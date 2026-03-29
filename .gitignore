@@ -39,3 +39,11 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+
+# Gizli Firebase Dosyaları
+google-services.json
+GoogleService-Info.plist
+
+# Şifre Kasası
+.env

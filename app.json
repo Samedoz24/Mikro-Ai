@@ -22,17 +22,24 @@
               "com.googleusercontent.apps.758732204910-1nqkd7vk72ch45urq8prkb3gk6rc3fsm"
             ]
           }
-        ]
+        ],
+        "NSCameraUsageDescription": "Fotoğraf çekmek için kamera izni gerekli"
       }
     },
     "android": {
       "package": "com.samedoz.mikroai",
+      "googleServicesFile": "./google-services.json",
+      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.INTERNET"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -45,6 +52,11 @@
           "cameraPermissionText": "Fotoğraf çekmek için kamera izni gerekli"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "d7a98211-7547-427b-94e6-6637fc6aae39"
+      }
+    }
   }
 }

@@ -12,9 +12,21 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.samedoz.mikroai",
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "infoPlist": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.758732204910-1nqkd7vk72ch45urq8prkb3gk6rc3fsm"
+            ]
+          }
+        ]
+      }
     },
     "android": {
+      "package": "com.samedoz.mikroai",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -24,6 +36,15 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "@react-native-google-signin/google-signin",
+      [
+        "react-native-vision-camera",
+        {
+          "cameraPermissionText": "Fotoğraf çekmek için kamera izni gerekli"
+        }
+      ]
+    ]
   }
 }

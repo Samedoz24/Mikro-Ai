@@ -12,9 +12,21 @@ import { auth } from "../firebaseConfig";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  GoogleAuthProvider,
+  signInWithCredential,
 } from "firebase/auth";
+import { GoogleSignin } from "@react-native-google-signin/google-signin";
+
 // 🎨 Renk dosyamızı çağırıyoruz
 import { colors } from "../theme";
+
+// ⚙️ Sayfa yüklenmeden önce Google ayarlarını yapıyoruz (Kopyaladığın ID'yi buraya yapıştır)
+GoogleSignin.configure({
+  webClientId:
+    "758732204910-2juevkcahro9998k6u9tllfqo49sot1a.apps.googleusercontent.com",
+  iosClientId:
+    "758732204910-1nqkd7vk72ch45urq8prkb3gk6rc3fsm.apps.googleusercontent.com",
+});
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -30,12 +42,33 @@ export default function LoginScreen() {
     createUserWithEmailAndPassword(auth, email, password).catch((e) =>
       Alert.alert("Hata", e.message)
     );
+
   const handleGirisYap = () =>
     signInWithEmailAndPassword(auth, email, password).catch((e) =>
       Alert.alert("Hata", "Yanlış bilgi.")
     );
 
-  // Dinamik tasarımları temanın renklerine göre burada oluşturuyoruz
+  // 🚀 Google ile giriş yapma veya kayıt olma işlemlerini yürüten fonksiyon
+  const handleGoogleGiris = async () => {
+    try {
+      // 1. Google servislerinin çalışıp çalışmadığını kontrol eder
+      await GoogleSignin.hasPlayServices();
+      // 2. Google giriş penceresini açar
+      const userInfo = await GoogleSignin.signIn();
+      // 3. Google'dan onay kimliğini (token) alır
+      const { idToken } = await GoogleSignin.getTokens();
+      // 4. Bu onay kimliğini Firebase'in anlayacağı bir bilete çevirir
+      const googleBileti = GoogleAuthProvider.credential(idToken);
+      // 5. Bu bilet ile Firebase'e giriş yapar
+      await signInWithCredential(auth, googleBileti);
+    } catch (error) {
+      // Hatayı bilgisayarın terminaline detaylıca yazdırır
+      console.log("GOOGLE GİRİŞ HATASI DETAYI:", error);
+      // Ekrana da gerçek hata mesajını yansıtır
+      Alert.alert("Google Giriş Hatası", String(error.message));
+    }
+  };
+
   const dinamikStil = {
     container: {
       flex: 1,
@@ -83,6 +116,7 @@ export default function LoginScreen() {
     altYazi: { color: tema.ikincilMetin, fontSize: 14, fontWeight: "600" },
   };
 
+  // 📄 Kayıt Ol Sayfası Görünümü
   if (gosterilenSayfa === "kayit") {
     return (
       <View style={dinamikStil.container}>
@@ -110,6 +144,18 @@ export default function LoginScreen() {
         >
           <Text style={dinamikStil.butonYazisi}>Kayıt Ol ve Başla</Text>
         </TouchableOpacity>
+
+        {/* ➕ Kayıt ol sayfasına da Google butonunu ekledik */}
+        <TouchableOpacity
+          style={[
+            dinamikStil.butonGiris,
+            { backgroundColor: "#DB4437", marginTop: 10 },
+          ]}
+          onPress={handleGoogleGiris}
+        >
+          <Text style={dinamikStil.butonYazisi}>Google ile Kayıt Ol</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity
           style={{ padding: 10 }}
           onPress={() => setGosterilenSayfa("giris")}
@@ -122,6 +168,7 @@ export default function LoginScreen() {
     );
   }
 
+  // 📄 Giriş Yap Sayfası Görünümü
   return (
     <View style={dinamikStil.container}>
       <Text style={dinamikStil.baslik}>Mikro Özel Hoca</Text>
@@ -145,6 +192,18 @@ export default function LoginScreen() {
       <TouchableOpacity style={dinamikStil.butonGiris} onPress={handleGirisYap}>
         <Text style={dinamikStil.butonYazisi}>Giriş Yap</Text>
       </TouchableOpacity>
+
+      {/* ➕ Giriş yap sayfasına Google butonunu ekledik */}
+      <TouchableOpacity
+        style={[
+          dinamikStil.butonGiris,
+          { backgroundColor: "#DB4437", marginTop: 10 },
+        ]}
+        onPress={handleGoogleGiris}
+      >
+        <Text style={dinamikStil.butonYazisi}>Google ile Giriş Yap</Text>
+      </TouchableOpacity>
+
       <TouchableOpacity
         style={{ padding: 10 }}
         onPress={() => setGosterilenSayfa("kayit")}

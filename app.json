@@ -37,8 +37,10 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.INTERNET"
+        "CAMERA",
+        "INTERNET",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_EXTERNAL_STORAGE"
       ]
     },
     "web": {
@@ -46,6 +48,12 @@
     },
     "plugins": [
       "@react-native-google-signin/google-signin",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Soru fotoğrafı çekmek için kameranıza erişmemiz gerekiyor."
+        }
+      ],
       [
         "react-native-vision-camera",
         {

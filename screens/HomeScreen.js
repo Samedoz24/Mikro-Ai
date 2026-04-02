@@ -10,17 +10,41 @@ import {
   useColorScheme,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import { Ionicons } from "@expo/vector-icons"; // 🚀 Standart İkon Kütüphanesi
 
 // Firebase
 import { auth, db, storage } from "../firebaseConfig";
 import { collection, addDoc } from "firebase/firestore";
-// uploadBytes'a geri döndük çünkü artık hazır Blob vereceğiz
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { colors } from "../theme";
+
+const base64ToHamVeri = (base64Str) => {
+  const chars =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  let len = base64Str.length;
+  let bufferLength = len * 0.75;
+  if (base64Str[len - 1] === "=") bufferLength--;
+  if (base64Str[len - 2] === "=") bufferLength--;
+
+  const bytes = new Uint8Array(bufferLength);
+  let p = 0;
+  for (let i = 0; i < len; i += 4) {
+    let encoded1 = chars.indexOf(base64Str[i]);
+    let encoded2 = chars.indexOf(base64Str[i + 1]);
+    let encoded3 = chars.indexOf(base64Str[i + 2]);
+    let encoded4 = chars.indexOf(base64Str[i + 3]);
+
+    bytes[p++] = (encoded1 << 2) | (encoded2 >> 4);
+    if (encoded3 !== 64) bytes[p++] = ((encoded2 & 15) << 4) | (encoded3 >> 2);
+    if (encoded4 !== 64) bytes[p++] = ((encoded3 & 3) << 6) | (encoded4 & 63);
+  }
+  return bytes;
+};
 
 export default function HomeScreen() {
   const [yukleniyor, setYukleniyor] = useState(false);
   const [image, setImage] = useState(null);
+  const [imageBase64, setImageBase64] = useState(null);
 
   const sistemTemasi = useColorScheme();
   const tema = sistemTemasi === "dark" ? colors.dark : colors.light;
@@ -30,17 +54,18 @@ export default function HomeScreen() {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
 
       if (!permission.granted) {
-        Alert.alert("İzin gerekli", "Kamera izni vermelisin");
+        Alert.alert("İzin Gerekli", "Kamera izni vermelisin.");
         return;
       }
 
       const result = await ImagePicker.launchCameraAsync({
         quality: 0.5,
-        // 🚀 Base64 iptal, sadece dosya yolunu alıyoruz
+        base64: true,
       });
 
       if (!result.canceled) {
         setImage(result.assets[0].uri);
+        setImageBase64(result.assets[0].base64);
       }
     } catch (error) {
       console.log("Kamera hatası:", error);
@@ -49,38 +74,31 @@ export default function HomeScreen() {
 
   const fotografiIptalEt = () => {
     setImage(null);
+    setImageBase64(null);
   };
 
   const fotografiGonder = async () => {
-    if (!image) return;
+    if (!image || !imageBase64) return;
 
     try {
       setYukleniyor(true);
-
-      // 🚀 NİHAİ iOS ÇÖZÜMÜ: Fotoğrafı cihazdan "Native Blob" olarak çekiyoruz.
-      // Firebase'e zaten hazır bir Blob vereceğimiz için o sinir bozucu
-      // ArrayBuffer hatasını vermeyecek.
-      const response = await fetch(image);
-      const blob = await response.blob();
-
+      const hamVeri = base64ToHamVeri(imageBase64);
       const dosyaAdi = `kullanicilar/${
         auth.currentUser.uid
       }/sorular/${Date.now()}.jpg`;
       const storageRef = ref(storage, dosyaAdi);
 
-      // Hazır blobu yüklüyoruz
-      await uploadBytes(storageRef, blob);
-
+      await uploadBytes(storageRef, hamVeri, { contentType: "image/jpeg" });
       const downloadURL = await getDownloadURL(storageRef);
 
       await addDoc(collection(db, "sorular"), {
         kullaniciEposta: auth.currentUser.email,
         fotoLink: downloadURL,
         tarih: new Date().toISOString(),
-        durum: "Bekliyor ⏳",
+        durum: "Bekliyor",
       });
 
-      Alert.alert("Başarılı", "Fotoğraf gönderildi ✅");
+      Alert.alert("Başarılı", "Fotoğraf gönderildi.");
       fotografiIptalEt();
     } catch (error) {
       console.log("HATA DETAYI:", error);
@@ -94,7 +112,7 @@ export default function HomeScreen() {
     <View style={[styles.container, { backgroundColor: tema.arkaplan }]}>
       <View style={styles.header}>
         <Text style={[styles.baslik, { color: tema.metin }]}>
-          Soru Tarayıcı 🔍
+          Soru Tarayıcı
         </Text>
         <Text style={[styles.altYazi, { color: tema.ikincilMetin }]}>
           Çözemediğin sorunun fotoğrafını çek, yapay zeka özel hocan anında
@@ -116,7 +134,12 @@ export default function HomeScreen() {
           <Image source={{ uri: image }} style={styles.foto} />
         ) : (
           <View style={styles.bosDurum}>
-            <Text style={styles.ikon}>📸</Text>
+            <Ionicons
+              name="camera-outline"
+              size={60}
+              color={tema.ikincilMetin}
+              style={styles.ikon}
+            />
             <Text style={[styles.bosDurumYazi, { color: tema.ikincilMetin }]}>
               Kamerayı açmak için aşağıdaki butona dokun
             </Text>
@@ -130,7 +153,7 @@ export default function HomeScreen() {
             onPress={kamerayiAc}
             style={[styles.tekliButon, { backgroundColor: tema.anaButon }]}
           >
-            <Text style={styles.butonYazi}>📸 Kamerayı Aç</Text>
+            <Text style={styles.butonYazi}>Kamerayı Aç</Text>
           </TouchableOpacity>
         ) : (
           <View style={styles.ikiliButonKutusu}>
@@ -146,7 +169,7 @@ export default function HomeScreen() {
                 },
               ]}
             >
-              <Text style={styles.butonYazi}>🗑 İptal Et</Text>
+              <Text style={styles.butonYazi}>İptal Et</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -167,7 +190,7 @@ export default function HomeScreen() {
                   <Text style={styles.butonYazi}>İletiliyor...</Text>
                 </View>
               ) : (
-                <Text style={styles.butonYazi}>🚀 Gönder</Text>
+                <Text style={styles.butonYazi}>Gönder</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -197,7 +220,7 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   bosDurum: { alignItems: "center", padding: 20 },
-  ikon: { fontSize: 60, marginBottom: 15, opacity: 0.8 },
+  ikon: { marginBottom: 15, opacity: 0.8 },
   bosDurumYazi: { fontSize: 16, textAlign: "center", fontWeight: "500" },
   foto: { width: "100%", height: "100%", resizeMode: "cover" },
   butonAlani: { paddingBottom: 20 },

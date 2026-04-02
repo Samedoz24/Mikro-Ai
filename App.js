@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { View, ActivityIndicator, useColorScheme } from "react-native";
 import { auth } from "./firebaseConfig";
 import { onAuthStateChanged } from "firebase/auth";
-import AsyncStorage from "@react-native-async-storage/async-storage"; // ➕ Yeni eklendi
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // 🧭 Navigasyon Paketleri
 import { NavigationContainer } from "@react-navigation/native";
@@ -23,7 +23,7 @@ const Tab = createBottomTabNavigator();
 export default function App() {
   const [kullanici, setKullanici] = useState(null);
   const [yukleniyor, setYukleniyor] = useState(true);
-  const [kullaniciRolu, setKullaniciRolu] = useState("ogrenci"); // Varsayılan rol
+  const [kullaniciRolu, setKullaniciRolu] = useState("ogrenci");
 
   const sistemTemasi = useColorScheme();
   const tema = sistemTemasi === "dark" ? colors.dark : colors.light;
@@ -31,7 +31,6 @@ export default function App() {
   useEffect(() => {
     const abonelik = onAuthStateChanged(auth, async (aktifKullanici) => {
       if (aktifKullanici) {
-        // 🚀 Uygulama açılırken veya kullanıcı varken hafızadaki rolü kontrol et
         try {
           const kayitliRol = await AsyncStorage.getItem("kullaniciRolu");
           if (kayitliRol) {
@@ -65,7 +64,6 @@ export default function App() {
   }
 
   if (!kullanici) {
-    // Giriş ekranına rol değiştirme yetkisini gönderiyoruz
     return <LoginScreen setKullaniciRolu={setKullaniciRolu} />;
   }
 
@@ -85,9 +83,7 @@ export default function App() {
             borderBottomWidth: 1,
           },
           headerTintColor: tema.metin,
-          headerTitleStyle: {
-            fontWeight: "bold",
-          },
+          headerTitleStyle: { fontWeight: "bold" },
         }}
       >
         {kullaniciRolu === "ogrenci" ? (
@@ -110,10 +106,11 @@ export default function App() {
           </>
         ) : (
           <>
+            {/* Veli için iki sekme: Yönetim Paneli ve Profil */}
             <Tab.Screen
               name="Veli Paneli"
               component={ParentDashboard}
-              options={{ title: "Veli Raporu" }}
+              options={{ title: "Yönetim Paneli" }}
             />
             <Tab.Screen
               name="Profil"

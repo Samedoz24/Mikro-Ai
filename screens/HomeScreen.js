@@ -10,7 +10,7 @@ import {
   useColorScheme,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import { Ionicons } from "@expo/vector-icons"; // 🚀 Standart İkon Kütüphanesi
+import { Ionicons } from "@expo/vector-icons";
 
 // Firebase
 import { auth, db, storage } from "../firebaseConfig";
@@ -18,36 +18,29 @@ import { collection, addDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { colors } from "../theme";
 
-const base64ToHamVeri = (base64Str) => {
-  const chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  let len = base64Str.length;
-  let bufferLength = len * 0.75;
-  if (base64Str[len - 1] === "=") bufferLength--;
-  if (base64Str[len - 2] === "=") bufferLength--;
-
-  const bytes = new Uint8Array(bufferLength);
-  let p = 0;
-  for (let i = 0; i < len; i += 4) {
-    let encoded1 = chars.indexOf(base64Str[i]);
-    let encoded2 = chars.indexOf(base64Str[i + 1]);
-    let encoded3 = chars.indexOf(base64Str[i + 2]);
-    let encoded4 = chars.indexOf(base64Str[i + 3]);
-
-    bytes[p++] = (encoded1 << 2) | (encoded2 >> 4);
-    if (encoded3 !== 64) bytes[p++] = ((encoded2 & 15) << 4) | (encoded3 >> 2);
-    if (encoded4 !== 64) bytes[p++] = ((encoded3 & 3) << 6) | (encoded4 & 63);
-  }
-  return bytes;
-};
-
 export default function HomeScreen() {
   const [yukleniyor, setYukleniyor] = useState(false);
-  const [image, setImage] = useState(null);
-  const [imageBase64, setImageBase64] = useState(null);
+  const [image, setImage] = useState(null); // Sadece resmin yolunu (URI) tutacağız
 
   const sistemTemasi = useColorScheme();
   const tema = sistemTemasi === "dark" ? colors.dark : colors.light;
+
+  // 🧩 Hatasız Blob'a Çevirme Fonksiyonu (ArrayBuffer yerine bu kullanılır)
+  const resmiBlobaCevir = async (uri) => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.onload = function () {
+        resolve(xhr.response);
+      };
+      xhr.onerror = function (e) {
+        console.log("Blob çevirme hatası:", e);
+        reject(new TypeError("Ağ isteği başarısız oldu."));
+      };
+      xhr.responseType = "blob";
+      xhr.open("GET", uri, true);
+      xhr.send(null);
+    });
+  };
 
   const kamerayiAc = async () => {
     try {
@@ -60,12 +53,11 @@ export default function HomeScreen() {
 
       const result = await ImagePicker.launchCameraAsync({
         quality: 0.5,
-        base64: true,
+        // base64: true özelliğini kaldırdık, artık hafızayı yormayacak
       });
 
       if (!result.canceled) {
         setImage(result.assets[0].uri);
-        setImageBase64(result.assets[0].base64);
       }
     } catch (error) {
       console.log("Kamera hatası:", error);
@@ -74,23 +66,30 @@ export default function HomeScreen() {
 
   const fotografiIptalEt = () => {
     setImage(null);
-    setImageBase64(null);
   };
 
   const fotografiGonder = async () => {
-    if (!image || !imageBase64) return;
+    if (!image) return;
 
     try {
       setYukleniyor(true);
-      const hamVeri = base64ToHamVeri(imageBase64);
+
+      // 1. Resmi sorunsuz bir şekilde Blob formatına çeviriyoruz
+      const blobFoto = await resmiBlobaCevir(image);
+
+      // 2. Firebase deposunda (Storage) kaydedilecek yeri belirliyoruz
       const dosyaAdi = `kullanicilar/${
         auth.currentUser.uid
       }/sorular/${Date.now()}.jpg`;
       const storageRef = ref(storage, dosyaAdi);
 
-      await uploadBytes(storageRef, hamVeri, { contentType: "image/jpeg" });
+      // 3. Blob verisini doğrudan Firebase'e yüklüyoruz
+      await uploadBytes(storageRef, blobFoto);
+
+      // 4. Yüklenen resmin internet adresini alıyoruz
       const downloadURL = await getDownloadURL(storageRef);
 
+      // 5. Veritabanına (Firestore) soruyu kaydediyoruz
       await addDoc(collection(db, "sorular"), {
         kullaniciEposta: auth.currentUser.email,
         fotoLink: downloadURL,
@@ -99,7 +98,7 @@ export default function HomeScreen() {
       });
 
       Alert.alert("Başarılı", "Fotoğraf gönderildi.");
-      fotografiIptalEt();
+      fotografiIptalEt(); // Başarılı olunca ekrandaki resmi temizle
     } catch (error) {
       console.log("HATA DETAYI:", error);
       Alert.alert("Yükleme Hatası", "Bir sorun oluştu: " + error.message);

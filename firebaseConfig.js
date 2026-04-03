@@ -1,9 +1,11 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage"; // 👈 Eksik olan parça buydu!
-
-// 🔐 Giriş bilgilerinin kalıcı olması için gerekli araçlar
-import { initializeAuth, getReactNativePersistence } from "firebase/auth";
+import { getStorage } from "firebase/storage";
+import {
+  initializeAuth,
+  getReactNativePersistence,
+  getAuth,
+} from "firebase/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const firebaseConfig = {
@@ -15,15 +17,21 @@ const firebaseConfig = {
   appId: "1:758732204910:web:d9b40d45ac4b312e842f7f",
 };
 
-// Uygulamayı başlat
-const app = initializeApp(firebaseConfig);
+// 🛡️ Uygulama zaten başlatıldıysa olanı al, yoksa yeni başlat
+const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// 🧠 Hafızayı (Persistence) aktif ederek Auth'u başlat
-const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(AsyncStorage),
-});
+let auth;
+// 🚀 ÇÖZÜM BURADA: Önce kendi istediğimiz AsyncStorage ile kurmayı deniyoruz
+try {
+  auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(AsyncStorage),
+  });
+} catch (error) {
+  // Eğer uygulama reload atıldıysa ve zaten kuruluysa, mevcut olanı al
+  auth = getAuth(app);
+}
 
 const db = getFirestore(app);
-const storage = getStorage(app); // 👈 Depoyu tanımladık
+const storage = getStorage(app);
 
 export { auth, db, storage };

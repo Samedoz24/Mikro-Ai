@@ -14,7 +14,8 @@ import {
   Alert,
 } from "react-native";
 import { colors } from "../theme";
-import { auth, db } from "../firebaseConfig";
+// 🚀 Firebase Storage eklendi
+import { auth, db, storage } from "../firebaseConfig";
 import {
   collection,
   query,
@@ -23,7 +24,9 @@ import {
   deleteDoc,
   doc,
 } from "firebase/firestore";
-import { Ionicons } from "@expo/vector-icons"; // 🚀 Standart İkon Kütüphanesi Eklendi
+// 🚀 Depodan dosya silmek için gereken komutlar eklendi
+import { ref, deleteObject } from "firebase/storage";
+import { Ionicons } from "@expo/vector-icons";
 
 const ekranGenisligi = Dimensions.get("window").width;
 const ekranYuksekligi = Dimensions.get("window").height;
@@ -66,13 +69,23 @@ export default function HistoryScreen() {
     setModalGorunur(true);
   };
 
+  // 🚀 Hem veritabanından hem de depodan silme fonksiyonu
   const soruyuSil = async () => {
     if (!seciliSoru) return;
     try {
+      // 1. ADIM: Eğer sorunun bir fotoğraf linki varsa, önce depodaki o fiziksel dosyayı sil
+      if (seciliSoru.fotoLink) {
+        const fotoRef = ref(storage, seciliSoru.fotoLink);
+        await deleteObject(fotoRef);
+      }
+
+      // 2. ADIM: Fotoğraf başarıyla silindikten sonra, veritabanındaki yazı kaydını sil
       await deleteDoc(doc(db, "sorular", seciliSoru.id));
+
       setModalGorunur(false);
       setTamEkranModu(false);
     } catch (error) {
+      console.log("Silme Hatası:", error);
       Alert.alert("Hata", "Soru silinirken bir sorun oluştu.");
     }
   };
@@ -80,7 +93,7 @@ export default function HistoryScreen() {
   const silmeOnayiIste = () => {
     Alert.alert(
       "Soruyu Sil",
-      "Bu soruyu hata defterinden kalıcı olarak silmek istediğine emin misin?",
+      "Bu soruyu ve fotoğrafını kalıcı olarak silmek istediğine emin misin?",
       [
         { text: "İptal", style: "cancel" },
         { text: "Evet, Sil", onPress: soruyuSil, style: "destructive" },

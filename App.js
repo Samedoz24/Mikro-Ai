@@ -8,6 +8,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 
+// 🎨 İkon Kütüphanesi Eklendi
+import { Ionicons } from "@expo/vector-icons";
+
 // 🎨 Renkler
 import { colors } from "./theme";
 
@@ -70,7 +73,29 @@ export default function App() {
   return (
     <NavigationContainer>
       <Tab.Navigator
-        screenOptions={{
+        screenOptions={({ route }) => ({
+          // 🚀 İKON MANTIĞI BURAYA EKLENDİ
+          tabBarIcon: ({ focused, color, size }) => {
+            let iconName;
+
+            // Bulunduğumuz sayfanın ismine göre ikon seçiyoruz
+            if (route.name === "Ana Sayfa") {
+              // focused = O an o sekmeye tıklanmışsa (aktifse)
+              iconName = focused ? "camera" : "camera-outline";
+            } else if (route.name === "Hata Defteri") {
+              iconName = focused ? "book" : "book-outline";
+            } else if (route.name === "Profil") {
+              iconName = focused ? "person" : "person-outline";
+            } else if (route.name === "Veli Paneli") {
+              iconName = focused
+                ? "shield-checkmark"
+                : "shield-checkmark-outline";
+            }
+
+            // Seçilen ikonu ekrana basıyoruz
+            return <Ionicons name={iconName} size={size} color={color} />;
+          },
+          headerTitleAlign: "center",
           tabBarActiveTintColor: tema.anaButon,
           tabBarInactiveTintColor: tema.ikincilMetin,
           tabBarStyle: {
@@ -84,7 +109,7 @@ export default function App() {
           },
           headerTintColor: tema.metin,
           headerTitleStyle: { fontWeight: "bold" },
-        }}
+        })}
       >
         {kullaniciRolu === "ogrenci" ? (
           <>

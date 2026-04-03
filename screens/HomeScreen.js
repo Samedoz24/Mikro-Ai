@@ -8,7 +8,7 @@ import {
   Image,
   StyleSheet,
   useColorScheme,
-  Platform, // 🍏📱 Platform kütüphanesi eklendi
+  Platform,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system/legacy";
@@ -34,12 +34,13 @@ export default function HomeScreen() {
         return;
       }
 
-      // ⚖️ Cihaza göre fotoğraf kalitesi belirliyoruz (iOS ise %20, Android ise %50)
       const kaliteAyari = Platform.OS === "ios" ? 0.2 : 0.5;
 
       const result = await ImagePicker.launchCameraAsync({
         quality: kaliteAyari,
-        base64: false, // Telefonu yormamak için Base64 kapalı
+        base64: false,
+        allowsEditing: true,
+        aspect: [3, 4],
       });
 
       if (!result.canceled) {
@@ -53,12 +54,39 @@ export default function HomeScreen() {
   // ❌ Çekilen Fotoğrafı İptal Etme
   const fotografiIptalEt = () => setImage(null);
 
+  // 🌐 Kendi İnternet Kontrol Fonksiyonumuz (Native paket gerektirmez)
+  const internetVarMi = async () => {
+    try {
+      // Google'a görünmez bir sinyal atıyoruz, 3 saniye içinde cevap gelmezse "Timeout" hatası verdiriyoruz
+      await Promise.race([
+        fetch("https://www.google.com", { method: "HEAD" }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Timeout")), 3000)
+        ),
+      ]);
+      return true; // Sinyal gittiyse internet var
+    } catch (error) {
+      return false; // Hata verdiyse veya 3 saniyede gitmediyse internet yok
+    }
+  };
+
   // 🚀 Fotoğrafı Güvenli Şekilde Gönderme
   const fotografiGonder = async () => {
     if (!image) return;
 
     try {
-      setYukleniyor(true);
+      // 🛡️ İlk iş olarak interneti kontrol ediyoruz
+      setYukleniyor(true); // Önce butonu "Kontrol ediliyor..." gibi göstermek için döndürüyoruz
+      const baglanti = await internetVarMi();
+
+      if (!baglanti) {
+        setYukleniyor(false);
+        Alert.alert(
+          "Bağlantı Hatası",
+          "Lütfen internet bağlantınızı kontrol edip tekrar deneyin."
+        );
+        return; // İnternet yoksa işlemi anında iptal et
+      }
 
       const dosyaYolu = `kullanicilar/${
         auth.currentUser.uid
@@ -72,7 +100,6 @@ export default function HomeScreen() {
 
       const token = await auth.currentUser.getIdToken();
 
-      // Expo FileSystem ile doğrudan Google sunucularına gönderim yapıyoruz
       const uploadResult = await FileSystem.uploadAsync(url, image, {
         httpMethod: "POST",
         headers: {
@@ -81,7 +108,6 @@ export default function HomeScreen() {
         },
       });
 
-      // 🛡️ Sunucu cevap kodu kontrolü: Sadece 200 (OK) ise işleme devam et
       if (uploadResult.status !== 200) {
         throw new Error(
           `Yükleme başarısız! Sunucu kodu: ${uploadResult.status}`
@@ -100,7 +126,7 @@ export default function HomeScreen() {
       });
 
       Alert.alert("Başarılı", "Soru fotoğrafı başarıyla gönderildi!");
-      fotografiIptalEt(); // Ekranı temizle
+      fotografiIptalEt();
     } catch (error) {
       console.log("HATA DETAY:", error);
       Alert.alert("Yükleme Hatası", "Yükleme sırasında bir hata oluştu.");

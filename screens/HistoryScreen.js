@@ -14,7 +14,6 @@ import {
   Alert,
 } from "react-native";
 import { colors } from "../theme";
-// 🚀 Firebase Storage eklendi
 import { auth, db, storage } from "../firebaseConfig";
 import {
   collection,
@@ -24,7 +23,6 @@ import {
   deleteDoc,
   doc,
 } from "firebase/firestore";
-// 🚀 Depodan dosya silmek için gereken komutlar eklendi
 import { ref, deleteObject } from "firebase/storage";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -45,20 +43,28 @@ export default function HistoryScreen() {
   useEffect(() => {
     const q = query(
       collection(db, "sorular"),
-      where("kullaniciEposta", "==", auth.currentUser?.email)
+      where("kullaniciEposta", "==", auth.currentUser?.email || "")
     );
 
-    const abonelik = onSnapshot(q, (snapshot) => {
-      const geciciDizi = [];
-      snapshot.forEach((doc) => {
-        geciciDizi.push({ id: doc.id, ...doc.data() });
-      });
+    const abonelik = onSnapshot(
+      q,
+      (snapshot) => {
+        const geciciDizi = [];
+        snapshot.forEach((doc) => {
+          geciciDizi.push({ id: doc.id, ...doc.data() });
+        });
 
-      geciciDizi.sort((a, b) => new Date(b.tarih) - new Date(a.tarih));
+        geciciDizi.sort((a, b) => new Date(b.tarih) - new Date(a.tarih));
 
-      setSorular(geciciDizi);
-      setYukleniyor(false);
-    });
+        setSorular(geciciDizi);
+        setYukleniyor(false);
+      },
+      (error) => {
+        // 🚀 ÇÖZÜM BURADA: İnternet kesildiğinde uygulamanın kırmızı ekran vermesini (çökmesini) engeller
+        console.log("İnternet bağlantısı koptu veya okuma hatası:", error);
+        setYukleniyor(false); // Yükleniyor dönen ikonunu durdurur
+      }
+    );
 
     return () => abonelik();
   }, []);
@@ -69,17 +75,24 @@ export default function HistoryScreen() {
     setModalGorunur(true);
   };
 
-  // 🚀 Hem veritabanından hem de depodan silme fonksiyonu
   const soruyuSil = async () => {
     if (!seciliSoru) return;
     try {
-      // 1. ADIM: Eğer sorunun bir fotoğraf linki varsa, önce depodaki o fiziksel dosyayı sil
       if (seciliSoru.fotoLink) {
-        const fotoRef = ref(storage, seciliSoru.fotoLink);
-        await deleteObject(fotoRef);
+        try {
+          const fotoRef = ref(storage, seciliSoru.fotoLink);
+          await deleteObject(fotoRef);
+        } catch (storageError) {
+          if (storageError.code === "storage/object-not-found") {
+            console.log(
+              "Fotoğraf depoda bulunamadı (zaten silinmiş). İşleme devam ediliyor."
+            );
+          } else {
+            console.log("Storage silme hatası:", storageError);
+          }
+        }
       }
 
-      // 2. ADIM: Fotoğraf başarıyla silindikten sonra, veritabanındaki yazı kaydını sil
       await deleteDoc(doc(db, "sorular", seciliSoru.id));
 
       setModalGorunur(false);

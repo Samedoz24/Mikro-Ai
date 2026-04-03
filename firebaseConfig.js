@@ -21,16 +21,15 @@ const firebaseConfig = {
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
 let auth;
-// 🚀 ÇÖZÜM BURADA: Önce kendi istediğimiz AsyncStorage ile kurmayı deniyoruz
 try {
   auth = initializeAuth(app, {
     persistence: getReactNativePersistence(AsyncStorage),
   });
 } catch (error) {
-  // Eğer uygulama reload atıldıysa ve zaten kuruluysa, mevcut olanı al
   auth = getAuth(app);
 }
 
+// 🔄 ÇÖZÜM: Hata veren çevrimdışı bellek denemesi silindi, orijinal hatasız koda dönüldü
 const db = getFirestore(app);
 const storage = getStorage(app);
 

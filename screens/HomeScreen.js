@@ -8,6 +8,7 @@ import {
   Image,
   StyleSheet,
   useColorScheme,
+  Platform, // 🚀 iOS/Android ayrımı için eklendi
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
@@ -20,26 +21,33 @@ import { colors } from "../theme";
 
 export default function HomeScreen() {
   const [yukleniyor, setYukleniyor] = useState(false);
-  const [image, setImage] = useState(null); // Sadece resmin yolunu (URI) tutacağız
+  const [image, setImage] = useState(null);
 
   const sistemTemasi = useColorScheme();
   const tema = sistemTemasi === "dark" ? colors.dark : colors.light;
 
-  // 🧩 Hatasız Blob'a Çevirme Fonksiyonu (ArrayBuffer yerine bu kullanılır)
+  // 🧩 iOS'a dokunmayan, Android'i çözen Blob fonksiyonu
   const resmiBlobaCevir = async (uri) => {
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.onload = function () {
-        resolve(xhr.response);
-      };
-      xhr.onerror = function (e) {
-        console.log("Blob çevirme hatası:", e);
-        reject(new TypeError("Ağ isteği başarısız oldu."));
-      };
-      xhr.responseType = "blob";
-      xhr.open("GET", uri, true);
-      xhr.send(null);
-    });
+    if (Platform.OS === "ios") {
+      // iOS için kusursuz çalışan orijinal yöntem
+      const response = await fetch(uri);
+      return await response.blob();
+    } else {
+      // Android için XHR (Ağ İstek) yöntemi
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.onload = function () {
+          resolve(xhr.response);
+        };
+        xhr.onerror = function (e) {
+          console.log("Blob çevirme hatası:", e);
+          reject(new TypeError("Ağ isteği başarısız oldu."));
+        };
+        xhr.responseType = "blob";
+        xhr.open("GET", uri, true);
+        xhr.send(null);
+      });
+    }
   };
 
   const kamerayiAc = async () => {
@@ -53,7 +61,6 @@ export default function HomeScreen() {
 
       const result = await ImagePicker.launchCameraAsync({
         quality: 0.5,
-        // base64: true özelliğini kaldırdık, artık hafızayı yormayacak
       });
 
       if (!result.canceled) {
@@ -74,22 +81,17 @@ export default function HomeScreen() {
     try {
       setYukleniyor(true);
 
-      // 1. Resmi sorunsuz bir şekilde Blob formatına çeviriyoruz
       const blobFoto = await resmiBlobaCevir(image);
 
-      // 2. Firebase deposunda (Storage) kaydedilecek yeri belirliyoruz
       const dosyaAdi = `kullanicilar/${
         auth.currentUser.uid
       }/sorular/${Date.now()}.jpg`;
       const storageRef = ref(storage, dosyaAdi);
 
-      // 3. Blob verisini doğrudan Firebase'e yüklüyoruz
       await uploadBytes(storageRef, blobFoto);
 
-      // 4. Yüklenen resmin internet adresini alıyoruz
       const downloadURL = await getDownloadURL(storageRef);
 
-      // 5. Veritabanına (Firestore) soruyu kaydediyoruz
       await addDoc(collection(db, "sorular"), {
         kullaniciEposta: auth.currentUser.email,
         fotoLink: downloadURL,
@@ -98,7 +100,7 @@ export default function HomeScreen() {
       });
 
       Alert.alert("Başarılı", "Fotoğraf gönderildi.");
-      fotografiIptalEt(); // Başarılı olunca ekrandaki resmi temizle
+      fotografiIptalEt();
     } catch (error) {
       console.log("HATA DETAYI:", error);
       Alert.alert("Yükleme Hatası", "Bir sorun oluştu: " + error.message);

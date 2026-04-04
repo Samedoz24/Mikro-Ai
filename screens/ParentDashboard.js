@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  useColorScheme,
   TouchableOpacity,
   Modal,
   TextInput,
@@ -28,9 +27,12 @@ import {
   arrayUnion,
 } from "firebase/firestore";
 
+// 🌗 ÇÖZÜM: Kendi Tema Sistemimizi Bağladık
+import { useTheme } from "../ThemeContext";
+
 export default function ParentDashboard() {
-  const sistemTemasi = useColorScheme();
-  const tema = sistemTemasi === "dark" ? colors.dark : colors.light;
+  // 🚀 ÇÖZÜM: Artık uygulamanın genel temasını okuyoruz
+  const { tema } = useTheme();
 
   // Veli Kontrol Stateleri
   const [veliModalGorunur, setVeliModalGorunur] = useState(false);

@@ -9,32 +9,43 @@ import {
   StyleSheet,
   useColorScheme,
   Platform,
+  Modal,
+  Dimensions, // Ekran boyutunu almak için eklendi
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import { Ionicons } from "@expo/vector-icons";
 
+// 🎉 Konfeti Animasyonu Kütüphanesi
+import ConfettiCannon from "react-native-confetti-cannon";
+
 import { auth, db, storage } from "../firebaseConfig";
-import { collection, addDoc, doc, getDoc, updateDoc } from "firebase/firestore"; // Firestore eklentileri
-import AsyncStorage from "@react-native-async-storage/async-storage"; // Storage eklentisi
+import { collection, addDoc, doc, getDoc, updateDoc } from "firebase/firestore";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { colors } from "../theme";
+
+// Ekran genişliğini alıyoruz (Konfetiyi ortalamak için)
+const screenWidth = Dimensions.get("window").width;
 
 export default function HomeScreen() {
   const [yukleniyor, setYukleniyor] = useState(false);
   const [image, setImage] = useState(null);
 
+  // 🚀 SERİ MODAL STATE
+  const [seriModalGorunur, setSeriModalGorunur] = useState(false);
+  const [guncelSeriSayisi, setGuncelSeriSayisi] = useState(0);
+
   const sistemTemasi = useColorScheme();
   const tema = sistemTemasi === "dark" ? colors.dark : colors.light;
   const user = auth.currentUser;
 
-  // 🚀 SERİ (STREAK) KONTROL MEKANİZMASI (YENİ EKLENDİ)
   useEffect(() => {
     const seriKontrol = async () => {
       if (!user) return;
 
       try {
         const bugun = new Date();
-        bugun.setHours(0, 0, 0, 0); // Sadece tarihi baz al, saatleri sıfırla
+        bugun.setHours(0, 0, 0, 0);
 
         const kullaniciRef = doc(db, "kullanicilar", user.uid);
         const kullaniciSnap = await getDoc(kullaniciRef);
@@ -49,32 +60,36 @@ export default function HomeScreen() {
           let guncellenecekVeri = {};
 
           if (!sonGiris) {
-            // İlk kez giriyorsa
             guncellenecekVeri = {
               seriGunu: 1,
               sonGirisTarihi: bugun.toISOString(),
             };
+            setGuncelSeriSayisi(1);
+            setSeriModalGorunur(true);
           } else {
             const farkMilisaniye = bugun.getTime() - sonGiris.getTime();
-            const farkGun = farkMilisaniye / (1000 * 3600 * 24);
+            const farkGun = Math.floor(farkMilisaniye / (1000 * 3600 * 24));
 
             if (farkGun === 1) {
-              // Dün girmiş, seriyi artır
+              const yeniSeri = mevcutSeri + 1;
               guncellenecekVeri = {
-                seriGunu: mevcutSeri + 1,
+                seriGunu: yeniSeri,
                 sonGirisTarihi: bugun.toISOString(),
               };
+              setGuncelSeriSayisi(yeniSeri);
+              setSeriModalGorunur(true);
             } else if (farkGun > 1) {
-              // Seriyi kaçırmış, baştan başlat
               guncellenecekVeri = {
                 seriGunu: 1,
                 sonGirisTarihi: bugun.toISOString(),
               };
+              setGuncelSeriSayisi(1);
+              setSeriModalGorunur(true);
+            } else {
+              setGuncelSeriSayisi(mevcutSeri);
             }
-            // Eğer farkGun 0 ise (bugün girmişse) işlem yapma
           }
 
-          // Eğer veri güncellendiyse (yani bugün ilk defa açılıyorsa veya seri değiştiyse) Firebase ve Storage'a kaydet
           if (Object.keys(guncellenecekVeri).length > 0) {
             await updateDoc(kullaniciRef, guncellenecekVeri);
             await AsyncStorage.setItem(
@@ -82,7 +97,6 @@ export default function HomeScreen() {
               String(guncellenecekVeri.seriGunu)
             );
           } else {
-            // Değişiklik yoksa bile profil sayfasının okuyabilmesi için güncel seriyi telefona yazalım
             await AsyncStorage.setItem("seriGunu", String(mevcutSeri));
           }
         }
@@ -94,7 +108,6 @@ export default function HomeScreen() {
     seriKontrol();
   }, [user]);
 
-  // 📷 Kamerayı Açma ve Çekim Kalitesini Ayarlama
   const kamerayiAc = async () => {
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
@@ -102,16 +115,12 @@ export default function HomeScreen() {
         Alert.alert("İzin Gerekli", "Kamera izni vermelisin.");
         return;
       }
-
       const kaliteAyari = Platform.OS === "ios" ? 0.2 : 0.5;
-
       const result = await ImagePicker.launchCameraAsync({
         quality: kaliteAyari,
-        base64: false,
         allowsEditing: true,
         aspect: [3, 4],
       });
-
       if (!result.canceled) {
         setImage(result.assets[0].uri);
       }
@@ -120,10 +129,8 @@ export default function HomeScreen() {
     }
   };
 
-  // ❌ Çekilen Fotoğrafı İptal Etme
   const fotografiIptalEt = () => setImage(null);
 
-  // 🌐 Kendi İnternet Kontrol Fonksiyonumuz
   const internetVarMi = async () => {
     try {
       await Promise.race([
@@ -138,20 +145,14 @@ export default function HomeScreen() {
     }
   };
 
-  // 🚀 Fotoğrafı Güvenli Şekilde Gönderme
   const fotografiGonder = async () => {
     if (!image) return;
-
     try {
       setYukleniyor(true);
       const baglanti = await internetVarMi();
-
       if (!baglanti) {
         setYukleniyor(false);
-        Alert.alert(
-          "Bağlantı Hatası",
-          "Lütfen internet bağlantınızı kontrol edip tekrar deneyin."
-        );
+        Alert.alert("Bağlantı Hatası", "İnternet bağlantınızı kontrol edin.");
         return;
       }
 
@@ -162,9 +163,7 @@ export default function HomeScreen() {
       const bucket =
         storage.app.options.storageBucket ||
         "project-21-3e377.firebasestorage.app";
-
       const url = `https://firebasestorage.googleapis.com/v0/b/${bucket}/o?name=${encodedYol}`;
-
       const token = await auth.currentUser.getIdToken();
 
       const uploadResult = await FileSystem.uploadAsync(url, image, {
@@ -175,14 +174,9 @@ export default function HomeScreen() {
         },
       });
 
-      if (uploadResult.status !== 200) {
-        throw new Error(
-          `Yükleme başarısız! Sunucu kodu: ${uploadResult.status}`
-        );
-      }
+      if (uploadResult.status !== 200) throw new Error("Yükleme başarısız!");
 
       const data = JSON.parse(uploadResult.body);
-
       const downloadURL = `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodedYol}?alt=media&token=${data.downloadTokens}`;
 
       await addDoc(collection(db, "sorular"), {
@@ -192,11 +186,10 @@ export default function HomeScreen() {
         durum: "Bekliyor",
       });
 
-      Alert.alert("Başarılı", "Soru fotoğrafı başarıyla gönderildi!");
+      Alert.alert("Başarılı", "Soru gönderildi!");
       fotografiIptalEt();
     } catch (error) {
-      console.log("HATA DETAY:", error);
-      Alert.alert("Yükleme Hatası", "Yükleme sırasında bir hata oluştu.");
+      Alert.alert("Hata", "Yükleme sırasında bir hata oluştu.");
     } finally {
       setYukleniyor(false);
     }
@@ -204,6 +197,43 @@ export default function HomeScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: tema.arkaplan }]}>
+      {/* 🚀 SERİ KUTLAMA MODALI VE KONFETİ */}
+      <Modal visible={seriModalGorunur} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          {/* Konfeti Patlaması (Modal açıldığında çalışır) */}
+          {seriModalGorunur && (
+            <ConfettiCannon
+              count={200}
+              origin={{ x: screenWidth / 2, y: -20 }}
+              autoStart={true}
+              fadeOut={true}
+              fallSpeed={2500}
+            />
+          )}
+
+          <View
+            style={[styles.modalKutu, { backgroundColor: tema.kutuArkaplan }]}
+          >
+            <View style={styles.ikonCember}>
+              <Ionicons name="flame" size={50} color="#FF9800" />
+            </View>
+            <Text style={[styles.modalBaslik, { color: tema.metin }]}>
+              {guncelSeriSayisi} GÜNLÜK SERİ!
+            </Text>
+            <Text style={[styles.modalMesaj, { color: tema.ikincilMetin }]}>
+              Harika gidiyorsun! Bugün de buradasın ve serini korudun. Hadi bir
+              soru çözerek günü taçlandır!
+            </Text>
+            <TouchableOpacity
+              onPress={() => setSeriModalGorunur(false)}
+              style={[styles.modalButon, { backgroundColor: tema.anaButon }]}
+            >
+              <Text style={styles.modalButonYazi}>Devam Et</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <View style={styles.header}>
         <Text style={[styles.baslik, { color: tema.metin }]}>
           Soru Tarayıcı
@@ -235,7 +265,7 @@ export default function HomeScreen() {
               style={styles.ikon}
             />
             <Text style={[styles.bosDurumYazi, { color: tema.ikincilMetin }]}>
-              Kamerayı açmak için aşağıdaki butona dokun
+              Kamerayı açmak için butona dokun
             </Text>
           </View>
         )}
@@ -265,7 +295,6 @@ export default function HomeScreen() {
             >
               <Text style={styles.butonYazi}>İptal Et</Text>
             </TouchableOpacity>
-
             <TouchableOpacity
               onPress={fotografiGonder}
               disabled={yukleniyor}
@@ -279,10 +308,7 @@ export default function HomeScreen() {
               ]}
             >
               {yukleniyor ? (
-                <View style={styles.yukleniyorSatir}>
-                  <ActivityIndicator color="#fff" style={{ marginRight: 5 }} />
-                  <Text style={styles.butonYazi}>İletiliyor...</Text>
-                </View>
+                <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={styles.butonYazi}>Gönder</Text>
               )}
@@ -333,9 +359,61 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   butonYazi: { color: "#fff", fontSize: 16, fontWeight: "bold" },
-  yukleniyorSatir: {
-    flexDirection: "row",
-    alignItems: "center",
+
+  // Modal Stilleri
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.75)",
     justifyContent: "center",
+    alignItems: "center",
+    padding: 30,
+  },
+  modalKutu: {
+    padding: 35,
+    borderRadius: 30,
+    alignItems: "center",
+    width: "100%",
+    elevation: 15,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+  },
+  ikonCember: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: "rgba(255, 152, 0, 0.15)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  modalBaslik: {
+    fontSize: 24,
+    fontWeight: "900",
+    textAlign: "center",
+    marginBottom: 12,
+    letterSpacing: 0.5,
+  },
+  modalMesaj: {
+    fontSize: 15,
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 30,
+    paddingHorizontal: 10,
+  },
+  modalButon: {
+    paddingVertical: 16,
+    paddingHorizontal: 40,
+    borderRadius: 100,
+    width: "100%",
+    alignItems: "center",
+    elevation: 3,
+  },
+  modalButonYazi: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 17,
+    letterSpacing: 0.5,
   },
 });

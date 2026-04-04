@@ -34,6 +34,13 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system/legacy";
 
+// 🔔 BİLDİRİM YÖNETİCİSİ
+import {
+  registerForPushNotificationsAsync,
+  scheduleDailyReminder,
+  cancelAllNotifications,
+} from "../utils/notificationManager";
+
 export default function ProfileScreen() {
   const user = auth.currentUser;
   const sistemTemasi = useColorScheme();
@@ -79,7 +86,6 @@ export default function ProfileScreen() {
       const kayitliFoto = await AsyncStorage.getItem("profilFoto");
       if (kayitliFoto) setProfilFoto(kayitliFoto);
 
-      // 🚀 YENİ EKLENDİ: Telefona kaydedilen seriyi hızlıca oku
       const kayitliSeri = await AsyncStorage.getItem("seriGunu");
       if (kayitliSeri) setSeriGunu(parseInt(kayitliSeri));
 
@@ -98,7 +104,6 @@ export default function ProfileScreen() {
         if (data.bildirimAktif !== undefined)
           setBildirimAktif(data.bildirimAktif);
 
-        // 🚀 YENİ EKLENDİ: Firebase'den güncel seriyi al (Garanti olsun diye)
         if (data.seriGunu !== undefined) {
           setSeriGunu(data.seriGunu);
           await AsyncStorage.setItem("seriGunu", String(data.seriGunu));
@@ -126,7 +131,7 @@ export default function ProfileScreen() {
           baglantiKodu: yeniKod,
           kayitTarihi: new Date().toISOString(),
           bildirimAktif: true,
-          seriGunu: 1, // Yeni kullanıcı ilk kez girdiği için 1'den başlar
+          seriGunu: 1,
         });
       }
     };
@@ -134,7 +139,6 @@ export default function ProfileScreen() {
     verileriGetir();
   }, [user]);
 
-  // 🌐 ÇÖZÜM: Kendi İnternet Kontrol Fonksiyonumuz
   const internetVarMi = async () => {
     try {
       await Promise.race([
@@ -289,6 +293,7 @@ export default function ProfileScreen() {
     }
   };
 
+  // 🔔 Bildirim Açma/Kapama mantığı
   const bildirimAyariniDegistir = async (deger) => {
     setBildirimAktif(deger);
     await AsyncStorage.setItem("bildirimAktif", JSON.stringify(deger));
@@ -296,6 +301,25 @@ export default function ProfileScreen() {
     if (user) {
       const kullaniciRef = doc(db, "kullanicilar", user.uid);
       await updateDoc(kullaniciRef, { bildirimAktif: deger });
+
+      if (deger) {
+        const izinVerildi = await registerForPushNotificationsAsync();
+        if (izinVerildi) {
+          await scheduleDailyReminder();
+          Alert.alert(
+            "Bildirimler Açıldı",
+            "Her akşam saat 19:00'da sana hatırlatma göndereceğiz."
+          );
+        } else {
+          setBildirimAktif(false);
+          Alert.alert(
+            "İzin Gerekli",
+            "Bildirim almak için telefon ayarlarından izin vermelisin."
+          );
+        }
+      } else {
+        await cancelAllNotifications();
+      }
     }
   };
 
@@ -309,13 +333,14 @@ export default function ProfileScreen() {
           text: "Evet",
           onPress: async () => {
             try {
+              await cancelAllNotifications();
               await AsyncStorage.multiRemove([
                 "adSoyad",
                 "seciliSinif",
                 "kullaniciRolu",
                 "bildirimAktif",
                 "profilFoto",
-                "seriGunu", // Çıkış yapınca seriyi telefondan siliyoruz
+                "seriGunu",
               ]);
               await signOut(auth);
             } catch (error) {
@@ -339,6 +364,7 @@ export default function ProfileScreen() {
           onPress: async () => {
             try {
               if (user) {
+                await cancelAllNotifications();
                 await deleteDoc(doc(db, "kullanicilar", user.uid));
                 await AsyncStorage.multiRemove([
                   "adSoyad",
@@ -627,6 +653,7 @@ export default function ProfileScreen() {
         >
           Destek ve Bilgi
         </Text>
+
         <TouchableOpacity
           onPress={() =>
             Alert.alert("Bilgi", "Kullanım rehberi yakında eklenecektir.")

@@ -10,7 +10,7 @@ import {
   useColorScheme,
   Platform,
   Modal,
-  Dimensions, // Ekran boyutunu almak için eklendi
+  Dimensions,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system/legacy";
@@ -24,7 +24,6 @@ import { collection, addDoc, doc, getDoc, updateDoc } from "firebase/firestore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { colors } from "../theme";
 
-// Ekran genişliğini alıyoruz (Konfetiyi ortalamak için)
 const screenWidth = Dimensions.get("window").width;
 
 export default function HomeScreen() {
@@ -156,6 +155,29 @@ export default function HomeScreen() {
         return;
       }
 
+      // 🚀 ÇÖZÜM 1: Fotoğrafı göndermeden önce veritabanındaki güncel kotayı soruyoruz
+      const kullaniciRef = doc(db, "kullanicilar", auth.currentUser.uid);
+      const kullaniciSnap = await getDoc(kullaniciRef);
+
+      let mevcutKota = 3; // Eğer bir hata olursa varsayılan 3 veriyoruz
+      if (kullaniciSnap.exists()) {
+        const data = kullaniciSnap.data();
+        if (data.kalanSoru !== undefined) {
+          mevcutKota = data.kalanSoru;
+        }
+      }
+
+      // 🛑 Eğer kota bittiyse işlemi durdur ve uyarı ver
+      if (mevcutKota <= 0) {
+        setYukleniyor(false);
+        Alert.alert(
+          "Günlük Kotan Doldu! ⏳",
+          "Bugünkü 3 ücretsiz soru sorma hakkını bitirdin. Lütfen yarın tekrar gel veya haklarını yenilemek için profilini kontrol et."
+        );
+        return; // Buradan aşağısına inmez, işlemi keser
+      }
+
+      // Kota varsa yükleme işlemine devam ediyoruz
       const dosyaYolu = `kullanicilar/${
         auth.currentUser.uid
       }/sorular/${Date.now()}.jpg`;
@@ -186,7 +208,12 @@ export default function HomeScreen() {
         durum: "Bekliyor",
       });
 
-      Alert.alert("Başarılı", "Soru gönderildi!");
+      // 🚀 ÇÖZÜM 2: Fotoğraf başarıyla gittiyse kotayı -1 eksiltiyoruz
+      await updateDoc(kullaniciRef, {
+        kalanSoru: mevcutKota - 1,
+      });
+
+      Alert.alert("Başarılı", "Soru gönderildi! Kotandan 1 hak düştü.");
       fotografiIptalEt();
     } catch (error) {
       Alert.alert("Hata", "Yükleme sırasında bir hata oluştu.");
@@ -197,10 +224,8 @@ export default function HomeScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: tema.arkaplan }]}>
-      {/* 🚀 SERİ KUTLAMA MODALI VE KONFETİ */}
       <Modal visible={seriModalGorunur} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          {/* Konfeti Patlaması (Modal açıldığında çalışır) */}
           {seriModalGorunur && (
             <ConfettiCannon
               count={200}

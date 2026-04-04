@@ -18,11 +18,11 @@ import { auth, db, storage } from "../firebaseConfig";
 import { signOut, deleteUser } from "firebase/auth";
 import {
   doc,
-  getDoc,
   setDoc,
   updateDoc,
   deleteDoc,
   deleteField,
+  onSnapshot, // 🚀 ÇÖZÜM: Canlı dinleyici eklendi
 } from "firebase/firestore";
 import { ref, deleteObject } from "firebase/storage";
 
@@ -71,9 +71,14 @@ export default function ProfileScreen() {
   };
 
   useEffect(() => {
-    const verileriGetir = async () => {
+    let abonelik = () => {}; // Boş bir temizleyici fonksiyon ile başlatıyoruz
+
+    const verileriCanliDinle = async () => {
       if (!user) return;
 
+      const bugununTarihi = new Date().toISOString().split("T")[0];
+
+      // Sabit verileri AsyncStorage'dan alıyoruz
       const kayitliRol = await AsyncStorage.getItem("kullaniciRolu");
       setRol(kayitliRol || "ogrenci");
 
@@ -93,50 +98,66 @@ export default function ProfileScreen() {
       if (bildirimAyar !== null) setBildirimAktif(JSON.parse(bildirimAyar));
 
       const kullaniciRef = doc(db, "kullanicilar", user.uid);
-      const kullaniciSnap = await getDoc(kullaniciRef);
 
-      if (kullaniciSnap.exists()) {
-        const data = kullaniciSnap.data();
+      // 🔄 ÇÖZÜM BURADA: getDoc yerine onSnapshot kullanarak Firebase'i canlı izliyoruz
+      abonelik = onSnapshot(kullaniciRef, async (kullaniciSnap) => {
+        if (kullaniciSnap.exists()) {
+          const data = kullaniciSnap.data();
 
-        if (data.sinif) setSeciliSinif(data.sinif);
-        if (data.baglantiKodu) setBaglantiKodu(data.baglantiKodu);
-        if (data.adSoyad) setAdSoyad(data.adSoyad);
-        if (data.bildirimAktif !== undefined)
-          setBildirimAktif(data.bildirimAktif);
+          if (data.sinif) setSeciliSinif(data.sinif);
+          if (data.baglantiKodu) setBaglantiKodu(data.baglantiKodu);
+          if (data.adSoyad) setAdSoyad(data.adSoyad);
+          if (data.bildirimAktif !== undefined)
+            setBildirimAktif(data.bildirimAktif);
 
-        if (data.seriGunu !== undefined) {
-          setSeriGunu(data.seriGunu);
-          await AsyncStorage.setItem("seriGunu", String(data.seriGunu));
+          if (data.seriGunu !== undefined) {
+            setSeriGunu(data.seriGunu);
+            await AsyncStorage.setItem("seriGunu", String(data.seriGunu));
+          }
+
+          if (data.profilFoto) {
+            setProfilFoto(data.profilFoto);
+            await AsyncStorage.setItem("profilFoto", data.profilFoto);
+          }
+
+          // 🧠 KOTA YENİLEME SİSTEMİ
+          let guncelKota = data.kalanSoru !== undefined ? data.kalanSoru : 3;
+          let veritabaniTarihi = data.sonSoruTarihi || "";
+
+          // Eğer veritabanındaki tarih bugün değilse (gün atlamışsa), kotayı 3'e fulle
+          if (veritabaniTarihi !== bugununTarihi) {
+            guncelKota = 3;
+            await updateDoc(kullaniciRef, {
+              kalanSoru: 3,
+              sonSoruTarihi: bugununTarihi,
+            });
+          }
+
+          setKalanSoru(guncelKota); // Ekranda güncel sayıyı (ister düşmüş ister fulenmiş) anında göster
+        } else {
+          const yeniKod = rastgeleKodUret();
+          setBaglantiKodu(yeniKod);
+
+          // Yeni hesaba varsayılan olarak 3 kota ve bugünün tarihini tanımlıyoruz
+          await setDoc(kullaniciRef, {
+            eposta: user.email,
+            rol: kayitliRol || "ogrenci",
+            baglantiKodu: yeniKod,
+            kayitTarihi: new Date().toISOString(),
+            bildirimAktif: true,
+            seriGunu: 1,
+            kalanSoru: 3,
+            sonSoruTarihi: bugununTarihi,
+          });
+          setKalanSoru(3);
         }
-
-        if (data.profilFoto) {
-          setProfilFoto(data.profilFoto);
-          await AsyncStorage.setItem("profilFoto", data.profilFoto);
-        }
-
-        if (data.adSoyad) await AsyncStorage.setItem("adSoyad", data.adSoyad);
-        if (data.sinif) await AsyncStorage.setItem("seciliSinif", data.sinif);
-        if (data.bildirimAktif !== undefined)
-          await AsyncStorage.setItem(
-            "bildirimAktif",
-            JSON.stringify(data.bildirimAktif)
-          );
-      } else {
-        const yeniKod = rastgeleKodUret();
-        setBaglantiKodu(yeniKod);
-
-        await setDoc(kullaniciRef, {
-          eposta: user.email,
-          rol: kayitliRol || "ogrenci",
-          baglantiKodu: yeniKod,
-          kayitTarihi: new Date().toISOString(),
-          bildirimAktif: true,
-          seriGunu: 1,
-        });
-      }
+      });
     };
 
-    verileriGetir();
+    verileriCanliDinle();
+
+    // Uygulama kapatıldığında veya sayfa değiştiğinde canlı dinlemeyi kapatıyoruz
+    return () => abonelik();
   }, [user]);
 
   const internetVarMi = async () => {
@@ -293,7 +314,6 @@ export default function ProfileScreen() {
     }
   };
 
-  // 🔔 Bildirim Açma/Kapama mantığı
   const bildirimAyariniDegistir = async (deger) => {
     setBildirimAktif(deger);
     await AsyncStorage.setItem("bildirimAktif", JSON.stringify(deger));

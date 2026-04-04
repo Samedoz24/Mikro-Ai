@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, ActivityIndicator, useColorScheme } from "react-native";
+import { View, ActivityIndicator } from "react-native"; // useColorScheme sildik, artık kendi temamızı kullanacağız
 import { auth } from "./firebaseConfig";
 import { onAuthStateChanged } from "firebase/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -11,8 +11,8 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 // 🎨 İkon Kütüphanesi Eklendi
 import { Ionicons } from "@expo/vector-icons";
 
-// 🎨 Renkler
-import { colors } from "./theme";
+// 🌗 TEMA YÖNETİCİSİ (Yeni Eklenen Kısım)
+import { ThemeProvider, useTheme } from "./ThemeContext";
 
 // 📄 Sayfalarımız
 import LoginScreen from "./screens/LoginScreen";
@@ -23,13 +23,14 @@ import ParentDashboard from "./screens/ParentDashboard";
 
 const Tab = createBottomTabNavigator();
 
-export default function App() {
+// 🧠 Ana Uygulama Gövdesi (Temayı okuyabilmesi için ayırdık)
+function MainApp() {
   const [kullanici, setKullanici] = useState(null);
   const [yukleniyor, setYukleniyor] = useState(true);
   const [kullaniciRolu, setKullaniciRolu] = useState("ogrenci");
 
-  const sistemTemasi = useColorScheme();
-  const tema = sistemTemasi === "dark" ? colors.dark : colors.light;
+  // 🚀 ÇÖZÜM: Artık telefonun değil, uygulamanın kendi global temasını dinliyoruz
+  const { tema } = useTheme();
 
   useEffect(() => {
     const abonelik = onAuthStateChanged(auth, async (aktifKullanici) => {
@@ -58,7 +59,7 @@ export default function App() {
           flex: 1,
           justifyContent: "center",
           alignItems: "center",
-          backgroundColor: tema.arkaplan,
+          backgroundColor: tema.arkaplan, // Temadan otomatik gelir
         }}
       >
         <ActivityIndicator size="large" color={tema.anaButon} />
@@ -74,13 +75,10 @@ export default function App() {
     <NavigationContainer>
       <Tab.Navigator
         screenOptions={({ route }) => ({
-          // 🚀 İKON MANTIĞI BURAYA EKLENDİ
           tabBarIcon: ({ focused, color, size }) => {
             let iconName;
 
-            // Bulunduğumuz sayfanın ismine göre ikon seçiyoruz
             if (route.name === "Ana Sayfa") {
-              // focused = O an o sekmeye tıklanmışsa (aktifse)
               iconName = focused ? "camera" : "camera-outline";
             } else if (route.name === "Hata Defteri") {
               iconName = focused ? "book" : "book-outline";
@@ -92,7 +90,6 @@ export default function App() {
                 : "shield-checkmark-outline";
             }
 
-            // Seçilen ikonu ekrana basıyoruz
             return <Ionicons name={iconName} size={size} color={color} />;
           },
           headerTitleAlign: "center",
@@ -131,7 +128,6 @@ export default function App() {
           </>
         ) : (
           <>
-            {/* Veli için iki sekme: Yönetim Paneli ve Profil */}
             <Tab.Screen
               name="Veli Paneli"
               component={ParentDashboard}
@@ -146,5 +142,14 @@ export default function App() {
         )}
       </Tab.Navigator>
     </NavigationContainer>
+  );
+}
+
+// 🚀 EN ÜST KATMAN: Uygulamayı Tema Dağıtıcısı ile sarmalıyoruz
+export default function App() {
+  return (
+    <ThemeProvider>
+      <MainApp />
+    </ThemeProvider>
   );
 }

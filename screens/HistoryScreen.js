@@ -4,7 +4,6 @@ import {
   Text,
   View,
   FlatList,
-  useColorScheme,
   ActivityIndicator,
   TouchableOpacity,
   Modal,
@@ -13,7 +12,6 @@ import {
   Dimensions,
   Alert,
 } from "react-native";
-import { colors } from "../theme";
 import { auth, db, storage } from "../firebaseConfig";
 import {
   collection,
@@ -26,12 +24,15 @@ import {
 import { ref, deleteObject } from "firebase/storage";
 import { Ionicons } from "@expo/vector-icons";
 
+// 🌗 ÇÖZÜM: Kendi Tema Sistemimizi Bağladık
+import { useTheme } from "../ThemeContext";
+
 const ekranGenisligi = Dimensions.get("window").width;
 const ekranYuksekligi = Dimensions.get("window").height;
 
 export default function HistoryScreen() {
-  const sistemTemasi = useColorScheme();
-  const tema = sistemTemasi === "dark" ? colors.dark : colors.light;
+  // 🚀 ÇÖZÜM: Artık uygulamanın genel temasını okuyoruz
+  const { tema } = useTheme();
 
   const [sorular, setSorular] = useState([]);
   const [yukleniyor, setYukleniyor] = useState(true);
@@ -60,9 +61,8 @@ export default function HistoryScreen() {
         setYukleniyor(false);
       },
       (error) => {
-        // 🚀 ÇÖZÜM BURADA: İnternet kesildiğinde uygulamanın kırmızı ekran vermesini (çökmesini) engeller
         console.log("İnternet bağlantısı koptu veya okuma hatası:", error);
-        setYukleniyor(false); // Yükleniyor dönen ikonunu durdurur
+        setYukleniyor(false);
       }
     );
 

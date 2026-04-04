@@ -1,39 +1,34 @@
 // theme.js
-// Bu dosya uygulamanın tüm renk hafızasını tutar.
+// Uygulamanın renk paleti - Instagram Standartlarına Göre Güncellendi
 
 export const colors = {
-  // ☀️ AÇIK MOD RENKLERİ (Gündüz)
+  // ☀️ İNSTAGRAM AÇIK MOD
   light: {
-    arkaplan: "#F8F9FA", // Çok açık gri (Göz yormayan beyaz)
-    metin: "#2D3436", // Koyu gri/siyah (Okunabilirlik için)
-    ikincilMetin: "#6c757d",
+    arkaplan: "#FFFFFF", // Saf Beyaz
+    metin: "#262626", // Instagram Koyu Metin
+    ikincilMetin: "#8E8E8E", // Instagram Gri Alt Metin
 
-    // Palet 1: Güven ve Temel Aksiyonlar
-    anaButon: "#007BFF", // Güven Mavisi (Giriş yap, Kayıt ol)
+    anaButon: "#0095F6", // Instagram Mavisi
+    aiButon: "#6C5CE7",
+    kameraButon: "#FFC107",
 
-    // Palet 2: Yapay Zeka ve Teknoloji
-    aiButon: "#6C5CE7", // Teknoloji Moru (Hocaya Sor butonu)
-
-    // Palet 3: Enerji ve Aksiyon
-    kameraButon: "#FFC107", // Dikkat Sarısı (Fotoğraf Çek)
-
-    kutuArkaplan: "#FFFFFF", // Metin kutuları için saf beyaz
-    kutuCerceve: "#ced4da",
-    hataKirmizi: "#dc3545", // Çıkış yap veya vazgeç
+    kutuArkaplan: "#FAFAFA", // Çok Hafif Gri Kutu
+    kutuCerceve: "#DBDBDB", // İnce Çerçeve
+    hataKirmizi: "#ED4956", // Instagram Hata Kırmızısı
   },
 
-  // 🌙 KARANLIK MOD RENKLERİ (Gece)
+  // 🌙 İNSTAGRAM KOYU MOD (OLED)
   dark: {
-    arkaplan: "#1E272E", // Gece Laciverti (Tam siyah yerine asil lacivert)
-    metin: "#F8F9FA", // Açık gri/beyaz (Okunabilirlik için)
-    ikincilMetin: "#b2bec3",
+    arkaplan: "#000000", // Saf OLED Siyahı (Şarj Dostu)
+    metin: "#F5F5F5", // Kırık Beyaz Metin
+    ikincilMetin: "#A8A8A8", // Koyu Mod Gri Alt Metin
 
-    anaButon: "#0984E3", // Geceye uygun Mavi
-    aiButon: "#A29BFE", // Geceye uygun açık Teknoloji Moru
-    kameraButon: "#FDCB6E", // Geceye uygun yumuşak Sarı
+    anaButon: "#0095F6", // Instagram Mavisi (Aynı Kalır)
+    aiButon: "#A29BFE",
+    kameraButon: "#FDCB6E",
 
-    kutuArkaplan: "#2D3436", // Metin kutuları için koyu gri
-    kutuCerceve: "#636e72",
-    hataKirmizi: "#ff7675",
+    kutuArkaplan: "#121212", // Yükseltilmiş Siyah Kutu
+    kutuCerceve: "#262626", // Belirgin Koyu Çerçeve
+    hataKirmizi: "#ED4956",
   },
 };

@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  useColorScheme,
   Alert,
   Modal,
   TextInput,
@@ -22,12 +21,11 @@ import {
   updateDoc,
   deleteDoc,
   deleteField,
-  onSnapshot, // 🚀 ÇÖZÜM: Canlı dinleyici eklendi
+  onSnapshot,
 } from "firebase/firestore";
 import { ref, deleteObject } from "firebase/storage";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { colors } from "../theme";
 import { Ionicons } from "@expo/vector-icons";
 
 // 📷 Resim ve Dosya Kütüphaneleri
@@ -41,14 +39,19 @@ import {
   cancelAllNotifications,
 } from "../utils/notificationManager";
 
+// 🌗 TEMA YÖNETİCİSİ
+import { useTheme } from "../ThemeContext";
+
 export default function ProfileScreen() {
   const user = auth.currentUser;
-  const sistemTemasi = useColorScheme();
-  const tema = sistemTemasi === "dark" ? colors.dark : colors.light;
+
+  const { tema, temaModu, temaDegistir } = useTheme();
 
   const [rol, setRol] = useState("ogrenci");
   const [sinifModalGorunur, setSinifModalGorunur] = useState(false);
   const [seciliSinif, setSeciliSinif] = useState("Sınıf Seçilmedi");
+
+  const [temaModalGorunur, setTemaModalGorunur] = useState(false);
 
   const [adSoyad, setAdSoyad] = useState("");
   const [bildirimAktif, setBildirimAktif] = useState(true);
@@ -71,14 +74,13 @@ export default function ProfileScreen() {
   };
 
   useEffect(() => {
-    let abonelik = () => {}; // Boş bir temizleyici fonksiyon ile başlatıyoruz
+    let abonelik = () => {};
 
     const verileriCanliDinle = async () => {
       if (!user) return;
 
       const bugununTarihi = new Date().toISOString().split("T")[0];
 
-      // Sabit verileri AsyncStorage'dan alıyoruz
       const kayitliRol = await AsyncStorage.getItem("kullaniciRolu");
       setRol(kayitliRol || "ogrenci");
 
@@ -99,7 +101,6 @@ export default function ProfileScreen() {
 
       const kullaniciRef = doc(db, "kullanicilar", user.uid);
 
-      // 🔄 ÇÖZÜM BURADA: getDoc yerine onSnapshot kullanarak Firebase'i canlı izliyoruz
       abonelik = onSnapshot(kullaniciRef, async (kullaniciSnap) => {
         if (kullaniciSnap.exists()) {
           const data = kullaniciSnap.data();
@@ -120,11 +121,9 @@ export default function ProfileScreen() {
             await AsyncStorage.setItem("profilFoto", data.profilFoto);
           }
 
-          // 🧠 KOTA YENİLEME SİSTEMİ
           let guncelKota = data.kalanSoru !== undefined ? data.kalanSoru : 3;
           let veritabaniTarihi = data.sonSoruTarihi || "";
 
-          // Eğer veritabanındaki tarih bugün değilse (gün atlamışsa), kotayı 3'e fulle
           if (veritabaniTarihi !== bugununTarihi) {
             guncelKota = 3;
             await updateDoc(kullaniciRef, {
@@ -133,12 +132,11 @@ export default function ProfileScreen() {
             });
           }
 
-          setKalanSoru(guncelKota); // Ekranda güncel sayıyı (ister düşmüş ister fulenmiş) anında göster
+          setKalanSoru(guncelKota);
         } else {
           const yeniKod = rastgeleKodUret();
           setBaglantiKodu(yeniKod);
 
-          // Yeni hesaba varsayılan olarak 3 kota ve bugünün tarihini tanımlıyoruz
           await setDoc(kullaniciRef, {
             eposta: user.email,
             rol: kayitliRol || "ogrenci",
@@ -156,7 +154,6 @@ export default function ProfileScreen() {
 
     verileriCanliDinle();
 
-    // Uygulama kapatıldığında veya sayfa değiştiğinde canlı dinlemeyi kapatıyoruz
     return () => abonelik();
   }, [user]);
 
@@ -651,6 +648,36 @@ export default function ProfileScreen() {
         >
           Tercihler
         </Text>
+
+        <TouchableOpacity
+          onPress={() => setTemaModalGorunur(true)}
+          style={[styles.menuItem, { backgroundColor: tema.kutuArkaplan }]}
+        >
+          <Ionicons
+            name="color-palette-outline"
+            size={22}
+            color={tema.anaButon}
+            style={styles.menuIcon}
+          />
+          <View style={styles.menuMetinAlan}>
+            <Text style={[styles.menuBaslik, { color: tema.metin }]}>
+              Görünüm Modu
+            </Text>
+            <Text style={[styles.menuAlt, { color: tema.ikincilMetin }]}>
+              {temaModu === "light"
+                ? "Açık Mod"
+                : temaModu === "dark"
+                ? "Koyu Mod"
+                : "Sistem Ayarı"}
+            </Text>
+          </View>
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={tema.ikincilMetin}
+          />
+        </TouchableOpacity>
+
         <View style={[styles.menuItem, { backgroundColor: tema.kutuArkaplan }]}>
           <Ionicons
             name="notifications-outline"
@@ -803,6 +830,100 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={temaModalGorunur}
+        animationType="slide"
+        transparent={true}
+      >
+        <View style={styles.modalArkaplan}>
+          <View
+            style={[styles.modalKutu, { backgroundColor: tema.kutuArkaplan }]}
+          >
+            <Text style={[styles.modalBaslik, { color: tema.metin }]}>
+              Görünüm Modu Seç
+            </Text>
+
+            <TouchableOpacity
+              style={[
+                styles.modalSecenek,
+                { borderBottomColor: tema.kutuCerceve },
+              ]}
+              onPress={() => {
+                temaDegistir("light");
+                setTemaModalGorunur(false);
+              }}
+            >
+              <Text
+                style={[
+                  styles.modalSecenekYazi,
+                  {
+                    color: temaModu === "light" ? tema.anaButon : tema.metin,
+                    fontWeight: temaModu === "light" ? "bold" : "normal",
+                  },
+                ]}
+              >
+                ☀️ Açık Mod
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.modalSecenek,
+                { borderBottomColor: tema.kutuCerceve },
+              ]}
+              onPress={() => {
+                temaDegistir("dark");
+                setTemaModalGorunur(false);
+              }}
+            >
+              <Text
+                style={[
+                  styles.modalSecenekYazi,
+                  {
+                    color: temaModu === "dark" ? tema.anaButon : tema.metin,
+                    fontWeight: temaModu === "dark" ? "bold" : "normal",
+                  },
+                ]}
+              >
+                🌙 Koyu Mod
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.modalSecenek,
+                { borderBottomColor: "transparent" },
+              ]}
+              onPress={() => {
+                temaDegistir("system");
+                setTemaModalGorunur(false);
+              }}
+            >
+              <Text
+                style={[
+                  styles.modalSecenekYazi,
+                  {
+                    color: temaModu === "system" ? tema.anaButon : tema.metin,
+                    fontWeight: temaModu === "system" ? "bold" : "normal",
+                  },
+                ]}
+              >
+                📱 Sistem Ayarı
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setTemaModalGorunur(false)}
+              style={styles.modalKapatButon}
+            >
+              <Text style={{ color: tema.hataKirmizi, fontWeight: "bold" }}>
+                Kapat
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -887,7 +1008,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 25,
   },
-  modalKutu: { borderRadius: 20, padding: 20 },
+  modalKutu: { borderRadius: 20, padding: 20, width: "100%" },
   modalBaslik: {
     fontSize: 19,
     fontWeight: "bold",

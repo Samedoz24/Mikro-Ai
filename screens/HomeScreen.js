@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
   Image,
   StyleSheet,
-  useColorScheme,
   Platform,
   Modal,
   Dimensions,
@@ -22,7 +21,9 @@ import ConfettiCannon from "react-native-confetti-cannon";
 import { auth, db, storage } from "../firebaseConfig";
 import { collection, addDoc, doc, getDoc, updateDoc } from "firebase/firestore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { colors } from "../theme";
+
+// 🌗 ÇÖZÜM: Kendi Tema Sistemimizi Bağladık
+import { useTheme } from "../ThemeContext";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -34,8 +35,9 @@ export default function HomeScreen() {
   const [seriModalGorunur, setSeriModalGorunur] = useState(false);
   const [guncelSeriSayisi, setGuncelSeriSayisi] = useState(0);
 
-  const sistemTemasi = useColorScheme();
-  const tema = sistemTemasi === "dark" ? colors.dark : colors.light;
+  // 🚀 ÇÖZÜM: Artık uygulamanın genel temasını okuyoruz
+  const { tema } = useTheme();
+
   const user = auth.currentUser;
 
   useEffect(() => {
@@ -155,11 +157,10 @@ export default function HomeScreen() {
         return;
       }
 
-      // 🚀 ÇÖZÜM 1: Fotoğrafı göndermeden önce veritabanındaki güncel kotayı soruyoruz
       const kullaniciRef = doc(db, "kullanicilar", auth.currentUser.uid);
       const kullaniciSnap = await getDoc(kullaniciRef);
 
-      let mevcutKota = 3; // Eğer bir hata olursa varsayılan 3 veriyoruz
+      let mevcutKota = 3;
       if (kullaniciSnap.exists()) {
         const data = kullaniciSnap.data();
         if (data.kalanSoru !== undefined) {
@@ -167,17 +168,15 @@ export default function HomeScreen() {
         }
       }
 
-      // 🛑 Eğer kota bittiyse işlemi durdur ve uyarı ver
       if (mevcutKota <= 0) {
         setYukleniyor(false);
         Alert.alert(
           "Günlük Kotan Doldu! ⏳",
           "Bugünkü 3 ücretsiz soru sorma hakkını bitirdin. Lütfen yarın tekrar gel veya haklarını yenilemek için profilini kontrol et."
         );
-        return; // Buradan aşağısına inmez, işlemi keser
+        return;
       }
 
-      // Kota varsa yükleme işlemine devam ediyoruz
       const dosyaYolu = `kullanicilar/${
         auth.currentUser.uid
       }/sorular/${Date.now()}.jpg`;
@@ -208,7 +207,6 @@ export default function HomeScreen() {
         durum: "Bekliyor",
       });
 
-      // 🚀 ÇÖZÜM 2: Fotoğraf başarıyla gittiyse kotayı -1 eksiltiyoruz
       await updateDoc(kullaniciRef, {
         kalanSoru: mevcutKota - 1,
       });

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Text,
   View,
@@ -15,7 +15,8 @@ import * as FileSystem from "expo-file-system/legacy";
 import { Ionicons } from "@expo/vector-icons";
 
 import { auth, db, storage } from "../firebaseConfig";
-import { collection, addDoc } from "firebase/firestore";
+import { collection, addDoc, doc, getDoc, updateDoc } from "firebase/firestore"; // Firestore eklentileri
+import AsyncStorage from "@react-native-async-storage/async-storage"; // Storage eklentisi
 import { colors } from "../theme";
 
 export default function HomeScreen() {
@@ -24,6 +25,74 @@ export default function HomeScreen() {
 
   const sistemTemasi = useColorScheme();
   const tema = sistemTemasi === "dark" ? colors.dark : colors.light;
+  const user = auth.currentUser;
+
+  // 🚀 SERİ (STREAK) KONTROL MEKANİZMASI (YENİ EKLENDİ)
+  useEffect(() => {
+    const seriKontrol = async () => {
+      if (!user) return;
+
+      try {
+        const bugun = new Date();
+        bugun.setHours(0, 0, 0, 0); // Sadece tarihi baz al, saatleri sıfırla
+
+        const kullaniciRef = doc(db, "kullanicilar", user.uid);
+        const kullaniciSnap = await getDoc(kullaniciRef);
+
+        if (kullaniciSnap.exists()) {
+          const data = kullaniciSnap.data();
+          let mevcutSeri = data.seriGunu || 0;
+          let sonGiris = data.sonGirisTarihi
+            ? new Date(data.sonGirisTarihi)
+            : null;
+
+          let guncellenecekVeri = {};
+
+          if (!sonGiris) {
+            // İlk kez giriyorsa
+            guncellenecekVeri = {
+              seriGunu: 1,
+              sonGirisTarihi: bugun.toISOString(),
+            };
+          } else {
+            const farkMilisaniye = bugun.getTime() - sonGiris.getTime();
+            const farkGun = farkMilisaniye / (1000 * 3600 * 24);
+
+            if (farkGun === 1) {
+              // Dün girmiş, seriyi artır
+              guncellenecekVeri = {
+                seriGunu: mevcutSeri + 1,
+                sonGirisTarihi: bugun.toISOString(),
+              };
+            } else if (farkGun > 1) {
+              // Seriyi kaçırmış, baştan başlat
+              guncellenecekVeri = {
+                seriGunu: 1,
+                sonGirisTarihi: bugun.toISOString(),
+              };
+            }
+            // Eğer farkGun 0 ise (bugün girmişse) işlem yapma
+          }
+
+          // Eğer veri güncellendiyse (yani bugün ilk defa açılıyorsa veya seri değiştiyse) Firebase ve Storage'a kaydet
+          if (Object.keys(guncellenecekVeri).length > 0) {
+            await updateDoc(kullaniciRef, guncellenecekVeri);
+            await AsyncStorage.setItem(
+              "seriGunu",
+              String(guncellenecekVeri.seriGunu)
+            );
+          } else {
+            // Değişiklik yoksa bile profil sayfasının okuyabilmesi için güncel seriyi telefona yazalım
+            await AsyncStorage.setItem("seriGunu", String(mevcutSeri));
+          }
+        }
+      } catch (error) {
+        console.log("Seri kontrol hatası:", error);
+      }
+    };
+
+    seriKontrol();
+  }, [user]);
 
   // 📷 Kamerayı Açma ve Çekim Kalitesini Ayarlama
   const kamerayiAc = async () => {
@@ -54,19 +123,18 @@ export default function HomeScreen() {
   // ❌ Çekilen Fotoğrafı İptal Etme
   const fotografiIptalEt = () => setImage(null);
 
-  // 🌐 Kendi İnternet Kontrol Fonksiyonumuz (Native paket gerektirmez)
+  // 🌐 Kendi İnternet Kontrol Fonksiyonumuz
   const internetVarMi = async () => {
     try {
-      // Google'a görünmez bir sinyal atıyoruz, 3 saniye içinde cevap gelmezse "Timeout" hatası verdiriyoruz
       await Promise.race([
         fetch("https://www.google.com", { method: "HEAD" }),
         new Promise((_, reject) =>
           setTimeout(() => reject(new Error("Timeout")), 3000)
         ),
       ]);
-      return true; // Sinyal gittiyse internet var
+      return true;
     } catch (error) {
-      return false; // Hata verdiyse veya 3 saniyede gitmediyse internet yok
+      return false;
     }
   };
 
@@ -75,8 +143,7 @@ export default function HomeScreen() {
     if (!image) return;
 
     try {
-      // 🛡️ İlk iş olarak interneti kontrol ediyoruz
-      setYukleniyor(true); // Önce butonu "Kontrol ediliyor..." gibi göstermek için döndürüyoruz
+      setYukleniyor(true);
       const baglanti = await internetVarMi();
 
       if (!baglanti) {
@@ -85,7 +152,7 @@ export default function HomeScreen() {
           "Bağlantı Hatası",
           "Lütfen internet bağlantınızı kontrol edip tekrar deneyin."
         );
-        return; // İnternet yoksa işlemi anında iptal et
+        return;
       }
 
       const dosyaYolu = `kullanicilar/${

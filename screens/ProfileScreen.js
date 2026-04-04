@@ -10,16 +10,29 @@ import {
   Modal,
   TextInput,
   Switch,
+  Image,
 } from "react-native";
 
 // Firebase Kütüphaneleri
-import { auth, db } from "../firebaseConfig";
-import { signOut } from "firebase/auth";
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import { auth, db, storage } from "../firebaseConfig";
+import { signOut, deleteUser } from "firebase/auth";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  deleteField,
+} from "firebase/firestore";
+import { ref, deleteObject } from "firebase/storage";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { colors } from "../theme";
 import { Ionicons } from "@expo/vector-icons";
+
+// 📷 Resim ve Dosya Kütüphaneleri
+import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from "expo-file-system/legacy";
 
 export default function ProfileScreen() {
   const user = auth.currentUser;
@@ -32,6 +45,10 @@ export default function ProfileScreen() {
 
   const [adSoyad, setAdSoyad] = useState("");
   const [bildirimAktif, setBildirimAktif] = useState(true);
+
+  const [profilFoto, setProfilFoto] = useState(null);
+  const [kaydetmeBasarili, setKaydetmeBasarili] = useState(false);
+  const [fotoYukleniyor, setFotoYukleniyor] = useState(false);
 
   const [kalanSoru, setKalanSoru] = useState(3);
   const [seriGunu, setSeriGunu] = useState(0);
@@ -50,10 +67,8 @@ export default function ProfileScreen() {
     const verileriGetir = async () => {
       if (!user) return;
 
-      // 1. Rolü, Sınıfı ve İsmi Hafızadan Hızlıca Al (Bekletmemek için)
       const kayitliRol = await AsyncStorage.getItem("kullaniciRolu");
-      const gecerliRol = kayitliRol || "ogrenci";
-      setRol(gecerliRol);
+      setRol(kayitliRol || "ogrenci");
 
       const kayitliSinif = await AsyncStorage.getItem("seciliSinif");
       if (kayitliSinif) setSeciliSinif(kayitliSinif);
@@ -61,36 +76,228 @@ export default function ProfileScreen() {
       const kayitliAdSoyad = await AsyncStorage.getItem("adSoyad");
       if (kayitliAdSoyad) setAdSoyad(kayitliAdSoyad);
 
-      // 2. Firebase Veritabanından Kullanıcıyı Bul (Asıl Güvenilir Kaynak)
+      const kayitliFoto = await AsyncStorage.getItem("profilFoto");
+      if (kayitliFoto) setProfilFoto(kayitliFoto);
+
+      // 🚀 YENİ EKLENDİ: Telefona kaydedilen seriyi hızlıca oku
+      const kayitliSeri = await AsyncStorage.getItem("seriGunu");
+      if (kayitliSeri) setSeriGunu(parseInt(kayitliSeri));
+
+      const bildirimAyar = await AsyncStorage.getItem("bildirimAktif");
+      if (bildirimAyar !== null) setBildirimAktif(JSON.parse(bildirimAyar));
+
       const kullaniciRef = doc(db, "kullanicilar", user.uid);
       const kullaniciSnap = await getDoc(kullaniciRef);
 
       if (kullaniciSnap.exists()) {
         const data = kullaniciSnap.data();
 
-        // Firebase'den gelen GÜNCEL verileri ekrana bas
         if (data.sinif) setSeciliSinif(data.sinif);
         if (data.baglantiKodu) setBaglantiKodu(data.baglantiKodu);
         if (data.adSoyad) setAdSoyad(data.adSoyad);
+        if (data.bildirimAktif !== undefined)
+          setBildirimAktif(data.bildirimAktif);
 
-        // Bu güncel verileri, sonraki açılışlar için telefonun hafızasına da kaydet
+        // 🚀 YENİ EKLENDİ: Firebase'den güncel seriyi al (Garanti olsun diye)
+        if (data.seriGunu !== undefined) {
+          setSeriGunu(data.seriGunu);
+          await AsyncStorage.setItem("seriGunu", String(data.seriGunu));
+        }
+
+        if (data.profilFoto) {
+          setProfilFoto(data.profilFoto);
+          await AsyncStorage.setItem("profilFoto", data.profilFoto);
+        }
+
         if (data.adSoyad) await AsyncStorage.setItem("adSoyad", data.adSoyad);
         if (data.sinif) await AsyncStorage.setItem("seciliSinif", data.sinif);
+        if (data.bildirimAktif !== undefined)
+          await AsyncStorage.setItem(
+            "bildirimAktif",
+            JSON.stringify(data.bildirimAktif)
+          );
       } else {
         const yeniKod = rastgeleKodUret();
         setBaglantiKodu(yeniKod);
 
         await setDoc(kullaniciRef, {
           eposta: user.email,
-          rol: gecerliRol,
+          rol: kayitliRol || "ogrenci",
           baglantiKodu: yeniKod,
           kayitTarihi: new Date().toISOString(),
+          bildirimAktif: true,
+          seriGunu: 1, // Yeni kullanıcı ilk kez girdiği için 1'den başlar
         });
       }
     };
 
     verileriGetir();
   }, [user]);
+
+  // 🌐 ÇÖZÜM: Kendi İnternet Kontrol Fonksiyonumuz
+  const internetVarMi = async () => {
+    try {
+      await Promise.race([
+        fetch("https://www.google.com", { method: "HEAD" }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Timeout")), 3000)
+        ),
+      ]);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  };
+
+  const isimKaydet = async () => {
+    if (adSoyad !== "") {
+      await AsyncStorage.setItem("adSoyad", adSoyad);
+      if (user) {
+        const kullaniciRef = doc(db, "kullanicilar", user.uid);
+        await updateDoc(kullaniciRef, { adSoyad: adSoyad });
+      }
+
+      setKaydetmeBasarili(true);
+      setTimeout(() => setKaydetmeBasarili(false), 2500);
+    }
+  };
+
+  const fotoAksiyonMenusu = () => {
+    if (profilFoto) {
+      Alert.alert("Profil Fotoğrafı", "Ne yapmak istersiniz?", [
+        { text: "İptal", style: "cancel" },
+        { text: "Fotoğrafı Değiştir", onPress: profilFotografiSec },
+        {
+          text: "Fotoğrafı Kaldır",
+          onPress: profilFotografiKaldir,
+          style: "destructive",
+        },
+      ]);
+    } else {
+      profilFotografiSec();
+    }
+  };
+
+  const profilFotografiKaldir = async () => {
+    setFotoYukleniyor(true);
+    const baglanti = await internetVarMi();
+    if (!baglanti) {
+      setFotoYukleniyor(false);
+      Alert.alert(
+        "Bağlantı Hatası",
+        "İnternet bağlantınız olmadığı için fotoğraf kaldırılamadı."
+      );
+      return;
+    }
+
+    try {
+      setProfilFoto(null);
+      await AsyncStorage.removeItem("profilFoto");
+
+      if (user) {
+        const kullaniciRef = doc(db, "kullanicilar", user.uid);
+        await updateDoc(kullaniciRef, { profilFoto: deleteField() });
+
+        const fotoRef = ref(storage, `profil_fotograflari/${user.uid}.jpg`);
+        await deleteObject(fotoRef).catch((err) =>
+          console.log("Dosya zaten yok:", err)
+        );
+      }
+    } catch (error) {
+      console.log("Fotoğraf kaldırma hatası:", error);
+      Alert.alert("Hata", "Fotoğraf kaldırılırken bir sorun oluştu.");
+    } finally {
+      setFotoYukleniyor(false);
+    }
+  };
+
+  const profilFotografiSec = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert(
+        "İzin Gerekli",
+        "Fotoğraf seçebilmek için galeri erişim izni vermelisiniz."
+      );
+      return;
+    }
+
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.3,
+    });
+
+    if (!result.canceled) {
+      setFotoYukleniyor(true);
+      const baglanti = await internetVarMi();
+      if (!baglanti) {
+        setFotoYukleniyor(false);
+        Alert.alert(
+          "Bağlantı Hatası",
+          "Lütfen internet bağlantınızı kontrol edip tekrar deneyin."
+        );
+        return;
+      }
+
+      const secilenFotoUri = result.assets[0].uri;
+      setProfilFoto(secilenFotoUri);
+
+      try {
+        if (user) {
+          const dosyaYolu = `profil_fotograflari/${user.uid}.jpg`;
+          const encodedYol = encodeURIComponent(dosyaYolu);
+          const bucket =
+            storage.app.options.storageBucket ||
+            "project-21-3e377.firebasestorage.app";
+          const url = `https://firebasestorage.googleapis.com/v0/b/${bucket}/o?name=${encodedYol}`;
+          const token = await user.getIdToken();
+
+          const uploadResult = await FileSystem.uploadAsync(
+            url,
+            secilenFotoUri,
+            {
+              httpMethod: "POST",
+              headers: {
+                "Content-Type": "image/jpeg",
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
+
+          if (uploadResult.status !== 200) {
+            throw new Error(
+              `Yükleme başarısız! Sunucu kodu: ${uploadResult.status}`
+            );
+          }
+
+          const data = JSON.parse(uploadResult.body);
+          const indirmeURL = `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodedYol}?alt=media&token=${data.downloadTokens}`;
+
+          const kullaniciRef = doc(db, "kullanicilar", user.uid);
+          await updateDoc(kullaniciRef, { profilFoto: indirmeURL });
+          await AsyncStorage.setItem("profilFoto", indirmeURL);
+          setProfilFoto(indirmeURL);
+        }
+      } catch (error) {
+        console.log("Fotoğraf yükleme hatası:", error);
+        Alert.alert("Hata", "Fotoğraf buluta yüklenirken sorun oluştu.");
+        setProfilFoto(null);
+      } finally {
+        setFotoYukleniyor(false);
+      }
+    }
+  };
+
+  const bildirimAyariniDegistir = async (deger) => {
+    setBildirimAktif(deger);
+    await AsyncStorage.setItem("bildirimAktif", JSON.stringify(deger));
+
+    if (user) {
+      const kullaniciRef = doc(db, "kullanicilar", user.uid);
+      await updateDoc(kullaniciRef, { bildirimAktif: deger });
+    }
+  };
 
   const cikisYap = () => {
     Alert.alert(
@@ -102,12 +309,14 @@ export default function ProfileScreen() {
           text: "Evet",
           onPress: async () => {
             try {
-              // Çıkış yaparken önceki hesaba ait tüm geçici hafızayı temizle
-              await AsyncStorage.removeItem("adSoyad");
-              await AsyncStorage.removeItem("seciliSinif");
-              await AsyncStorage.removeItem("kullaniciRolu");
-
-              // Firebase'den çıkış yap
+              await AsyncStorage.multiRemove([
+                "adSoyad",
+                "seciliSinif",
+                "kullaniciRolu",
+                "bildirimAktif",
+                "profilFoto",
+                "seriGunu", // Çıkış yapınca seriyi telefondan siliyoruz
+              ]);
               await signOut(auth);
             } catch (error) {
               console.log("Çıkış hatası:", error);
@@ -119,14 +328,50 @@ export default function ProfileScreen() {
   };
 
   const hesabiSil = () => {
-    Alert.alert("Hesabı Sil", "Tüm verileriniz kalıcı olarak silinecektir.", [
-      { text: "Vazgeç", style: "cancel" },
-      {
-        text: "Sil",
-        style: "destructive",
-        onPress: () => console.log("Silme talebi"),
-      },
-    ]);
+    Alert.alert(
+      "Hesabı Sil",
+      "Tüm verileriniz kalıcı olarak silinecektir. Bu işlem geri alınamaz.",
+      [
+        { text: "Vazgeç", style: "cancel" },
+        {
+          text: "Sil",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              if (user) {
+                await deleteDoc(doc(db, "kullanicilar", user.uid));
+                await AsyncStorage.multiRemove([
+                  "adSoyad",
+                  "seciliSinif",
+                  "kullaniciRolu",
+                  "bildirimAktif",
+                  "profilFoto",
+                  "seriGunu",
+                ]);
+                await deleteUser(user);
+              }
+            } catch (error) {
+              if (error.code === "auth/requires-recent-login") {
+                Alert.alert(
+                  "Güvenlik Doğrulaması",
+                  "Güvenliğiniz için hesabınızı silmeden önce yeniden giriş yapmanız gerekiyor. Lütfen çıkış yapıp tekrar giriş yapın.",
+                  [
+                    { text: "İptal", style: "cancel" },
+                    {
+                      text: "Çıkış Yap",
+                      onPress: cikisYap,
+                      style: "destructive",
+                    },
+                  ]
+                );
+              } else {
+                Alert.alert("Hata", "Hesap silinirken hata oluştu.");
+              }
+            }
+          },
+        },
+      ]
+    );
   };
 
   const siniflar = [
@@ -145,17 +390,49 @@ export default function ProfileScreen() {
     "Mezun",
   ];
 
+  const getAvatarHarf = () => {
+    if (adSoyad && adSoyad.trim().length > 0) {
+      return adSoyad.charAt(0).toUpperCase();
+    }
+    return user?.email?.charAt(0).toUpperCase() || "?";
+  };
+
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: tema.arkaplan }]}
       showsVerticalScrollIndicator={false}
     >
       <View style={[styles.header, { backgroundColor: tema.anaButon }]}>
-        <View style={styles.avatarContainer}>
-          <Text style={styles.avatarText}>
-            {user?.email?.charAt(0).toUpperCase()}
+        <TouchableOpacity
+          style={styles.avatarContainer}
+          onPress={fotoAksiyonMenusu}
+          disabled={fotoYukleniyor}
+        >
+          {profilFoto ? (
+            <Image source={{ uri: profilFoto }} style={styles.avatarImage} />
+          ) : (
+            <Text style={styles.avatarText}>{getAvatarHarf()}</Text>
+          )}
+          <View
+            style={[styles.kameraIkonKutu, { backgroundColor: tema.anaButon }]}
+          >
+            <Ionicons name="camera" size={16} color="#fff" />
+          </View>
+        </TouchableOpacity>
+
+        {fotoYukleniyor && (
+          <Text
+            style={{
+              color: "#fff",
+              fontSize: 12,
+              marginTop: -10,
+              marginBottom: 10,
+            }}
+          >
+            Yükleniyor...
           </Text>
-        </View>
+        )}
+
         <Text style={styles.userName}>
           {adSoyad || user?.email?.split("@")[0]}
         </Text>
@@ -183,16 +460,20 @@ export default function ProfileScreen() {
             onChangeText={setAdSoyad}
             autoCorrect={false}
             spellCheck={false}
-            onEndEditing={async () => {
-              if (adSoyad !== "") {
-                await AsyncStorage.setItem("adSoyad", adSoyad);
-                if (user) {
-                  const kullaniciRef = doc(db, "kullanicilar", user.uid);
-                  await updateDoc(kullaniciRef, { adSoyad: adSoyad });
-                }
-              }
-            }}
+            onEndEditing={isimKaydet}
           />
+          {kaydetmeBasarili && (
+            <Text
+              style={{
+                color: "#2ecc71",
+                fontSize: 13,
+                marginTop: 8,
+                fontWeight: "bold",
+              }}
+            >
+              ✓ Bilgiler güncellendi
+            </Text>
+          )}
         </View>
 
         {rol === "ogrenci" && (
@@ -205,7 +486,6 @@ export default function ProfileScreen() {
             >
               Gelişim Durumum
             </Text>
-
             <View
               style={[
                 styles.streakKutu,
@@ -337,7 +617,7 @@ export default function ProfileScreen() {
           </Text>
           <Switch
             value={bildirimAktif}
-            onValueChange={setBildirimAktif}
+            onValueChange={bildirimAyariniDegistir}
             trackColor={{ false: tema.kutuCerceve, true: tema.anaButon }}
           />
         </View>
@@ -348,6 +628,9 @@ export default function ProfileScreen() {
           Destek ve Bilgi
         </Text>
         <TouchableOpacity
+          onPress={() =>
+            Alert.alert("Bilgi", "Kullanım rehberi yakında eklenecektir.")
+          }
           style={[styles.menuItem, { backgroundColor: tema.kutuArkaplan }]}
         >
           <Ionicons
@@ -361,6 +644,9 @@ export default function ProfileScreen() {
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
+          onPress={() =>
+            Alert.alert("Bilgi", "Kullanım koşulları yakında eklenecektir.")
+          }
           style={[styles.menuItem, { backgroundColor: tema.kutuArkaplan }]}
         >
           <Ionicons
@@ -444,9 +730,7 @@ export default function ProfileScreen() {
                   onPress={async () => {
                     setSeciliSinif(sinif);
                     setSinifModalGorunur(false);
-
                     await AsyncStorage.setItem("seciliSinif", sinif);
-
                     if (user) {
                       const kullaniciRef = doc(db, "kullanicilar", user.uid);
                       await updateDoc(kullaniciRef, { sinif: sinif });
@@ -485,15 +769,29 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 35,
   },
   avatarContainer: {
-    width: 85,
-    height: 85,
+    width: 90,
+    height: 90,
     borderRadius: 45,
     backgroundColor: "rgba(255,255,255,0.25)",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 15,
+    position: "relative",
   },
+  avatarImage: { width: 90, height: 90, borderRadius: 45 },
   avatarText: { fontSize: 38, color: "#fff", fontWeight: "bold" },
+  kameraIkonKutu: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
   userName: { fontSize: 22, color: "#fff", fontWeight: "bold" },
   userEmail: { fontSize: 14, color: "rgba(255,255,255,0.85)" },
   content: { padding: 20, paddingBottom: 40 },

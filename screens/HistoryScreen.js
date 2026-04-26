@@ -26,7 +26,7 @@ import { ref, deleteObject, getDownloadURL } from "firebase/storage";
 import { Ionicons } from "@expo/vector-icons";
 
 // İndirme İşlemleri Paketleri
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as MediaLibrary from "expo-media-library";
 
 // Tema Sistemimiz
@@ -207,7 +207,6 @@ export default function HistoryScreen() {
       ]
     );
   };
-
   const cozumKartiniIndir = async () => {
     if (!seciliSoru?.cozumKartiLink) {
       Alert.alert("Hata", "İndirilecek bir çözüm kartı bulunamadı.");
@@ -230,12 +229,13 @@ export default function HistoryScreen() {
       await MediaLibrary.saveToLibraryAsync(uri);
       Alert.alert("Başarılı!", "Çözüm kartı galerinize kaydedildi. 🖼️");
     } catch (error) {
+      // Hatayı terminalde detaylı görmek için log ekledik
+      console.log("İndirme Hatası Detayı:", error);
       Alert.alert("Hata", "Fotoğraf indirilirken bir sorun oluştu.");
     } finally {
       setIndirmeBasladi(false);
     }
   };
-
   if (yukleniyor) {
     return (
       <View

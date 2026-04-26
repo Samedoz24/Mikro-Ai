@@ -59,6 +59,13 @@
         {
           "cameraPermissionText": "Fotoğraf çekmek için kamera izni gerekli"
         }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Çözüm kartlarını galeriye kaydetmek için izninize ihtiyacımız var.",
+          "savePhotosPermission": "Çözüm kartını galeriye kaydetmek için izin verin."
+        }
       ]
     ],
     "extra": {

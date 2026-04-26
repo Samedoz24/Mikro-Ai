@@ -8,13 +8,14 @@ import {
 } from "firebase/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+// Şifreler artık güvenli .env dosyasından otomatik çekiliyor
 const firebaseConfig = {
-  apiKey: "AIzaSyCHRIo3u_-QCQOdv1O7YZAEdoR6f3TiaLs",
-  authDomain: "project-21-3e377.firebaseapp.com",
-  projectId: "project-21-3e377",
-  storageBucket: "project-21-3e377.firebasestorage.app",
-  messagingSenderId: "758732204910",
-  appId: "1:758732204910:web:d9b40d45ac4b312e842f7f",
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
 };
 
 // 🛡️ Uygulama zaten başlatıldıysa olanı al, yoksa yeni başlat
@@ -29,7 +30,6 @@ try {
   auth = getAuth(app);
 }
 
-// 🔄 ÇÖZÜM: Hata veren çevrimdışı bellek denemesi silindi, orijinal hatasız koda dönüldü
 const db = getFirestore(app);
 const storage = getStorage(app);
 

@@ -101,55 +101,76 @@ export default function ProfileScreen() {
 
       const kullaniciRef = doc(db, "kullanicilar", user.uid);
 
-      abonelik = onSnapshot(kullaniciRef, async (kullaniciSnap) => {
-        if (kullaniciSnap.exists()) {
-          const data = kullaniciSnap.data();
+      // 🛡️ DÜZELTME: onSnapshot hata yakalayıcı (error listener) ile güçlendirildi
+      abonelik = onSnapshot(
+        kullaniciRef,
+        async (kullaniciSnap) => {
+          if (kullaniciSnap.exists()) {
+            const data = kullaniciSnap.data();
 
-          if (data.sinif) setSeciliSinif(data.sinif);
-          if (data.baglantiKodu) setBaglantiKodu(data.baglantiKodu);
-          if (data.adSoyad) setAdSoyad(data.adSoyad);
-          if (data.bildirimAktif !== undefined)
-            setBildirimAktif(data.bildirimAktif);
+            if (data.sinif) setSeciliSinif(data.sinif);
+            if (data.baglantiKodu) setBaglantiKodu(data.baglantiKodu);
+            if (data.adSoyad) setAdSoyad(data.adSoyad);
+            if (data.bildirimAktif !== undefined)
+              setBildirimAktif(data.bildirimAktif);
 
-          if (data.seriGunu !== undefined) {
-            setSeriGunu(data.seriGunu);
-            await AsyncStorage.setItem("seriGunu", String(data.seriGunu));
+            if (data.seriGunu !== undefined) {
+              setSeriGunu(data.seriGunu);
+              await AsyncStorage.setItem("seriGunu", String(data.seriGunu));
+            }
+
+            if (data.profilFoto) {
+              setProfilFoto(data.profilFoto);
+              await AsyncStorage.setItem("profilFoto", data.profilFoto);
+            }
+
+            let guncelKota = data.kalanSoru !== undefined ? data.kalanSoru : 3;
+            let veritabaniTarihi = data.sonSoruTarihi || "";
+
+            if (veritabaniTarihi !== bugununTarihi) {
+              guncelKota = 3;
+              // 🛡️ DÜZELTME: Güncelleme işlemi try-catch içine alındı
+              try {
+                await updateDoc(kullaniciRef, {
+                  kalanSoru: 3,
+                  sonSoruTarihi: bugununTarihi,
+                });
+              } catch (e) {
+                console.log("Kota güncelleme hatası:", e.message);
+              }
+            }
+
+            setKalanSoru(guncelKota);
+          } else {
+            const yeniKod = rastgeleKodUret();
+            setBaglantiKodu(yeniKod);
+
+            // 🛡️ DÜZELTME: Kullanıcı oluşturma işlemi try-catch içine alındı
+            try {
+              await setDoc(kullaniciRef, {
+                eposta: user.email,
+                rol: kayitliRol || "ogrenci",
+                baglantiKodu: yeniKod,
+                kayitTarihi: new Date().toISOString(),
+                bildirimAktif: true,
+                seriGunu: 1,
+                kalanSoru: 3,
+                sonSoruTarihi: bugununTarihi,
+              });
+              setKalanSoru(3);
+            } catch (yazmaHatasi) {
+              console.log(
+                "Kullanıcı belge oluşturma hatası:",
+                yazmaHatasi.message
+              );
+            }
           }
-
-          if (data.profilFoto) {
-            setProfilFoto(data.profilFoto);
-            await AsyncStorage.setItem("profilFoto", data.profilFoto);
-          }
-
-          let guncelKota = data.kalanSoru !== undefined ? data.kalanSoru : 3;
-          let veritabaniTarihi = data.sonSoruTarihi || "";
-
-          if (veritabaniTarihi !== bugununTarihi) {
-            guncelKota = 3;
-            await updateDoc(kullaniciRef, {
-              kalanSoru: 3,
-              sonSoruTarihi: bugununTarihi,
-            });
-          }
-
-          setKalanSoru(guncelKota);
-        } else {
-          const yeniKod = rastgeleKodUret();
-          setBaglantiKodu(yeniKod);
-
-          await setDoc(kullaniciRef, {
-            eposta: user.email,
-            rol: kayitliRol || "ogrenci",
-            baglantiKodu: yeniKod,
-            kayitTarihi: new Date().toISOString(),
-            bildirimAktif: true,
-            seriGunu: 1,
-            kalanSoru: 3,
-            sonSoruTarihi: bugununTarihi,
-          });
-          setKalanSoru(3);
+        },
+        // 🛡️ DÜZELTME: Hata durumunda uygulamanın çökmesini engelleyen fonksiyon
+        (error) => {
+          console.log("Firebase Canlı Dinleme Hatası:", error.message);
         }
-      });
+      );
     };
 
     verileriCanliDinle();

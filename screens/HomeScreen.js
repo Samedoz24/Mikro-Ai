@@ -195,7 +195,13 @@ export default function HomeScreen() {
         },
       });
 
-      if (uploadResult.status !== 200) throw new Error("Yükleme başarısız!");
+      // 🚨 DÜZELTME BURADA: Eğer Firebase hata verirse gerçek hatayı terminale yazdırıyoruz
+      if (uploadResult.status !== 200) {
+        console.log("🔥 Firebase Sunucu Red Sebebi (Body):", uploadResult.body);
+        throw new Error(
+          `Yükleme başarısız! Sunucu Kodu: ${uploadResult.status}`
+        );
+      }
 
       const data = JSON.parse(uploadResult.body);
       const downloadURL = `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodedYol}?alt=media&token=${data.downloadTokens}`;
@@ -214,6 +220,7 @@ export default function HomeScreen() {
       Alert.alert("Başarılı", "Soru gönderildi! Kotandan 1 hak düştü.");
       fotografiIptalEt();
     } catch (error) {
+      console.log("📸 Fotoğraf Gönderme Hatası Detayı:", error);
       Alert.alert("Hata", "Yükleme sırasında bir hata oluştu.");
     } finally {
       setYukleniyor(false);

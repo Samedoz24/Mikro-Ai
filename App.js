@@ -1,18 +1,24 @@
 import React, { useState, useEffect } from "react";
-import { View, ActivityIndicator } from "react-native"; // useColorScheme sildik, artık kendi temamızı kullanacağız
-import { auth } from "./firebaseConfig";
-import { onAuthStateChanged } from "firebase/auth";
+import { View, ActivityIndicator, Alert } from "react-native";
+import { auth, db } from "./firebaseConfig";
+import { onAuthStateChanged, signOut } from "firebase/auth";
+import {
+  collection,
+  query,
+  where,
+  onSnapshot,
+  doc,
+  getDoc,
+  setDoc,
+} from "firebase/firestore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// 🧭 Navigasyon Paketleri
 import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-
-// 🎨 İkon Kütüphanesi Eklendi
 import { Ionicons } from "@expo/vector-icons";
 
-// 🌗 TEMA YÖNETİCİSİ (Yeni Eklenen Kısım)
 import { ThemeProvider, useTheme } from "./ThemeContext";
+import { sendQuestionSolvedNotification } from "./utils/notificationManager";
 
 // 📄 Sayfalarımız
 import LoginScreen from "./screens/LoginScreen";
@@ -20,37 +26,111 @@ import HomeScreen from "./screens/HomeScreen";
 import ProfileScreen from "./screens/ProfileScreen";
 import HistoryScreen from "./screens/HistoryScreen";
 import ParentDashboard from "./screens/ParentDashboard";
+// 🎯 YENİ: Onboarding sayfamızı uygulamaya dahil ediyoruz
+import OnboardingScreen from "./screens/OnboardingScreen";
 
 const Tab = createBottomTabNavigator();
 
-// 🧠 Ana Uygulama Gövdesi (Temayı okuyabilmesi için ayırdık)
 function MainApp() {
   const [kullanici, setKullanici] = useState(null);
   const [yukleniyor, setYukleniyor] = useState(true);
   const [kullaniciRolu, setKullaniciRolu] = useState("ogrenci");
 
-  // 🚀 ÇÖZÜM: Artık telefonun değil, uygulamanın kendi global temasını dinliyoruz
+  // 🎯 YENİ: Tanıtım ekranının gösterilip gösterilmeyeceğini tutan state
+  const [gosterOnboarding, setGosterOnboarding] = useState(false);
+
   const { tema } = useTheme();
 
+  // 🚪 Akıllı Kapı Bekçisi (Gatekeeper)
   useEffect(() => {
     const abonelik = onAuthStateChanged(auth, async (aktifKullanici) => {
       if (aktifKullanici) {
+        setYukleniyor(true);
+
         try {
-          const kayitliRol = await AsyncStorage.getItem("kullaniciRolu");
-          if (kayitliRol) {
-            setKullaniciRolu(kayitliRol);
+          const userDocRef = doc(db, "kullanicilar", aktifKullanici.uid);
+          const userDoc = await getDoc(userDocRef);
+          const hedefRol = await AsyncStorage.getItem("hedefRol");
+
+          if (userDoc.exists()) {
+            // ESKİ KULLANICI: Doğrudan içeri al (Tanıtımı gösterme)
+            const gercekRol = userDoc.data().rol || "ogrenci";
+
+            if (hedefRol && gercekRol !== hedefRol) {
+              await signOut(auth);
+              Alert.alert(
+                "Hatalı Giriş ❌",
+                `Bu e-posta adresi bir ${
+                  gercekRol === "ogrenci" ? "Öğrenci" : "Veli"
+                } hesabına ait. Lütfen doğru sekmeyi seçin.`
+              );
+              await AsyncStorage.removeItem("hedefRol");
+              setKullanici(null);
+              setYukleniyor(false);
+              return;
+            }
+
+            setKullaniciRolu(gercekRol);
+            await AsyncStorage.setItem("kullaniciRolu", gercekRol);
+            setGosterOnboarding(false); // Eski kullanıcı olduğu için tanıtım kapalı
+          } else {
+            // YENİ KULLANICI: Veritabanına kaydet ve Tanıtımı Aç
+            const yeniRol = hedefRol || "ogrenci";
+            await setDoc(
+              userDocRef,
+              {
+                eposta: aktifKullanici.email,
+                rol: yeniRol,
+                kayitTarihi: new Date().toISOString(),
+              },
+              { merge: true }
+            );
+
+            setKullaniciRolu(yeniRol);
+            await AsyncStorage.setItem("kullaniciRolu", yeniRol);
+
+            // 🎯 YENİ: Kullanıcı veritabanında ilk kez oluşturulduğu için tanıtımı göster
+            setGosterOnboarding(true);
           }
+
+          await AsyncStorage.removeItem("hedefRol");
         } catch (e) {
-          console.log("Hafızadan rol okuma hatası:", e);
+          console.log("Kapı bekçisi hatası:", e);
         }
+
         setKullanici(aktifKullanici);
       } else {
         setKullanici(null);
       }
       setYukleniyor(false);
     });
+
     return () => abonelik();
   }, []);
+
+  // 🤖 Arka Planda Soru Çözümü Bekçisi
+  useEffect(() => {
+    if (!kullanici || kullaniciRolu !== "ogrenci") return;
+
+    const q = query(
+      collection(db, "sorular"),
+      where("kullaniciEposta", "==", kullanici.email)
+    );
+
+    const abonelik = onSnapshot(q, (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === "modified") {
+          const veri = change.doc.data();
+          if (veri.durum === "Çözüldü") {
+            const dersAdi = veri.subject || veri.ders || "";
+            sendQuestionSolvedNotification(dersAdi);
+          }
+        }
+      });
+    });
+
+    return () => abonelik();
+  }, [kullanici, kullaniciRolu]);
 
   if (yukleniyor) {
     return (
@@ -59,7 +139,7 @@ function MainApp() {
           flex: 1,
           justifyContent: "center",
           alignItems: "center",
-          backgroundColor: tema.arkaplan, // Temadan otomatik gelir
+          backgroundColor: tema.arkaplan,
         }}
       >
         <ActivityIndicator size="large" color={tema.anaButon} />
@@ -69,6 +149,12 @@ function MainApp() {
 
   if (!kullanici) {
     return <LoginScreen setKullaniciRolu={setKullaniciRolu} />;
+  }
+
+  // 🎯 YENİ: Eğer yeni kayıt ise, Ana Menüyü göstermek yerine Tanıtım Ekranını göster
+  if (gosterOnboarding) {
+    // onTamamla fonksiyonu çalışınca (kullanıcı "Hemen Başla"ya basınca) gosterOnboarding'i false yapıp normal sekmelere geçiyoruz.
+    return <OnboardingScreen onTamamla={() => setGosterOnboarding(false)} />;
   }
 
   return (
@@ -145,7 +231,6 @@ function MainApp() {
   );
 }
 
-// 🚀 EN ÜST KATMAN: Uygulamayı Tema Dağıtıcısı ile sarmalıyoruz
 export default function App() {
   return (
     <ThemeProvider>

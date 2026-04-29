@@ -8,6 +8,7 @@ import {
   Alert,
   useColorScheme,
 } from "react-native";
+
 import { auth } from "../firebaseConfig";
 import {
   createUserWithEmailAndPassword,
@@ -15,13 +16,12 @@ import {
   GoogleAuthProvider,
   signInWithCredential,
 } from "firebase/auth";
-import { GoogleSignin } from "@react-native-google-signin/google-signin";
-import AsyncStorage from "@react-native-async-storage/async-storage"; // ➕ Hafıza paketi eklendi
 
-// 🎨 Renk dosyamızı çağırıyoruz
+import { GoogleSignin } from "@react-native-google-signin/google-signin";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
 import { colors } from "../theme";
 
-// ⚙️ Sayfa yüklenmeden önce Google ayarlarını yapıyoruz
 GoogleSignin.configure({
   webClientId:
     "758732204910-2juevkcahro9998k6u9tllfqo49sot1a.apps.googleusercontent.com",
@@ -38,33 +38,27 @@ export default function LoginScreen({ setKullaniciRolu }) {
   const sistemTemasi = useColorScheme();
   const tema = sistemTemasi === "dark" ? colors.dark : colors.light;
 
-  // 💾 ➕ YENİ: Rolü telefonun hafızasına kaydeden fonksiyon
-  const roluKaydet = async (rol) => {
+  const handleKayitOl = async () => {
     try {
-      await AsyncStorage.setItem("kullaniciRolu", rol);
-      setKullaniciRolu(rol);
+      await AsyncStorage.setItem("hedefRol", seciliRol); // Sadece hedeflenen rolü not alıyoruz, gerisini App.js yapacak
+      await createUserWithEmailAndPassword(auth, email, password);
     } catch (e) {
-      console.log("Rol kaydetme hatası:", e);
+      Alert.alert("Hata", e.message);
     }
   };
 
-  const handleKayitOl = async () => {
-    await roluKaydet(seciliRol); // ➕ İşlemden önce rolü kaydet
-    createUserWithEmailAndPassword(auth, email, password).catch((e) =>
-      Alert.alert("Hata", e.message)
-    );
-  };
-
   const handleGirisYap = async () => {
-    await roluKaydet(seciliRol); // ➕ İşlemden önce rolü kaydet
-    signInWithEmailAndPassword(auth, email, password).catch((e) =>
-      Alert.alert("Hata", "Yanlış bilgi.")
-    );
+    try {
+      await AsyncStorage.setItem("hedefRol", seciliRol);
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (e) {
+      Alert.alert("Hata", "Yanlış e-posta veya şifre girdiniz.");
+    }
   };
 
   const handleGoogleGiris = async () => {
     try {
-      await roluKaydet(seciliRol); // ➕ İşlemden önce rolü kaydet
+      await AsyncStorage.setItem("hedefRol", seciliRol);
       await GoogleSignin.hasPlayServices();
       const userInfo = await GoogleSignin.signIn();
       const { idToken } = await GoogleSignin.getTokens();
@@ -189,7 +183,6 @@ export default function LoginScreen({ setKullaniciRolu }) {
         {gosterilenSayfa === "giris" ? "Mikro Özel Hoca" : "Yeni Hesap Aç"}
       </Text>
 
-      {/* 🎓 ROL SEÇİCİ EKLENDİ */}
       <RolSecici />
 
       <TextInput

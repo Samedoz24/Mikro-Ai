@@ -13,6 +13,11 @@ import {
   Alert,
 } from "react-native";
 import { auth, db, storage } from "../firebaseConfig";
+
+// 📄 PDF ve Paylaşım Kütüphaneleri
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
+
 import {
   collection,
   query,
@@ -21,15 +26,12 @@ import {
   deleteDoc,
   doc,
 } from "firebase/firestore";
-// Storage'dan dosya çekmek ve silmek için gerekli fonksiyonlar
 import { ref, deleteObject, getDownloadURL } from "firebase/storage";
 import { Ionicons } from "@expo/vector-icons";
 
-// İndirme İşlemleri Paketleri
 import * as FileSystem from "expo-file-system/legacy";
 import * as MediaLibrary from "expo-media-library";
 
-// Tema Sistemimiz
 import { useTheme } from "../ThemeContext";
 
 const ekranGenisligi = Dimensions.get("window").width;
@@ -42,10 +44,28 @@ export default function HistoryScreen() {
   const [yukleniyor, setYukleniyor] = useState(true);
   const [indirmeBasladi, setIndirmeBasladi] = useState(false);
 
+  const [seciliKategori, setSeciliKategori] = useState("Tümü");
+  const kategoriler = [
+    "Tümü",
+    "Matematik",
+    "Fizik",
+    "Kimya",
+    "Biyoloji",
+    "Türkçe",
+    "Tarih",
+    "Coğrafya",
+    "Diğer",
+  ];
+
   const [seciliSoru, setSeciliSoru] = useState(null);
   const [modalGorunur, setModalGorunur] = useState(false);
   const [tamEkranModu, setTamEkranModu] = useState(false);
   const [cozumYukleniyor, setCozumYukleniyor] = useState(false);
+
+  const [pratikModalGorunur, setPratikModalGorunur] = useState(false);
+  const [aktifPratikSoru, setAktifPratikSoru] = useState(null);
+  const [seciliPratikSeviye, setSeciliPratikSeviye] = useState("");
+  const [secilenSik, setSecilenSik] = useState(null);
 
   useEffect(() => {
     const q = query(
@@ -75,24 +95,30 @@ export default function HistoryScreen() {
     return () => abonelik();
   }, []);
 
-  // Storage'dan JSON Çözüm Verisini ve Resmini Çeken Fonksiyon
+  const filtrelenmisSorular =
+    seciliKategori === "Tümü"
+      ? sorular
+      : sorular.filter(
+          (soru) =>
+            soru.ders === seciliKategori || soru.subject === seciliKategori
+        );
+
   const soruDetayAc = async (soru) => {
     setSeciliSoru(soru);
     setModalGorunur(true);
     setTamEkranModu(false);
     setCozumYukleniyor(true);
+    setPratikModalGorunur(false);
 
     try {
       const userEmail = auth.currentUser?.email;
       let timestamp = soru.id;
 
-      // Linkin içindeki 13 haneli sayıyı (timestamp) kesin olarak bulur
       if (soru.fotoLink) {
         const match = soru.fotoLink.match(/(\d{13})/);
         if (match && match[1]) {
           timestamp = match[1];
         } else {
-          // Eğer 13 haneli değilse eski usul noktadan öncekini almayı dene
           const matchYedek = soru.fotoLink.match(/(\d+)\.(jpg|jpeg|png)/i);
           if (matchYedek && matchYedek[1]) {
             timestamp = matchYedek[1];
@@ -100,37 +126,26 @@ export default function HistoryScreen() {
         }
       }
 
-      console.log("Kullanılan Timestamp:", timestamp);
-      console.log("Kullanılan E-Posta:", userEmail);
-
-      // 1. JSON Verisini Çekme (Düzeltilmiş Yol)
       let jsonVerisi = null;
       try {
         const jsonYolu = `cozumDetayi/${userEmail}/${timestamp}.json`;
-        console.log("Aranan JSON Yolu:", jsonYolu);
-
         const jsonRef = ref(storage, jsonYolu);
         const jsonUrl = await getDownloadURL(jsonRef);
-
         const response = await fetch(jsonUrl);
         jsonVerisi = await response.json();
       } catch (jsonHata) {
-        console.log("JSON bulunamadı. Hata detayı:", jsonHata.message);
+        console.log("JSON bulunamadı.");
       }
 
-      // 2. Çözüm Kartı (Resim) Çekme (Düzeltilmiş Yol)
       let resimVerisi = null;
       try {
         const resimYolu = `solution-cards/${userEmail}/${timestamp}.png`;
-        console.log("Aranan Resim Yolu:", resimYolu);
-
         const resimRef = ref(storage, resimYolu);
         resimVerisi = await getDownloadURL(resimRef);
       } catch (resimHata) {
-        console.log("Çözüm resmi bulunamadı. Hata detayı:", resimHata.message);
+        console.log("Çözüm resmi bulunamadı.");
       }
 
-      // İndirilen verileri seçili soruya ekle
       setSeciliSoru((prev) => ({
         ...prev,
         cozumDetayi: jsonVerisi,
@@ -163,34 +178,23 @@ export default function HistoryScreen() {
 
       const userEmail = auth.currentUser?.email;
 
-      // Orijinal sorunun fotoğrafını sil
       if (seciliSoru.fotoLink) {
         try {
           await deleteObject(ref(storage, seciliSoru.fotoLink));
-        } catch (e) {
-          console.log("Orijinal fotoğraf silinemedi.");
-        }
+        } catch (e) {}
       }
 
-      // Storage'daki JSON çözüm dosyasını sil
       try {
         const jsonYolu = `cozumDetayi/${userEmail}/${timestamp}.json`;
         await deleteObject(ref(storage, jsonYolu));
-      } catch (e) {
-        console.log("JSON dosyası silinemedi.");
-      }
+      } catch (e) {}
 
-      // Storage'daki Çözüm Kartını (Resim) sil
       try {
         const resimYolu = `solution-cards/${userEmail}/${timestamp}.png`;
         await deleteObject(ref(storage, resimYolu));
-      } catch (e) {
-        console.log("Çözüm resmi silinemedi.");
-      }
+      } catch (e) {}
 
-      // Firestore belgesini sil
       await deleteDoc(doc(db, "sorular", seciliSoru.id));
-
       setModalGorunur(false);
     } catch (error) {
       Alert.alert("Hata", "Soru silinirken bir sorun oluştu.");
@@ -207,6 +211,7 @@ export default function HistoryScreen() {
       ]
     );
   };
+
   const cozumKartiniIndir = async () => {
     if (!seciliSoru?.cozumKartiLink) {
       Alert.alert("Hata", "İndirilecek bir çözüm kartı bulunamadı.");
@@ -229,13 +234,157 @@ export default function HistoryScreen() {
       await MediaLibrary.saveToLibraryAsync(uri);
       Alert.alert("Başarılı!", "Çözüm kartı galerinize kaydedildi. 🖼️");
     } catch (error) {
-      // Hatayı terminalde detaylı görmek için log ekledik
       console.log("İndirme Hatası Detayı:", error);
       Alert.alert("Hata", "Fotoğraf indirilirken bir sorun oluştu.");
     } finally {
       setIndirmeBasladi(false);
     }
   };
+
+  const pratikEkraniAc = (seviyeAdi, soruData) => {
+    if (!soruData) return;
+    if (typeof soruData === "string" || !soruData.options) {
+      Alert.alert(
+        "Bilgi",
+        "Bu sorunun pratik testi eski formatta oluşturulmuş. Lütfen yeni çözdürdüğünüz sorularda deneyin."
+      );
+      return;
+    }
+
+    setSeciliPratikSeviye(seviyeAdi);
+    setAktifPratikSoru(soruData);
+    setSecilenSik(null);
+    setPratikModalGorunur(true);
+  };
+
+  // 🎯 YENİ VE GELİŞTİRİLMİŞ: PDF Çıktı Alma Özelliği
+  const pdfOlarakIndir = async () => {
+    try {
+      setIndirmeBasladi(true);
+
+      const indirilecekSorular = filtrelenmisSorular;
+
+      if (indirilecekSorular.length === 0) {
+        Alert.alert("Bilgi", "Bu kategoride indirilecek soru bulunmuyor.");
+        setIndirmeBasladi(false);
+        return;
+      }
+
+      const userEmail = auth.currentUser?.email;
+      let sorularHtml = "";
+
+      for (let i = 0; i < indirilecekSorular.length; i++) {
+        const soru = indirilecekSorular[i];
+        const dersAdi = soru.subject || soru.ders || "Ders Belirtilmemiş";
+        const tarih = new Date(soru.tarih).toLocaleDateString("tr-TR");
+        const durum = soru.durum || "Bilinmiyor";
+
+        let cozumMetni = "";
+
+        if (durum !== "Çözüldü") {
+          cozumMetni =
+            "⏳ Bu soru henüz yapay zeka tarafından çözülmedi veya beklemede.";
+        } else {
+          let timestamp = soru.id;
+          if (soru.fotoLink) {
+            const match = soru.fotoLink.match(/(\d{13})/);
+            if (match && match[1]) {
+              timestamp = match[1];
+            } else {
+              const matchYedek = soru.fotoLink.match(/(\d+)\.(jpg|jpeg|png)/i);
+              if (matchYedek && matchYedek[1]) timestamp = matchYedek[1];
+            }
+          }
+
+          try {
+            const jsonYolu = `cozumDetayi/${userEmail}/${timestamp}.json`;
+            const jsonUrl = await getDownloadURL(ref(storage, jsonYolu));
+            const response = await fetch(jsonUrl);
+            const jsonVerisi = await response.json();
+
+            cozumMetni =
+              jsonVerisi.cardAnswer ||
+              jsonVerisi.correct_answer ||
+              jsonVerisi.solution ||
+              jsonVerisi.answer ||
+              jsonVerisi.sonuc ||
+              jsonVerisi.result ||
+              jsonVerisi.explanation ||
+              "Çözüm dosyası bulundu fakat sonuç formatı farklı (Eski format).";
+          } catch (e) {
+            cozumMetni =
+              "⚠️ Yapay zeka analiz dosyası sunucuda bulunamadı (Test veya silinmiş veri).";
+          }
+        }
+
+        const resimHtml = soru.fotoLink
+          ? `<img src="${soru.fotoLink}" style="max-width: 100%; max-height: 300px; object-fit: contain; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ddd;" />`
+          : `<div style="padding: 20px; background: #eee; text-align: center; border-radius: 8px; margin-bottom: 15px; color: #888;">Fotoğraf Yok</div>`;
+
+        sorularHtml += `
+        <div class="soru-kutusu">
+          <div class="soru-baslik">
+            <span>Soru ${i + 1} - ${dersAdi}</span>
+            <span>${tarih}</span>
+          </div>
+          ${resimHtml}
+          <div class="cozum-kutusu">
+            <strong>Yapay Zeka Çözümü:</strong><br/>
+            <p style="margin-top:8px; line-height:1.6; font-size:15px;">${cozumMetni}</p>
+          </div>
+        </div>
+      `;
+      }
+
+      const htmlIcerik = `
+      <!DOCTYPE html>
+      <html lang="tr">
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Hata Defterim</title>
+        <style>
+          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 40px; color: #333; }
+          h1 { text-align: center; color: #2C3E50; border-bottom: 2px solid #3498DB; padding-bottom: 10px; font-size: 28px; margin-bottom: 5px; }
+          .kategori-bilgi { text-align: center; font-size: 14px; color: #7F8C8D; margin-bottom: 35px; }
+          .soru-kutusu { border: 1px solid #BDC3C7; border-radius: 8px; padding: 20px; margin-bottom: 25px; page-break-inside: avoid; }
+          .soru-baslik { display: flex; justify-content: space-between; font-weight: bold; font-size: 16px; color: #2980B9; border-bottom: 1px solid #ECF0F1; padding-bottom: 10px; margin-bottom: 15px; }
+          .cozum-kutusu { background-color: #F4F6F7; border-left: 4px solid #1ABC9C; padding: 15px; border-radius: 4px; font-size: 15px; }
+          .footer { text-align: center; margin-top: 50px; font-size: 12px; color: #95A5A6; border-top: 1px solid #ECF0F1; padding-top: 15px; }
+        </style>
+      </head>
+      <body>
+        <h1>Akıllı Hata Defterim</h1>
+        <div class="kategori-bilgi">Seçilen Kategori: <strong>${seciliKategori}</strong> | Toplam Soru: <strong>${indirilecekSorular.length}</strong></div>
+        ${sorularHtml}
+        <div class="footer">Bu belge Akıllı Hata Defterim uygulaması tarafından otomatik oluşturulmuştur.</div>
+      </body>
+      </html>
+    `;
+
+      const { uri } = await Print.printToFileAsync({
+        html: htmlIcerik,
+        base64: false,
+      });
+
+      const isSharingAvailable = await Sharing.isAvailableAsync();
+      if (isSharingAvailable) {
+        await Sharing.shareAsync(uri, {
+          mimeType: "application/pdf",
+          dialogTitle: "Hata Defterimi Paylaş",
+          UTI: "com.adobe.pdf",
+        });
+      } else {
+        Alert.alert("Bilgi", "Cihazınızda paylaşım özelliği desteklenmiyor.");
+      }
+    } catch (error) {
+      console.log("PDF Oluşturma Hatası:", error);
+      Alert.alert("Hata", "PDF oluşturulurken bir sorun yaşandı.");
+    } finally {
+      setIndirmeBasladi(false);
+    }
+  };
+
   if (yukleniyor) {
     return (
       <View
@@ -251,9 +400,12 @@ export default function HistoryScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: tema.arkaplan }]}>
-      <Text style={[styles.baslik, { color: tema.metin }]}>
-        Akıllı Hata Defterim
-      </Text>
+      {/* 🎯 GÜNCELLENEN: Sadece Başlık Kaldı (PDF Butonu Aşağı Gitti) */}
+      <View style={styles.headerKapsayici}>
+        <Text style={[styles.anaBaslik, { color: tema.metin }]}>
+          Hata Defterim
+        </Text>
+      </View>
 
       {sorular.length === 0 ? (
         <View style={styles.bosMesajKutusu}>
@@ -268,48 +420,128 @@ export default function HistoryScreen() {
           </Text>
         </View>
       ) : (
-        <FlatList
-          data={sorular}
-          keyExtractor={(item) => item.id}
-          showsVerticalScrollIndicator={false}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={[
-                styles.kart,
-                {
-                  backgroundColor: tema.kutuArkaplan,
-                  borderColor: tema.kutuCerceve,
-                },
-              ]}
-              onPress={() => soruDetayAc(item)}
-            >
-              <Image source={{ uri: item.fotoLink }} style={styles.kucukFoto} />
-              <View style={styles.kartBilgi}>
-                <Text style={[styles.kartTarih, { color: tema.ikincilMetin }]}>
-                  {new Date(item.tarih).toLocaleString("tr-TR")}
-                </Text>
-                <Text
+        <>
+          <View style={styles.kategoriKapsayici}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {kategoriler.map((kategori, index) => (
+                <TouchableOpacity
+                  key={index}
                   style={[
-                    styles.kartDurum,
+                    styles.kategoriButon,
                     {
-                      color:
-                        item.durum === "Çözüldü" ? "#4CAF50" : tema.anaButon,
+                      backgroundColor:
+                        seciliKategori === kategori
+                          ? tema.anaButon
+                          : tema.kutuArkaplan,
+                      borderColor:
+                        seciliKategori === kategori
+                          ? tema.anaButon
+                          : tema.kutuCerceve,
                     },
                   ]}
+                  onPress={() => setSeciliKategori(kategori)}
                 >
-                  {item.durum === "Çözüldü" ? "✅ Çözüldü" : "⏳ " + item.durum}
-                </Text>
-              </View>
-              <Ionicons
-                name="chevron-forward-outline"
-                size={20}
-                color={tema.ikincilMetin}
-              />
-            </TouchableOpacity>
+                  <Text
+                    style={[
+                      styles.kategoriYazi,
+                      {
+                        color:
+                          seciliKategori === kategori ? "#fff" : tema.metin,
+                      },
+                    ]}
+                  >
+                    {kategori}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          {filtrelenmisSorular.length === 0 ? (
+            <View style={styles.bosMesajKutusu}>
+              <Text
+                style={[styles.bosMesajYazisi, { color: tema.ikincilMetin }]}
+              >
+                Bu kategoriye ait soru bulunmuyor.
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={filtrelenmisSorular}
+              keyExtractor={(item) => item.id}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 80 }} // 🎯 YENİ: Listenin sonu FAB butonun altında kalmasın diye boşluk bırakıldı
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.kart,
+                    {
+                      backgroundColor: tema.kutuArkaplan,
+                      borderColor: tema.kutuCerceve,
+                    },
+                  ]}
+                  onPress={() => soruDetayAc(item)}
+                >
+                  <Image
+                    source={{ uri: item.fotoLink }}
+                    style={styles.kucukFoto}
+                  />
+                  <View style={styles.kartBilgi}>
+                    <Text
+                      style={[styles.kartTarih, { color: tema.ikincilMetin }]}
+                    >
+                      {new Date(item.tarih).toLocaleString("tr-TR")}
+                      {item.subject || item.ders
+                        ? ` • ${item.subject || item.ders}`
+                        : ""}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.kartDurum,
+                        {
+                          color:
+                            item.durum === "Çözüldü"
+                              ? "#4CAF50"
+                              : tema.anaButon,
+                        },
+                      ]}
+                    >
+                      {item.durum === "Çözüldü"
+                        ? "✅ Çözüldü"
+                        : "⏳ " + item.durum}
+                    </Text>
+                  </View>
+                  <Ionicons
+                    name="chevron-forward-outline"
+                    size={20}
+                    color={tema.ikincilMetin}
+                  />
+                </TouchableOpacity>
+              )}
+            />
           )}
-        />
+        </>
       )}
 
+      {/* 🎯 YENİ: Yüzen PDF Butonu (FAB - Floating Action Button) */}
+      {filtrelenmisSorular.length > 0 && (
+        <TouchableOpacity
+          style={[styles.fabButon, { backgroundColor: tema.anaButon }]}
+          onPress={pdfOlarakIndir}
+          disabled={indirmeBasladi}
+        >
+          {indirmeBasladi ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <>
+              <Ionicons name="document-text" size={24} color="#fff" />
+              <Text style={styles.fabYazi}>PDF</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      )}
+
+      {/* ANA SORU DETAY MODALI */}
       <Modal
         visible={modalGorunur}
         animationType="slide"
@@ -539,33 +771,85 @@ export default function HistoryScreen() {
                       </View>
                     )}
 
-                    <View style={styles.benzerSoruBolumu}>
-                      <Text
-                        style={[styles.adimlarAnaBaslik, { color: tema.metin }]}
-                      >
-                        🎯 Pratik Yap
-                      </Text>
-                      {seciliSoru.cozumDetayi.easy_question && (
-                        <View
+                    {(seciliSoru.cozumDetayi.easy_question ||
+                      seciliSoru.cozumDetayi.medium_question ||
+                      seciliSoru.cozumDetayi.hard_question) && (
+                      <View style={styles.benzerSoruBolumu}>
+                        <Text
                           style={[
-                            styles.egzersizKutu,
-                            {
-                              backgroundColor:
-                                temaModu === "dark" ? "#1A1A1A" : "#F9FAFB",
-                            },
+                            styles.adimlarAnaBaslik,
+                            { color: tema.metin },
                           ]}
                         >
-                          <Text
-                            style={{ fontWeight: "bold", color: "#4CAF50" }}
-                          >
-                            Kolay Seviye:
-                          </Text>
-                          <Text style={{ color: tema.metin }}>
-                            {seciliSoru.cozumDetayi.easy_question}
-                          </Text>
+                          🎯 Pratik Yap
+                        </Text>
+
+                        <View style={styles.seviyeButonKonteyner}>
+                          {seciliSoru.cozumDetayi.easy_question && (
+                            <TouchableOpacity
+                              style={[
+                                styles.seviyeButon,
+                                { borderColor: "#4CAF50" },
+                              ]}
+                              onPress={() =>
+                                pratikEkraniAc(
+                                  "Kolay",
+                                  seciliSoru.cozumDetayi.easy_question
+                                )
+                              }
+                            >
+                              <Text
+                                style={{ color: "#4CAF50", fontWeight: "bold" }}
+                              >
+                                Kolay
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+
+                          {seciliSoru.cozumDetayi.medium_question && (
+                            <TouchableOpacity
+                              style={[
+                                styles.seviyeButon,
+                                { borderColor: "#FF9800" },
+                              ]}
+                              onPress={() =>
+                                pratikEkraniAc(
+                                  "Orta",
+                                  seciliSoru.cozumDetayi.medium_question
+                                )
+                              }
+                            >
+                              <Text
+                                style={{ color: "#FF9800", fontWeight: "bold" }}
+                              >
+                                Orta
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+
+                          {seciliSoru.cozumDetayi.hard_question && (
+                            <TouchableOpacity
+                              style={[
+                                styles.seviyeButon,
+                                { borderColor: "#F44336" },
+                              ]}
+                              onPress={() =>
+                                pratikEkraniAc(
+                                  "Zor",
+                                  seciliSoru.cozumDetayi.hard_question
+                                )
+                              }
+                            >
+                              <Text
+                                style={{ color: "#F44336", fontWeight: "bold" }}
+                              >
+                                Zor
+                              </Text>
+                            </TouchableOpacity>
+                          )}
                         </View>
-                      )}
-                    </View>
+                      </View>
+                    )}
                   </View>
                 ) : (
                   <View style={{ padding: 40, alignItems: "center" }}>
@@ -615,6 +899,176 @@ export default function HistoryScreen() {
                 <View style={{ height: 40 }} />
               </ScrollView>
             </View>
+
+            {pratikModalGorunur && (
+              <View
+                style={[
+                  StyleSheet.absoluteFill,
+                  styles.pratikModalArkaplan,
+                  { zIndex: 999 },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.pratikModalKutu,
+                    { backgroundColor: tema.kutuArkaplan },
+                  ]}
+                >
+                  <View style={styles.pratikUstKontroller}>
+                    <Text style={[styles.pratikBaslik, { color: tema.metin }]}>
+                      {seciliPratikSeviye} Seviye Test
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => setPratikModalGorunur(false)}
+                    >
+                      <Ionicons
+                        name="close-circle"
+                        size={28}
+                        color={tema.ikincilMetin}
+                      />
+                    </TouchableOpacity>
+                  </View>
+
+                  {aktifPratikSoru && (
+                    <ScrollView showsVerticalScrollIndicator={false}>
+                      <Text
+                        style={[styles.pratikSoruMetni, { color: tema.metin }]}
+                      >
+                        {aktifPratikSoru.question}
+                      </Text>
+
+                      {aktifPratikSoru.options &&
+                        Object.entries(aktifPratikSoru.options).map(
+                          ([harf, secenek]) => {
+                            let arkaplanRengi = tema.arkaplan;
+                            let cerceveRengi = tema.kutuCerceve;
+                            let yaziRengi = tema.metin;
+
+                            if (secilenSik) {
+                              if (harf === aktifPratikSoru.correct_option) {
+                                arkaplanRengi =
+                                  temaModu === "dark" ? "#064E3B" : "#ECFDF5";
+                                cerceveRengi = "#10B981";
+                                yaziRengi =
+                                  temaModu === "dark" ? "#A7F3D0" : "#065F46";
+                              } else if (
+                                secilenSik === harf &&
+                                harf !== aktifPratikSoru.correct_option
+                              ) {
+                                arkaplanRengi =
+                                  temaModu === "dark" ? "#7F1D1D" : "#FEF2F2";
+                                cerceveRengi = "#EF4444";
+                                yaziRengi =
+                                  temaModu === "dark" ? "#FECACA" : "#991B1B";
+                              } else {
+                                arkaplanRengi = tema.kutuArkaplan;
+                                cerceveRengi = "transparent";
+                                yaziRengi = tema.ikincilMetin;
+                              }
+                            }
+
+                            return (
+                              <TouchableOpacity
+                                key={harf}
+                                disabled={secilenSik !== null}
+                                onPress={() => setSecilenSik(harf)}
+                                style={[
+                                  styles.sikKutusu,
+                                  {
+                                    backgroundColor: arkaplanRengi,
+                                    borderColor: cerceveRengi,
+                                  },
+                                ]}
+                              >
+                                <View
+                                  style={[
+                                    styles.harfDairesi,
+                                    {
+                                      backgroundColor:
+                                        cerceveRengi === "transparent"
+                                          ? tema.kutuCerceve
+                                          : cerceveRengi,
+                                    },
+                                  ]}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.harfYazisi,
+                                      {
+                                        color:
+                                          cerceveRengi === "transparent"
+                                            ? tema.metin
+                                            : "#fff",
+                                      },
+                                    ]}
+                                  >
+                                    {harf}
+                                  </Text>
+                                </View>
+                                <Text
+                                  style={[
+                                    styles.sikMetni,
+                                    { color: yaziRengi },
+                                  ]}
+                                >
+                                  {secenek}
+                                </Text>
+
+                                {secilenSik &&
+                                  harf === aktifPratikSoru.correct_option && (
+                                    <Ionicons
+                                      name="checkmark-circle"
+                                      size={24}
+                                      color="#10B981"
+                                    />
+                                  )}
+                                {secilenSik === harf &&
+                                  harf !== aktifPratikSoru.correct_option && (
+                                    <Ionicons
+                                      name="close-circle"
+                                      size={24}
+                                      color="#EF4444"
+                                    />
+                                  )}
+                              </TouchableOpacity>
+                            );
+                          }
+                        )}
+
+                      {secilenSik && (
+                        <View
+                          style={{
+                            marginTop: 20,
+                            padding: 15,
+                            borderRadius: 10,
+                            backgroundColor:
+                              secilenSik === aktifPratikSoru.correct_option
+                                ? "#10B98120"
+                                : "#EF444420",
+                          }}
+                        >
+                          <Text
+                            style={{
+                              textAlign: "center",
+                              fontWeight: "bold",
+                              color:
+                                secilenSik === aktifPratikSoru.correct_option
+                                  ? "#10B981"
+                                  : "#EF4444",
+                            }}
+                          >
+                            {secilenSik === aktifPratikSoru.correct_option
+                              ? "🎉 Tebrikler, Doğru Cevap!"
+                              : "Kötü Şans, Yanlış Cevap."}
+                          </Text>
+                        </View>
+                      )}
+                      <View style={{ height: 30 }} />
+                    </ScrollView>
+                  )}
+                </View>
+              </View>
+            )}
           </View>
         )}
       </Modal>
@@ -624,12 +1078,30 @@ export default function HistoryScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20 },
-  baslik: {
+  headerKapsayici: {
+    flexDirection: "row",
+    justifyContent: "center", // 🎯 GÜNCELLENEN: Sadece başlık olduğu için ortalandı
+    alignItems: "center",
+    marginBottom: 20,
+    marginTop: 20,
+  },
+  anaBaslik: {
     fontSize: 24,
     fontWeight: "bold",
-    marginBottom: 20,
-    textAlign: "center",
-    marginTop: 20,
+  },
+  kategoriKapsayici: {
+    marginBottom: 15,
+  },
+  kategoriButon: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginRight: 10,
+    borderWidth: 1,
+  },
+  kategoriYazi: {
+    fontSize: 14,
+    fontWeight: "bold",
   },
   bosMesajKutusu: { flex: 1, justifyContent: "center", alignItems: "center" },
   ikon: { marginBottom: 15, opacity: 0.8 },
@@ -646,6 +1118,30 @@ const styles = StyleSheet.create({
   kartTarih: { fontSize: 12, marginBottom: 5 },
   kartDurum: { fontSize: 16, fontWeight: "bold" },
   kucukFoto: { width: 60, height: 60, borderRadius: 8, marginRight: 15 },
+
+  // 🎯 YENİ: Yüzen Buton (FAB) Stilleri
+  fabButon: {
+    position: "absolute",
+    bottom: 30,
+    right: 20,
+    width: 65,
+    height: 65,
+    borderRadius: 35,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8, // Android gölgesi
+  },
+  fabYazi: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "bold",
+    marginTop: -2,
+  },
+
   modalArkaplan: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.8)",
@@ -748,12 +1244,19 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "rgba(150,150,150,0.2)",
   },
-  egzersizKutu: {
-    padding: 15,
+  seviyeButonKonteyner: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 15,
+  },
+  seviyeButon: {
+    flex: 1,
+    paddingVertical: 12,
+    marginHorizontal: 5,
     borderRadius: 10,
-    borderWidth: 1,
-    marginBottom: 12,
-    borderColor: "#ccc",
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
   },
   indirButonu: {
     flexDirection: "row",
@@ -783,5 +1286,61 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 20,
     zIndex: 10,
+  },
+
+  pratikModalArkaplan: {
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "flex-end",
+  },
+  pratikModalKutu: {
+    borderTopLeftRadius: 25,
+    borderTopRightRadius: 25,
+    padding: 25,
+    maxHeight: "75%",
+    minHeight: "45%",
+  },
+  pratikUstKontroller: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(150,150,150,0.2)",
+    paddingBottom: 15,
+  },
+  pratikBaslik: {
+    fontSize: 20,
+    fontWeight: "bold",
+  },
+  pratikSoruMetni: {
+    fontSize: 17,
+    fontWeight: "600",
+    lineHeight: 26,
+    marginBottom: 25,
+  },
+  sikKutusu: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    marginBottom: 12,
+  },
+  harfDairesi: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 15,
+  },
+  harfYazisi: {
+    fontWeight: "bold",
+    fontSize: 16,
+  },
+  sikMetni: {
+    fontSize: 16,
+    flex: 1,
+    fontWeight: "500",
   },
 });

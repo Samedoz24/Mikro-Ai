@@ -51,10 +51,24 @@ export async function scheduleDailyReminder() {
       hour: 19,
       minute: 0,
       repeats: true,
-      channelId: "default", // 🚀 HATA ÇÖZÜMÜ: Android için Kanal ID'si eklendi
+      channelId: "default",
     },
   });
   console.log("Günlük hatırlatıcı kuruldu.");
+}
+
+// 🤖 YENİ: Soru Çözüldüğünde Anında Gelen Bildirim
+export async function sendQuestionSolvedNotification(dersAdi) {
+  const dersMetni = dersAdi ? `${dersAdi} dersine ait s` : "S";
+
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: "🤖 Sorunun Çözümü Hazır!",
+      body: `${dersMetni}orunun yapay zeka analizi ve çözüm kartı hazırlandı. Hemen incele!`,
+      sound: true,
+    },
+    trigger: null, // null olması bildirimin "Saniye beklemeden anında" gönderilmesini sağlar
+  });
 }
 
 // ❌ Bildirimleri Kapatma

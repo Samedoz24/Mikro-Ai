@@ -66,7 +66,8 @@
           "photosPermission": "Çözüm kartlarını galeriye kaydetmek için izninize ihtiyacımız var.",
           "savePhotosPermission": "Çözüm kartını galeriye kaydetmek için izin verin."
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "extra": {
       "eas": {

@@ -10,6 +10,7 @@ import {
   TextInput,
   Switch,
   Image,
+  ActivityIndicator,
 } from "react-native";
 
 // Firebase Kütüphaneleri
@@ -22,6 +23,9 @@ import {
   deleteDoc,
   deleteField,
   onSnapshot,
+  collection,
+  query,
+  where,
 } from "firebase/firestore";
 import { ref, deleteObject } from "firebase/storage";
 
@@ -32,7 +36,8 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system/legacy";
 
-// 🔔 BİLDİRİM YÖNETİCİSİ
+// 🔔 BİLDİRİM YÖNETİCİSİ VE KÜTÜPHANESİ
+import * as Notifications from "expo-notifications";
 import {
   registerForPushNotificationsAsync,
   scheduleDailyReminder,
@@ -63,6 +68,10 @@ export default function ProfileScreen() {
   const [kalanSoru, setKalanSoru] = useState(3);
   const [seriGunu, setSeriGunu] = useState(0);
   const [baglantiKodu, setBaglantiKodu] = useState("Yükleniyor...");
+
+  const [toplamSoru, setToplamSoru] = useState(0);
+  const [dersIstatistikleri, setDersIstatistikleri] = useState([]);
+  const [istatistikYukleniyor, setIstatistikYukleniyor] = useState(true);
 
   const rastgeleKodUret = () => {
     const karakterler = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -101,7 +110,6 @@ export default function ProfileScreen() {
 
       const kullaniciRef = doc(db, "kullanicilar", user.uid);
 
-      // 🛡️ DÜZELTME: onSnapshot hata yakalayıcı (error listener) ile güçlendirildi
       abonelik = onSnapshot(
         kullaniciRef,
         async (kullaniciSnap) => {
@@ -109,14 +117,32 @@ export default function ProfileScreen() {
             const data = kullaniciSnap.data();
 
             if (data.sinif) setSeciliSinif(data.sinif);
-            if (data.baglantiKodu) setBaglantiKodu(data.baglantiKodu);
             if (data.adSoyad) setAdSoyad(data.adSoyad);
             if (data.bildirimAktif !== undefined)
               setBildirimAktif(data.bildirimAktif);
 
+            if (data.baglantiKodu) {
+              setBaglantiKodu(data.baglantiKodu);
+            } else {
+              const yeniKod = rastgeleKodUret();
+              setBaglantiKodu(yeniKod);
+              try {
+                await updateDoc(kullaniciRef, { baglantiKodu: yeniKod });
+              } catch (e) {
+                console.log("Kod ekleme hatası", e);
+              }
+            }
+
             if (data.seriGunu !== undefined) {
               setSeriGunu(data.seriGunu);
               await AsyncStorage.setItem("seriGunu", String(data.seriGunu));
+            } else {
+              setSeriGunu(1);
+              try {
+                await updateDoc(kullaniciRef, { seriGunu: 1 });
+              } catch (e) {
+                console.log("Seri ekleme hatası", e);
+              }
             }
 
             if (data.profilFoto) {
@@ -129,7 +155,6 @@ export default function ProfileScreen() {
 
             if (veritabaniTarihi !== bugununTarihi) {
               guncelKota = 3;
-              // 🛡️ DÜZELTME: Güncelleme işlemi try-catch içine alındı
               try {
                 await updateDoc(kullaniciRef, {
                   kalanSoru: 3,
@@ -145,7 +170,6 @@ export default function ProfileScreen() {
             const yeniKod = rastgeleKodUret();
             setBaglantiKodu(yeniKod);
 
-            // 🛡️ DÜZELTME: Kullanıcı oluşturma işlemi try-catch içine alındı
             try {
               await setDoc(kullaniciRef, {
                 eposta: user.email,
@@ -166,7 +190,6 @@ export default function ProfileScreen() {
             }
           }
         },
-        // 🛡️ DÜZELTME: Hata durumunda uygulamanın çökmesini engelleyen fonksiyon
         (error) => {
           console.log("Firebase Canlı Dinleme Hatası:", error.message);
         }
@@ -174,6 +197,55 @@ export default function ProfileScreen() {
     };
 
     verileriCanliDinle();
+
+    return () => abonelik();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user?.email) return;
+
+    const q = query(
+      collection(db, "sorular"),
+      where("kullaniciEposta", "==", user.email)
+    );
+
+    const abonelik = onSnapshot(
+      q,
+      (snapshot) => {
+        let total = 0;
+        const dersSayaclari = {};
+
+        snapshot.forEach((doc) => {
+          total++;
+          const data = doc.data();
+          const ders = data.subject || data.ders || "Diğer";
+          dersSayaclari[ders] = (dersSayaclari[ders] || 0) + 1;
+        });
+
+        setToplamSoru(total);
+
+        if (total > 0) {
+          const istatistikDizisi = Object.keys(dersSayaclari).map(
+            (dersAdi) => ({
+              ders: dersAdi,
+              sayi: dersSayaclari[dersAdi],
+              yuzde: Math.round((dersSayaclari[dersAdi] / total) * 100),
+            })
+          );
+
+          istatistikDizisi.sort((a, b) => b.sayi - a.sayi);
+          setDersIstatistikleri(istatistikDizisi);
+        } else {
+          setDersIstatistikleri([]);
+        }
+
+        setIstatistikYukleniyor(false);
+      },
+      (error) => {
+        console.log("İstatistik çekme hatası:", error);
+        setIstatistikYukleniyor(false);
+      }
+    );
 
     return () => abonelik();
   }, [user]);
@@ -461,6 +533,75 @@ export default function ProfileScreen() {
     return user?.email?.charAt(0).toUpperCase() || "?";
   };
 
+  const kullaniciPuan = toplamSoru * 50 + seriGunu * 20;
+  const kullaniciSeviye = Math.floor(kullaniciPuan / 1000) + 1;
+
+  const rozetler = [
+    {
+      id: 1,
+      baslik: "İlk Adım",
+      ikon: "🌱",
+      aciklama: "İlk soru",
+      kazanildi: toplamSoru >= 1,
+    },
+    {
+      id: 2,
+      baslik: "Isınma Turu",
+      ikon: "⚡",
+      aciklama: "3 günlük seri",
+      kazanildi: seriGunu >= 3,
+    },
+    {
+      id: 3,
+      baslik: "İstikrarlı",
+      ikon: "📅",
+      aciklama: "7 günlük seri",
+      kazanildi: seriGunu >= 7,
+    },
+    {
+      id: 4,
+      baslik: "Soru Avcısı",
+      ikon: "🎯",
+      aciklama: "10 soru çözdün",
+      kazanildi: toplamSoru >= 10,
+    },
+    {
+      id: 5,
+      baslik: "Çırak",
+      ikon: "🛠️",
+      aciklama: "25 soru çözdün",
+      kazanildi: toplamSoru >= 25,
+    },
+    {
+      id: 6,
+      baslik: "Bilge Baykuş",
+      ikon: "🦉",
+      aciklama: "50 soru çözdün",
+      kazanildi: toplamSoru >= 50,
+    },
+    {
+      id: 7,
+      baslik: "Efsane",
+      ikon: "👑",
+      aciklama: "100 soru barajı",
+      kazanildi: toplamSoru >= 100,
+    },
+    {
+      id: 8,
+      baslik: "Usta",
+      ikon: "⚔️",
+      aciklama: "250 soru çözdün",
+      kazanildi: toplamSoru >= 250,
+    },
+    {
+      id: 9,
+      baslik: "Profesör",
+      ikon: "🎓",
+      aciklama: "500 soru çözdün",
+      kazanildi: toplamSoru >= 500,
+    },
+  ];
+
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: tema.arkaplan }]}
@@ -501,9 +642,65 @@ export default function ProfileScreen() {
           {adSoyad || user?.email?.split("@")[0]}
         </Text>
         <Text style={styles.userEmail}>{user?.email}</Text>
+
+        {/* 🎯 GÜNCELLENEN: Seviye Dışarı Alındı */}
+        {rol === "ogrenci" && (
+          <View style={styles.seviyeVeXpKapsayici}>
+            <Text style={styles.seviyeYazisi}>Seviye {kullaniciSeviye}</Text>
+            <View style={styles.xpKutusu}>
+              <Ionicons name="star" size={16} color="#FFD700" />
+              <Text style={styles.xpYazisi}>{kullaniciPuan} XP</Text>
+            </View>
+          </View>
+        )}
       </View>
 
       <View style={styles.content}>
+        {rol === "ogrenci" && (
+          <>
+            <Text style={[styles.sectionTitle, { color: tema.metin }]}>
+              🏆 Kazanılan Rozetler
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ marginBottom: 20 }}
+            >
+              {rozetler.map((rozet) => (
+                <View
+                  key={rozet.id}
+                  style={[
+                    styles.rozetKutu,
+                    {
+                      backgroundColor: rozet.kazanildi
+                        ? temaModu === "dark"
+                          ? "#1E293B"
+                          : "#F0F9FF"
+                        : tema.kutuArkaplan,
+                      borderColor: rozet.kazanildi
+                        ? tema.anaButon
+                        : tema.kutuCerceve,
+                      opacity: rozet.kazanildi ? 1 : 0.5,
+                    },
+                  ]}
+                >
+                  <Text style={{ fontSize: 24, marginBottom: 4 }}>
+                    {rozet.ikon}
+                  </Text>
+                  <Text style={[styles.rozetBaslik, { color: tema.metin }]}>
+                    {rozet.baslik}
+                  </Text>
+                  <Text
+                    style={[styles.rozetAciklama, { color: tema.ikincilMetin }]}
+                  >
+                    {rozet.aciklama}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
+          </>
+        )}
+
         <Text style={[styles.sectionTitle, { color: tema.metin }]}>
           Kişisel Bilgiler
         </Text>
@@ -570,6 +767,109 @@ export default function ProfileScreen() {
                   Her gün soru çözerek serini koru!
                 </Text>
               </View>
+            </View>
+
+            <View
+              style={[
+                styles.kutu,
+                {
+                  backgroundColor: tema.kutuArkaplan,
+                  borderColor: tema.kutuCerceve,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.kutuBaslik,
+                  { color: tema.metin, marginBottom: 15 },
+                ]}
+              >
+                📊 Soru Çözüm İstatistikleri
+              </Text>
+
+              {istatistikYukleniyor ? (
+                <ActivityIndicator size="small" color={tema.anaButon} />
+              ) : (
+                <View>
+                  <Text
+                    style={{
+                      color: tema.ikincilMetin,
+                      marginBottom: 15,
+                      fontSize: 14,
+                    }}
+                  >
+                    Toplam Çözülen Soru:{" "}
+                    <Text
+                      style={{
+                        color: tema.metin,
+                        fontWeight: "bold",
+                        fontSize: 16,
+                      }}
+                    >
+                      {toplamSoru}
+                    </Text>
+                  </Text>
+
+                  {dersIstatistikleri.length > 0 ? (
+                    dersIstatistikleri.map((ist, index) => (
+                      <View key={index} style={{ marginBottom: 12 }}>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            justifyContent: "space-between",
+                            marginBottom: 5,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: tema.metin,
+                              fontSize: 13,
+                              fontWeight: "500",
+                            }}
+                          >
+                            {ist.ders}
+                          </Text>
+                          <Text
+                            style={{
+                              color: tema.anaButon,
+                              fontSize: 13,
+                              fontWeight: "bold",
+                            }}
+                          >
+                            %{ist.yuzde}
+                          </Text>
+                        </View>
+                        <View
+                          style={[
+                            styles.barArkaplan,
+                            { backgroundColor: tema.kutuCerceve, height: 6 },
+                          ]}
+                        >
+                          <View
+                            style={[
+                              styles.barDolu,
+                              {
+                                backgroundColor: tema.anaButon,
+                                width: `${ist.yuzde}%`,
+                              },
+                            ]}
+                          />
+                        </View>
+                      </View>
+                    ))
+                  ) : (
+                    <Text
+                      style={{
+                        color: tema.ikincilMetin,
+                        fontSize: 13,
+                        fontStyle: "italic",
+                      }}
+                    >
+                      Henüz yeterli istatistik oluşmadı. Soru çözmeye başla!
+                    </Text>
+                  )}
+                </View>
+              )}
             </View>
 
             <View
@@ -983,8 +1283,47 @@ const styles = StyleSheet.create({
   },
   userName: { fontSize: 22, color: "#fff", fontWeight: "bold" },
   userEmail: { fontSize: 14, color: "rgba(255,255,255,0.85)" },
+
+  seviyeVeXpKapsayici: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 10,
+  },
+  seviyeYazisi: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 16,
+    marginRight: 12,
+  },
+  xpKutusu: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.2)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  xpYazisi: { color: "#fff", fontWeight: "bold", marginLeft: 5, fontSize: 14 },
+
   content: { padding: 20, paddingBottom: 40 },
   sectionTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 15 },
+
+  rozetKutu: {
+    width: 105,
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    alignItems: "center",
+    marginRight: 10,
+  },
+  rozetBaslik: {
+    fontSize: 12,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginTop: 5,
+  },
+  rozetAciklama: { fontSize: 10, textAlign: "center", marginTop: 2 },
+
   streakKutu: {
     flexDirection: "row",
     alignItems: "center",

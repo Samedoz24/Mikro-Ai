@@ -10,6 +10,7 @@ import {
   Platform,
   Modal,
   Dimensions,
+  ScrollView,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system/legacy";
@@ -22,7 +23,7 @@ import { auth, db, storage } from "../firebaseConfig";
 import { collection, addDoc, doc, getDoc, updateDoc } from "firebase/firestore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// 🌗 ÇÖZÜM: Kendi Tema Sistemimizi Bağladık
+// 🌗 Tema Sistemi
 import { useTheme } from "../ThemeContext";
 
 const screenWidth = Dimensions.get("window").width;
@@ -35,9 +36,11 @@ export default function HomeScreen() {
   const [seriModalGorunur, setSeriModalGorunur] = useState(false);
   const [guncelSeriSayisi, setGuncelSeriSayisi] = useState(0);
 
-  // 🚀 ÇÖZÜM: Artık uygulamanın genel temasını okuyoruz
-  const { tema } = useTheme();
+  // 💎 PREMIUM MODAL STATE
+  const [premiumModalGorunur, setPremiumModalGorunur] = useState(false);
+  const [seciliPaket, setSeciliPaket] = useState("yillik"); // Varsayılan paket
 
+  const { tema, temaModu } = useTheme();
   const user = auth.currentUser;
 
   useEffect(() => {
@@ -168,12 +171,10 @@ export default function HomeScreen() {
         }
       }
 
+      // 💎 ÇÖZÜM: Kotası bitenleri doğrudan Premium Sayfasına yönlendiriyoruz
       if (mevcutKota <= 0) {
         setYukleniyor(false);
-        Alert.alert(
-          "Günlük Kotan Doldu! ⏳",
-          "Bugünkü 3 ücretsiz soru sorma hakkını bitirdin. Lütfen yarın tekrar gel veya haklarını yenilemek için profilini kontrol et."
-        );
+        setPremiumModalGorunur(true); // Premium Modal'ı tetikler
         return;
       }
 
@@ -195,7 +196,6 @@ export default function HomeScreen() {
         },
       });
 
-      // 🚨 DÜZELTME BURADA: Eğer Firebase hata verirse gerçek hatayı terminale yazdırıyoruz
       if (uploadResult.status !== 200) {
         console.log("🔥 Firebase Sunucu Red Sebebi (Body):", uploadResult.body);
         throw new Error(
@@ -227,8 +227,14 @@ export default function HomeScreen() {
     }
   };
 
+  const premiumSatinAl = () => {
+    // İleride buraya RevenueCat veya Apple/Google Pay kodları eklenecek
+    Alert.alert("Hazırlanıyor", "Ödeme altyapısı çok yakında aktif olacak!");
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: tema.arkaplan }]}>
+      {/* 🚀 SERİ MODALI */}
       <Modal visible={seriModalGorunur} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           {seriModalGorunur && (
@@ -264,6 +270,194 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
+      {/* 💎 YENİ: PREMIUM MODALI */}
+      <Modal visible={premiumModalGorunur} transparent animationType="slide">
+        {/* Arka plan tıklamasıyla kapatma (activeOpacity=1 tıklama efektini engeller) */}
+        <TouchableOpacity
+          style={styles.premiumOverlay}
+          activeOpacity={1}
+          onPress={() => setPremiumModalGorunur(false)}
+        >
+          {/* İç kutu tıklamasını dışarı taşırmamak için boş bir Touchable */}
+          <TouchableOpacity
+            activeOpacity={1}
+            style={[
+              styles.premiumKutu,
+              { backgroundColor: temaModu === "dark" ? "#1E293B" : "#fff" },
+            ]}
+          >
+            {/* Kapat (X) Butonu */}
+            <TouchableOpacity
+              style={styles.kapatIkon}
+              onPress={() => setPremiumModalGorunur(false)}
+            >
+              <Ionicons name="close" size={28} color={tema.ikincilMetin} />
+            </TouchableOpacity>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{
+                alignItems: "center",
+                paddingBottom: 20,
+              }}
+            >
+              <View style={styles.premiumIkonCember}>
+                <Ionicons name="star" size={40} color="#FFD700" />
+              </View>
+
+              <Text style={[styles.premiumAnaBaslik, { color: tema.metin }]}>
+                Premium'a Geç
+              </Text>
+              <Text style={styles.premiumAltYazi}>
+                Bugünkü ücretsiz hakların bitti. Sınırları kaldır ve tüm
+                özelliklere anında eriş!
+              </Text>
+
+              {/* Avantajlar Listesi */}
+              <View style={styles.avantajKutusu}>
+                <View style={styles.avantajSatiri}>
+                  <Ionicons name="checkmark-circle" size={22} color="#10B981" />
+                  <Text style={[styles.avantajYazi, { color: tema.metin }]}>
+                    Sınırsız Soru Çözümü
+                  </Text>
+                </View>
+                <View style={styles.avantajSatiri}>
+                  <Ionicons name="checkmark-circle" size={22} color="#10B981" />
+                  <Text style={[styles.avantajYazi, { color: tema.metin }]}>
+                    Anında Detaylı Açıklamalar
+                  </Text>
+                </View>
+                <View style={styles.avantajSatiri}>
+                  <Ionicons name="checkmark-circle" size={22} color="#10B981" />
+                  <Text style={[styles.avantajYazi, { color: tema.metin }]}>
+                    Hata Defterini PDF İndirme
+                  </Text>
+                </View>
+                <View style={styles.avantajSatiri}>
+                  <Ionicons name="checkmark-circle" size={22} color="#10B981" />
+                  <Text style={[styles.avantajYazi, { color: tema.metin }]}>
+                    VIP Öncelikli Sunucu Hızı
+                  </Text>
+                </View>
+              </View>
+
+              {/* Abonelik Paketleri */}
+              <View style={styles.paketlerKapsayici}>
+                {/* Aylık Paket */}
+                <TouchableOpacity
+                  onPress={() => setSeciliPaket("aylik")}
+                  style={[
+                    styles.paketKutu,
+                    {
+                      borderColor:
+                        seciliPaket === "aylik" ? "#FFD700" : tema.kutuCerceve,
+                      backgroundColor:
+                        seciliPaket === "aylik"
+                          ? temaModu === "dark"
+                            ? "#332a00"
+                            : "#FFFBEB"
+                          : tema.arkaplan,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.paketIsmi, { color: tema.metin }]}>
+                    1 Aylık
+                  </Text>
+                  <Text style={[styles.paketFiyat, { color: tema.metin }]}>
+                    500 ₺
+                  </Text>
+                </TouchableOpacity>
+
+                {/* 3 Aylık Paket */}
+                <TouchableOpacity
+                  onPress={() => setSeciliPaket("uc_aylik")}
+                  style={[
+                    styles.paketKutu,
+                    {
+                      borderColor:
+                        seciliPaket === "uc_aylik"
+                          ? "#FFD700"
+                          : tema.kutuCerceve,
+                      backgroundColor:
+                        seciliPaket === "uc_aylik"
+                          ? temaModu === "dark"
+                            ? "#332a00"
+                            : "#FFFBEB"
+                          : tema.arkaplan,
+                    },
+                  ]}
+                >
+                  <View style={styles.indirimEtiketi}>
+                    <Text style={styles.indirimYazisi}>%16 İndirim</Text>
+                  </View>
+                  <Text style={[styles.paketIsmi, { color: tema.metin }]}>
+                    3 Aylık
+                  </Text>
+                  <Text style={[styles.paketFiyat, { color: tema.metin }]}>
+                    1250 ₺
+                  </Text>
+                  <Text style={styles.eskiFiyat}>1500 ₺</Text>
+                </TouchableOpacity>
+
+                {/* Yıllık Paket (Popüler) */}
+                <TouchableOpacity
+                  onPress={() => setSeciliPaket("yillik")}
+                  style={[
+                    styles.paketKutu,
+                    {
+                      borderColor:
+                        seciliPaket === "yillik" ? "#FFD700" : tema.kutuCerceve,
+                      backgroundColor:
+                        seciliPaket === "yillik"
+                          ? temaModu === "dark"
+                            ? "#332a00"
+                            : "#FFFBEB"
+                          : tema.arkaplan,
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.indirimEtiketi,
+                      { backgroundColor: "#FFD700" },
+                    ]}
+                  >
+                    <Text style={[styles.indirimYazisi, { color: "#000" }]}>
+                      En Popüler
+                    </Text>
+                  </View>
+                  <Text style={[styles.paketIsmi, { color: tema.metin }]}>
+                    12 Aylık
+                  </Text>
+                  <Text style={[styles.paketFiyat, { color: tema.metin }]}>
+                    1500 ₺
+                  </Text>
+                  <Text style={styles.eskiFiyat}>1600 ₺</Text>
+                  <Text
+                    style={{
+                      fontSize: 10,
+                      color: tema.ikincilMetin,
+                      marginTop: 2,
+                    }}
+                  >
+                    %6 İndirim
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Satın Alma Butonu */}
+              <TouchableOpacity
+                onPress={premiumSatinAl}
+                style={styles.satinAlButon}
+              >
+                <Text style={styles.satinAlYazi}>Devam Et</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ANA EKRAN İÇERİĞİ */}
       <View style={styles.header}>
         <Text style={[styles.baslik, { color: tema.metin }]}>
           Soru Tarayıcı
@@ -390,7 +584,7 @@ const styles = StyleSheet.create({
   },
   butonYazi: { color: "#fff", fontSize: 16, fontWeight: "bold" },
 
-  // Modal Stilleri
+  // Seri Modal Stilleri
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.75)",
@@ -404,10 +598,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     width: "100%",
     elevation: 15,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
   },
   ikonCember: {
     width: 90,
@@ -444,6 +634,124 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "bold",
     fontSize: 17,
+  },
+
+  // 💎 PREMIUM MODAL STİLLERİ
+  premiumOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.85)", // Daha koyu ve dramatik arkaplan
+    justifyContent: "flex-end", // Aşağıdan çıksın
+  },
+  premiumKutu: {
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    padding: 25,
+    maxHeight: "90%",
+  },
+  kapatIkon: {
+    position: "absolute",
+    top: 20,
+    right: 20,
+    zIndex: 10,
+    padding: 5,
+  },
+  premiumIkonCember: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "rgba(255, 215, 0, 0.15)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 15,
+  },
+  premiumAnaBaslik: {
+    fontSize: 26,
+    fontWeight: "900",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  premiumAltYazi: {
+    fontSize: 14,
+    color: "#9CA3AF",
+    textAlign: "center",
+    marginBottom: 25,
+    lineHeight: 20,
+    paddingHorizontal: 10,
+  },
+  avantajKutusu: {
+    width: "100%",
+    marginBottom: 25,
+  },
+  avantajSatiri: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  avantajYazi: {
+    fontSize: 15,
+    fontWeight: "500",
+    marginLeft: 10,
+  },
+  paketlerKapsayici: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    width: "100%",
+    marginBottom: 25,
+  },
+  paketKutu: {
+    flex: 1,
+    borderWidth: 2,
+    borderRadius: 15,
+    padding: 15,
+    alignItems: "center",
+    marginHorizontal: 4,
+    position: "relative",
+  },
+  paketIsmi: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 8,
+    marginTop: 5,
+  },
+  paketFiyat: {
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  eskiFiyat: {
+    fontSize: 12,
+    color: "#9CA3AF",
+    textDecorationLine: "line-through",
+    marginTop: 4,
+  },
+  indirimEtiketi: {
+    position: "absolute",
+    top: -12,
+    backgroundColor: "#EF4444",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  indirimYazisi: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "bold",
+  },
+  satinAlButon: {
+    backgroundColor: "#FFD700",
+    width: "100%",
+    paddingVertical: 18,
+    borderRadius: 100,
+    alignItems: "center",
+    shadowColor: "#FFD700",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  satinAlYazi: {
+    color: "#000",
+    fontSize: 18,
+    fontWeight: "bold",
     letterSpacing: 0.5,
   },
 });

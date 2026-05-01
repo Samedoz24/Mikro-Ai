@@ -119,12 +119,14 @@ export default function HomeScreen() {
         Alert.alert("İzin Gerekli", "Kamera izni vermelisin.");
         return;
       }
-      const kaliteAyari = Platform.OS === "ios" ? 0.2 : 0.5;
+
+      // 🚀 PROFESYONEL KIRPMA: Yapay zeka metinleri rahat okusun diye kaliteyi yüksek (0.8) tutuyoruz.
       const result = await ImagePicker.launchCameraAsync({
-        quality: kaliteAyari,
-        allowsEditing: true,
-        aspect: [3, 4],
+        quality: 0.8,
+        allowsEditing: true, // Kullanıcı sadece soruyu seçebilsin
+        aspect: [3, 4], // Soru kağıdına en uygun dikey oran
       });
+
       if (!result.canceled) {
         setImage(result.assets[0].uri);
       }
@@ -272,13 +274,11 @@ export default function HomeScreen() {
 
       {/* 💎 YENİ: PREMIUM MODALI */}
       <Modal visible={premiumModalGorunur} transparent animationType="slide">
-        {/* Arka plan tıklamasıyla kapatma (activeOpacity=1 tıklama efektini engeller) */}
         <TouchableOpacity
           style={styles.premiumOverlay}
           activeOpacity={1}
           onPress={() => setPremiumModalGorunur(false)}
         >
-          {/* İç kutu tıklamasını dışarı taşırmamak için boş bir Touchable */}
           <TouchableOpacity
             activeOpacity={1}
             style={[
@@ -286,7 +286,6 @@ export default function HomeScreen() {
               { backgroundColor: temaModu === "dark" ? "#1E293B" : "#fff" },
             ]}
           >
-            {/* Kapat (X) Butonu */}
             <TouchableOpacity
               style={styles.kapatIkon}
               onPress={() => setPremiumModalGorunur(false)}
@@ -313,7 +312,6 @@ export default function HomeScreen() {
                 özelliklere anında eriş!
               </Text>
 
-              {/* Avantajlar Listesi */}
               <View style={styles.avantajKutusu}>
                 <View style={styles.avantajSatiri}>
                   <Ionicons name="checkmark-circle" size={22} color="#10B981" />
@@ -341,9 +339,7 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              {/* Abonelik Paketleri */}
               <View style={styles.paketlerKapsayici}>
-                {/* Aylık Paket */}
                 <TouchableOpacity
                   onPress={() => setSeciliPaket("aylik")}
                   style={[
@@ -368,7 +364,6 @@ export default function HomeScreen() {
                   </Text>
                 </TouchableOpacity>
 
-                {/* 3 Aylık Paket */}
                 <TouchableOpacity
                   onPress={() => setSeciliPaket("uc_aylik")}
                   style={[
@@ -399,7 +394,6 @@ export default function HomeScreen() {
                   <Text style={styles.eskiFiyat}>1500 ₺</Text>
                 </TouchableOpacity>
 
-                {/* Yıllık Paket (Popüler) */}
                 <TouchableOpacity
                   onPress={() => setSeciliPaket("yillik")}
                   style={[
@@ -445,7 +439,6 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* Satın Alma Butonu */}
               <TouchableOpacity
                 onPress={premiumSatinAl}
                 style={styles.satinAlButon}
@@ -457,7 +450,6 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* ANA EKRAN İÇERİĞİ */}
       <View style={styles.header}>
         <Text style={[styles.baslik, { color: tema.metin }]}>
           Soru Tarayıcı
@@ -468,7 +460,10 @@ export default function HomeScreen() {
         </Text>
       </View>
 
-      <View
+      {/* 🚀 ORTADAKİ DEVASA BUTON: Artık Tıklanabilir */}
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={!image ? kamerayiAc : undefined} // Resim varsa tıklandığında kamerayı açmasın, yanlışlıkla dokunmayı önler
         style={[
           styles.onizlemeKutusu,
           {
@@ -493,7 +488,7 @@ export default function HomeScreen() {
             </Text>
           </View>
         )}
-      </View>
+      </TouchableOpacity>
 
       <View style={styles.butonAlani}>
         {!image ? (
@@ -639,8 +634,8 @@ const styles = StyleSheet.create({
   // 💎 PREMIUM MODAL STİLLERİ
   premiumOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.85)", // Daha koyu ve dramatik arkaplan
-    justifyContent: "flex-end", // Aşağıdan çıksın
+    backgroundColor: "rgba(0,0,0,0.85)",
+    justifyContent: "flex-end",
   },
   premiumKutu: {
     borderTopLeftRadius: 30,

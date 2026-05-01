@@ -1,4 +1,10 @@
-import React, { createContext, useState, useContext, useEffect } from "react";
+import React, {
+  createContext,
+  useState,
+  useContext,
+  useEffect,
+  useMemo,
+} from "react";
 import { useColorScheme } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { colors } from "./theme";
@@ -13,7 +19,9 @@ export const ThemeProvider = ({ children }) => {
   useEffect(() => {
     const tercihiYukle = async () => {
       const kaydedilenMod = await AsyncStorage.getItem("kullaniciTemaTercihi");
-      if (kaydedilenMod) setTemaModu(kaydedilenMod);
+      if (kaydedilenMod) {
+        setTemaModu(kaydedilenMod);
+      }
     };
     tercihiYukle();
   }, []);
@@ -24,18 +32,16 @@ export const ThemeProvider = ({ children }) => {
     await AsyncStorage.setItem("kullaniciTemaTercihi", yeniMod);
   };
 
-  // Aktif renk paletini belirle (Zeki Mantık)
-  const aktifTema = () => {
+  // ⚡ HATANIN ÇÖZÜMÜ: useMemo ile temayı React'ın hafızasına sabitleyip anında tetiklemek
+  const tema = useMemo(() => {
     if (temaModu === "system") {
       return sistemTemasi === "dark" ? colors.dark : colors.light;
     }
     return temaModu === "dark" ? colors.dark : colors.light;
-  };
+  }, [temaModu, sistemTemasi]);
 
   return (
-    <ThemeContext.Provider
-      value={{ temaModu, temaDegistir, tema: aktifTema() }}
-    >
+    <ThemeContext.Provider value={{ temaModu, temaDegistir, tema }}>
       {children}
     </ThemeContext.Provider>
   );

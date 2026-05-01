@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -23,7 +23,9 @@
             ]
           }
         ],
-        "NSCameraUsageDescription": "Fotoğraf çekmek için kamera izni gerekli"
+        "NSCameraUsageDescription": "Fotoğraf çekmek için kamera izni gerekli",
+        "CFBundleAllowMixedLocalizations": true,
+        "CFBundleLocalizations": ["tr"]
       }
     },
     "android": {
@@ -67,7 +69,8 @@
           "savePhotosPermission": "Çözüm kartını galeriye kaydetmek için izin verin."
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      "./withDisableForceDark.js" 
     ],
     "extra": {
       "eas": {

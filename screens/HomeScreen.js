@@ -360,7 +360,7 @@ export default function HomeScreen() {
                     1 Aylık
                   </Text>
                   <Text style={[styles.paketFiyat, { color: tema.metin }]}>
-                    500 ₺
+                    499 ₺
                   </Text>
                 </TouchableOpacity>
 
@@ -389,7 +389,7 @@ export default function HomeScreen() {
                     3 Aylık
                   </Text>
                   <Text style={[styles.paketFiyat, { color: tema.metin }]}>
-                    1250 ₺
+                    1249 ₺
                   </Text>
                   <Text style={styles.eskiFiyat}>1500 ₺</Text>
                 </TouchableOpacity>
@@ -424,9 +424,9 @@ export default function HomeScreen() {
                     12 Aylık
                   </Text>
                   <Text style={[styles.paketFiyat, { color: tema.metin }]}>
-                    1500 ₺
+                    4999₺
                   </Text>
-                  <Text style={styles.eskiFiyat}>1600 ₺</Text>
+                  <Text style={styles.eskiFiyat}>6000 ₺</Text>
                   <Text
                     style={{
                       fontSize: 10,
@@ -434,7 +434,7 @@ export default function HomeScreen() {
                       marginTop: 2,
                     }}
                   >
-                    %6 İndirim
+                    %16,7 İndirim
                   </Text>
                 </TouchableOpacity>
               </View>

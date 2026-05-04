@@ -16,11 +16,22 @@ import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import { Ionicons } from "@expo/vector-icons";
 
+// 📱 Cihaz Kimliği Kütüphanesi (Sahte hesapları engeller)
+import * as Application from "expo-application";
+
 // 🎉 Konfeti Animasyonu Kütüphanesi
 import ConfettiCannon from "react-native-confetti-cannon";
 
 import { auth, db, storage } from "../firebaseConfig";
-import { collection, addDoc, doc, getDoc, updateDoc } from "firebase/firestore";
+// ⚙️ setDoc eklendi (Cihaz kayıtları için)
+import {
+  collection,
+  addDoc,
+  doc,
+  getDoc,
+  updateDoc,
+  setDoc,
+} from "firebase/firestore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // 🌗 Tema Sistemi
@@ -48,8 +59,8 @@ export default function HomeScreen() {
       if (!user) return;
 
       try {
-        const bugun = new Date();
-        bugun.setHours(0, 0, 0, 0);
+        const bugunDate = new Date();
+        bugunDate.setHours(0, 0, 0, 0);
 
         const kullaniciRef = doc(db, "kullanicilar", user.uid);
         const kullaniciSnap = await getDoc(kullaniciRef);
@@ -66,26 +77,26 @@ export default function HomeScreen() {
           if (!sonGiris) {
             guncellenecekVeri = {
               seriGunu: 1,
-              sonGirisTarihi: bugun.toISOString(),
+              sonGirisTarihi: bugunDate.toISOString(),
             };
             setGuncelSeriSayisi(1);
             setSeriModalGorunur(true);
           } else {
-            const farkMilisaniye = bugun.getTime() - sonGiris.getTime();
+            const farkMilisaniye = bugunDate.getTime() - sonGiris.getTime();
             const farkGun = Math.floor(farkMilisaniye / (1000 * 3600 * 24));
 
             if (farkGun === 1) {
               const yeniSeri = mevcutSeri + 1;
               guncellenecekVeri = {
                 seriGunu: yeniSeri,
-                sonGirisTarihi: bugun.toISOString(),
+                sonGirisTarihi: bugunDate.toISOString(),
               };
               setGuncelSeriSayisi(yeniSeri);
               setSeriModalGorunur(true);
             } else if (farkGun > 1) {
               guncellenecekVeri = {
                 seriGunu: 1,
-                sonGirisTarihi: bugun.toISOString(),
+                sonGirisTarihi: bugunDate.toISOString(),
               };
               setGuncelSeriSayisi(1);
               setSeriModalGorunur(true);
@@ -120,11 +131,10 @@ export default function HomeScreen() {
         return;
       }
 
-      // 🚀 PROFESYONEL KIRPMA: Yapay zeka metinleri rahat okusun diye kaliteyi yüksek (0.8) tutuyoruz.
       const result = await ImagePicker.launchCameraAsync({
         quality: 0.8,
-        allowsEditing: true, // Kullanıcı sadece soruyu seçebilsin
-        aspect: [3, 4], // Soru kağıdına en uygun dikey oran
+        allowsEditing: true,
+        aspect: [3, 4],
       });
 
       if (!result.canceled) {
@@ -151,6 +161,15 @@ export default function HomeScreen() {
     }
   };
 
+  // 📱 Fiziksel Cihaz Kimliğini Alan Fonksiyon
+  const getDeviceId = async () => {
+    if (Platform.OS === "android") {
+      return Application.getAndroidId();
+    } else {
+      return await Application.getIosIdForVendorAsync();
+    }
+  };
+
   const fotografiGonder = async () => {
     if (!image) return;
     try {
@@ -162,21 +181,36 @@ export default function HomeScreen() {
         return;
       }
 
-      const kullaniciRef = doc(db, "kullanicilar", auth.currentUser.uid);
-      const kullaniciSnap = await getDoc(kullaniciRef);
+      // 🛡️ CİHAZ KİMLİĞİ KONTROLÜ BAŞLIYOR (Sahte Hesap Engeli)
+      const cihazId = await getDeviceId();
 
-      let mevcutKota = 3;
-      if (kullaniciSnap.exists()) {
-        const data = kullaniciSnap.data();
-        if (data.kalanSoru !== undefined) {
-          mevcutKota = data.kalanSoru;
+      // ⏱️ DÜZELTME: Türkiye saat dilimine uygun, yerel tarih (YYYY-MM-DD) alımı
+      const simdi = new Date();
+      const yyyy = simdi.getFullYear();
+      const mm = String(simdi.getMonth() + 1).padStart(2, "0");
+      const dd = String(simdi.getDate()).padStart(2, "0");
+      const bugunYerel = `${yyyy}-${mm}-${dd}`;
+
+      const cihazRef = doc(db, "cihazHaklari", cihazId);
+      const cihazSnap = await getDoc(cihazRef);
+
+      let mevcutKota = 3; // Her cihaza günlük 3 hak
+
+      if (cihazSnap.exists()) {
+        const data = cihazSnap.data();
+        if (data.tarih === bugunYerel) {
+          // Eğer bugün zaten soru sorduysa, kalan kotasını al
+          if (data.kalanSoru !== undefined) {
+            mevcutKota = data.kalanSoru;
+          }
         }
+        // Eğer tarih bugün değilse sistem otomatik olarak 3 kota kabul edecek ve yeni güne sıfırlanmış olacak.
       }
 
-      // 💎 ÇÖZÜM: Kotası bitenleri doğrudan Premium Sayfasına yönlendiriyoruz
+      // 💎 ÇÖZÜM: Kotası biten CİHAZLARI doğrudan Premium Sayfasına yönlendiriyoruz
       if (mevcutKota <= 0) {
         setYukleniyor(false);
-        setPremiumModalGorunur(true); // Premium Modal'ı tetikler
+        setPremiumModalGorunur(true);
         return;
       }
 
@@ -199,7 +233,6 @@ export default function HomeScreen() {
       });
 
       if (uploadResult.status !== 200) {
-        console.log("🔥 Firebase Sunucu Red Sebebi (Body):", uploadResult.body);
         throw new Error(
           `Yükleme başarısız! Sunucu Kodu: ${uploadResult.status}`
         );
@@ -208,18 +241,31 @@ export default function HomeScreen() {
       const data = JSON.parse(uploadResult.body);
       const downloadURL = `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodedYol}?alt=media&token=${data.downloadTokens}`;
 
+      // 🔐 DÜZELTME: Veri tabanına soru kaydedilirken güvenlik için kullaniciUid eklendi
       await addDoc(collection(db, "sorular"), {
+        kullaniciUid: auth.currentUser.uid,
         kullaniciEposta: auth.currentUser.email,
         fotoLink: downloadURL,
         tarih: new Date().toISOString(),
         durum: "Bekliyor",
       });
 
-      await updateDoc(kullaniciRef, {
-        kalanSoru: mevcutKota - 1,
-      });
+      // 🛡️ CİHAZIN KOTASINI 1 DÜŞÜR VE KAYDET (E-postadan bağımsız)
+      await setDoc(
+        cihazRef,
+        {
+          kalanSoru: mevcutKota - 1,
+          tarih: bugunYerel,
+        },
+        { merge: true }
+      );
 
-      Alert.alert("Başarılı", "Soru gönderildi! Kotandan 1 hak düştü.");
+      Alert.alert(
+        "Başarılı",
+        `Soru gönderildi! Cihazının kotasından 1 hak düştü. (Kalan Hak: ${
+          mevcutKota - 1
+        })`
+      );
       fotografiIptalEt();
     } catch (error) {
       console.log("📸 Fotoğraf Gönderme Hatası Detayı:", error);
@@ -230,7 +276,6 @@ export default function HomeScreen() {
   };
 
   const premiumSatinAl = () => {
-    // İleride buraya RevenueCat veya Apple/Google Pay kodları eklenecek
     Alert.alert("Hazırlanıyor", "Ödeme altyapısı çok yakında aktif olacak!");
   };
 
@@ -272,7 +317,7 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      {/* 💎 YENİ: PREMIUM MODALI */}
+      {/* 💎 PREMIUM MODALI (Altın Fiyatlandırma Stratejisi İle) */}
       <Modal visible={premiumModalGorunur} transparent animationType="slide">
         <TouchableOpacity
           style={styles.premiumOverlay}
@@ -340,6 +385,7 @@ export default function HomeScreen() {
               </View>
 
               <View style={styles.paketlerKapsayici}>
+                {/* AYLIK PAKET */}
                 <TouchableOpacity
                   onPress={() => setSeciliPaket("aylik")}
                   style={[
@@ -360,10 +406,11 @@ export default function HomeScreen() {
                     1 Aylık
                   </Text>
                   <Text style={[styles.paketFiyat, { color: tema.metin }]}>
-                    499 ₺
+                    349 ₺
                   </Text>
                 </TouchableOpacity>
 
+                {/* 3 AYLIK PAKET */}
                 <TouchableOpacity
                   onPress={() => setSeciliPaket("uc_aylik")}
                   style={[
@@ -383,17 +430,18 @@ export default function HomeScreen() {
                   ]}
                 >
                   <View style={styles.indirimEtiketi}>
-                    <Text style={styles.indirimYazisi}>%16 İndirim</Text>
+                    <Text style={styles.indirimYazisi}>%23 İndirim</Text>
                   </View>
                   <Text style={[styles.paketIsmi, { color: tema.metin }]}>
                     3 Aylık
                   </Text>
                   <Text style={[styles.paketFiyat, { color: tema.metin }]}>
-                    1249 ₺
+                    799 ₺
                   </Text>
-                  <Text style={styles.eskiFiyat}>1500 ₺</Text>
+                  <Text style={styles.eskiFiyat}>1047 ₺</Text>
                 </TouchableOpacity>
 
+                {/* YILLIK PAKET */}
                 <TouchableOpacity
                   onPress={() => setSeciliPaket("yillik")}
                   style={[
@@ -424,9 +472,9 @@ export default function HomeScreen() {
                     12 Aylık
                   </Text>
                   <Text style={[styles.paketFiyat, { color: tema.metin }]}>
-                    4999₺
+                    1999 ₺
                   </Text>
-                  <Text style={styles.eskiFiyat}>6000 ₺</Text>
+                  <Text style={styles.eskiFiyat}>4188 ₺</Text>
                   <Text
                     style={{
                       fontSize: 10,
@@ -434,7 +482,7 @@ export default function HomeScreen() {
                       marginTop: 2,
                     }}
                   >
-                    %16,7 İndirim
+                    %52 İndirim
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -460,10 +508,9 @@ export default function HomeScreen() {
         </Text>
       </View>
 
-      {/* 🚀 ORTADAKİ DEVASA BUTON: Artık Tıklanabilir */}
       <TouchableOpacity
         activeOpacity={0.8}
-        onPress={!image ? kamerayiAc : undefined} // Resim varsa tıklandığında kamerayı açmasın, yanlışlıkla dokunmayı önler
+        onPress={!image ? kamerayiAc : undefined}
         style={[
           styles.onizlemeKutusu,
           {

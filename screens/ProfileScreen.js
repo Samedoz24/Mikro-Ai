@@ -11,6 +11,7 @@ import {
   Switch,
   Image,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 
 // Firebase Kütüphaneleri
@@ -35,6 +36,9 @@ import { Ionicons } from "@expo/vector-icons";
 // 📷 Resim ve Dosya Kütüphaneleri
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system/legacy";
+
+// 📱 CİHAZ KİMLİĞİ KÜTÜPHANESİ (Kota için eklendi)
+import * as Application from "expo-application";
 
 // 🔔 BİLDİRİM YÖNETİCİSİ VE KÜTÜPHANESİ
 import * as Notifications from "expo-notifications";
@@ -65,7 +69,9 @@ export default function ProfileScreen() {
   const [kaydetmeBasarili, setKaydetmeBasarili] = useState(false);
   const [fotoYukleniyor, setFotoYukleniyor] = useState(false);
 
+  // KOTA STATE'İ
   const [kalanSoru, setKalanSoru] = useState(3);
+
   const [seriGunu, setSeriGunu] = useState(0);
   const [baglantiKodu, setBaglantiKodu] = useState("Yükleniyor...");
 
@@ -82,13 +88,59 @@ export default function ProfileScreen() {
     return kod;
   };
 
+  // 🛡️ YENİ: CİHAZ KOTASINI CANLI DİNLEYEN EFFECT
+  useEffect(() => {
+    let cihazAbonelik = () => {};
+
+    const cihazKotasiDinle = async () => {
+      try {
+        const cihazId =
+          Platform.OS === "android"
+            ? Application.getAndroidId()
+            : await Application.getIosIdForVendorAsync();
+
+        const bugun = new Date().toISOString().split("T")[0];
+        const cihazRef = doc(db, "cihazHaklari", cihazId);
+
+        cihazAbonelik = onSnapshot(cihazRef, async (cihazSnap) => {
+          if (cihazSnap.exists()) {
+            const data = cihazSnap.data();
+            if (data.tarih === bugun) {
+              setKalanSoru(data.kalanSoru !== undefined ? data.kalanSoru : 3);
+            } else {
+              // Yeni güne geçilmiş, limiti 3 yap ve veritabanını güncelle
+              setKalanSoru(3);
+              await setDoc(
+                cihazRef,
+                { kalanSoru: 3, tarih: bugun },
+                { merge: true }
+              );
+            }
+          } else {
+            // Cihaz uygulamayı ilk defa açıyor
+            setKalanSoru(3);
+            await setDoc(
+              cihazRef,
+              { kalanSoru: 3, tarih: bugun },
+              { merge: true }
+            );
+          }
+        });
+      } catch (error) {
+        console.log("Cihaz kotası dinleme hatası:", error);
+      }
+    };
+
+    cihazKotasiDinle();
+    return () => cihazAbonelik();
+  }, []);
+
+  // KİŞİSEL BİLGİLERİ DİNLEYEN EFFECT (Kota kısmı buradan temizlendi)
   useEffect(() => {
     let abonelik = () => {};
 
     const verileriCanliDinle = async () => {
       if (!user) return;
-
-      const bugununTarihi = new Date().toISOString().split("T")[0];
 
       const kayitliRol = await AsyncStorage.getItem("kullaniciRolu");
       setRol(kayitliRol || "ogrenci");
@@ -149,23 +201,6 @@ export default function ProfileScreen() {
               setProfilFoto(data.profilFoto);
               await AsyncStorage.setItem("profilFoto", data.profilFoto);
             }
-
-            let guncelKota = data.kalanSoru !== undefined ? data.kalanSoru : 3;
-            let veritabaniTarihi = data.sonSoruTarihi || "";
-
-            if (veritabaniTarihi !== bugununTarihi) {
-              guncelKota = 3;
-              try {
-                await updateDoc(kullaniciRef, {
-                  kalanSoru: 3,
-                  sonSoruTarihi: bugununTarihi,
-                });
-              } catch (e) {
-                console.log("Kota güncelleme hatası:", e.message);
-              }
-            }
-
-            setKalanSoru(guncelKota);
           } else {
             const yeniKod = rastgeleKodUret();
             setBaglantiKodu(yeniKod);
@@ -178,10 +213,7 @@ export default function ProfileScreen() {
                 kayitTarihi: new Date().toISOString(),
                 bildirimAktif: true,
                 seriGunu: 1,
-                kalanSoru: 3,
-                sonSoruTarihi: bugununTarihi,
               });
-              setKalanSoru(3);
             } catch (yazmaHatasi) {
               console.log(
                 "Kullanıcı belge oluşturma hatası:",
@@ -643,7 +675,6 @@ export default function ProfileScreen() {
         </Text>
         <Text style={styles.userEmail}>{user?.email}</Text>
 
-        {/* 🎯 GÜNCELLENEN: Seviye Dışarı Alındı */}
         {rol === "ogrenci" && (
           <View style={styles.seviyeVeXpKapsayici}>
             <Text style={styles.seviyeYazisi}>Seviye {kullaniciSeviye}</Text>

@@ -39,6 +39,9 @@ function MainApp() {
   // 🎯 YENİ: Tanıtım ekranının gösterilip gösterilmeyeceğini tutan state
   const [gosterOnboarding, setGosterOnboarding] = useState(false);
 
+  // 🔴 YENİ: Okunmamış (Yeni Çözülmüş) Soru Sayacı
+  const [okunmamisSayisi, setOkunmamisSayisi] = useState(0);
+
   const { tema } = useTheme();
 
   // 🚪 Akıllı Kapı Bekçisi (Gatekeeper)
@@ -108,7 +111,7 @@ function MainApp() {
     return () => abonelik();
   }, []);
 
-  // 🤖 Arka Planda Soru Çözümü Bekçisi
+  // 🤖 Arka Planda Soru Çözümü ve Bildirim Bekçisi
   useEffect(() => {
     if (!kullanici || kullaniciRolu !== "ogrenci") return;
 
@@ -118,10 +121,22 @@ function MainApp() {
     );
 
     const abonelik = onSnapshot(q, (snapshot) => {
+      // 🔴 ROZET SAYACI İÇİN YENİ MANTIK:
+      let okunmamisAdet = 0;
+      snapshot.forEach((doc) => {
+        const veri = doc.data();
+        // Eğer soru çözülmüşse ve okunduMu etiketi true DEĞİLSE, bu yeni bir sorudur.
+        if (veri.durum === "Çözüldü" && veri.okunduMu !== true) {
+          okunmamisAdet++;
+        }
+      });
+      setOkunmamisSayisi(okunmamisAdet);
+
+      // 🔔 BİLDİRİM (PUSH NOTIFICATION) MANTIĞI (Eski kod korunarak optimize edildi)
       snapshot.docChanges().forEach((change) => {
         if (change.type === "modified") {
           const veri = change.doc.data();
-          if (veri.durum === "Çözüldü") {
+          if (veri.durum === "Çözüldü" && veri.okunduMu !== true) {
             const dersAdi = veri.subject || veri.ders || "";
             sendQuestionSolvedNotification(dersAdi);
           }
@@ -204,7 +219,17 @@ function MainApp() {
             <Tab.Screen
               name="Hata Defteri"
               component={HistoryScreen}
-              options={{ title: "Geçmiş Sorular" }}
+              options={{
+                title: "Geçmiş Sorular",
+                // 🔴 ROZET BURADA GÖSTERİLİYOR (Eğer okunmamış soru varsa sayıyı yaz, yoksa null ver yani gizle)
+                tabBarBadge: okunmamisSayisi > 0 ? okunmamisSayisi : null,
+                tabBarBadgeStyle: {
+                  backgroundColor: "#EF4444", // Kırmızı renk
+                  color: "#FFFFFF",
+                  fontSize: 12,
+                  fontWeight: "bold",
+                },
+              }}
             />
             <Tab.Screen
               name="Profil"

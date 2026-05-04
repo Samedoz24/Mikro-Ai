@@ -25,6 +25,7 @@ import {
   onSnapshot,
   deleteDoc,
   doc,
+  updateDoc,
 } from "firebase/firestore";
 import { ref, deleteObject, getDownloadURL } from "firebase/storage";
 import { Ionicons } from "@expo/vector-icons";
@@ -45,8 +46,8 @@ export default function HistoryScreen() {
   const [indirmeBasladi, setIndirmeBasladi] = useState(false);
 
   const [seciliKategori, setSeciliKategori] = useState("Tümü");
-  const kategoriler = [
-    "Tümü",
+
+  const temelKategoriler = [
     "Matematik",
     "Fizik",
     "Kimya",
@@ -56,6 +57,10 @@ export default function HistoryScreen() {
     "Coğrafya",
     "Diğer",
   ];
+  const [dinamikKategoriler, setDinamikKategoriler] = useState([
+    "Tümü",
+    ...temelKategoriler,
+  ]);
 
   const [seciliSoru, setSeciliSoru] = useState(null);
   const [modalGorunur, setModalGorunur] = useState(false);
@@ -95,6 +100,28 @@ export default function HistoryScreen() {
     return () => abonelik();
   }, []);
 
+  useEffect(() => {
+    if (sorular.length > 0) {
+      const enSonSoru = sorular[0];
+      const enSonDers = enSonSoru.subject || enSonSoru.ders;
+
+      if (enSonDers && enSonDers !== "Tümü") {
+        const yeniSiralama = ["Tümü", enSonDers];
+
+        temelKategoriler.forEach((kategori) => {
+          if (kategori !== enSonDers && !yeniSiralama.includes(kategori)) {
+            yeniSiralama.push(kategori);
+          }
+        });
+        setDinamikKategoriler(yeniSiralama);
+      } else {
+        setDinamikKategoriler(["Tümü", ...temelKategoriler]);
+      }
+    } else {
+      setDinamikKategoriler(["Tümü", ...temelKategoriler]);
+    }
+  }, [sorular]);
+
   const filtrelenmisSorular =
     seciliKategori === "Tümü"
       ? sorular
@@ -109,6 +136,16 @@ export default function HistoryScreen() {
     setTamEkranModu(false);
     setCozumYukleniyor(true);
     setPratikModalGorunur(false);
+
+    if (soru.durum === "Çözüldü" && soru.okunduMu !== true) {
+      try {
+        await updateDoc(doc(db, "sorular", soru.id), {
+          okunduMu: true,
+        });
+      } catch (error) {
+        console.log("Okundu damgası vurulurken hata oluştu:", error);
+      }
+    }
 
     try {
       const userEmail = auth.currentUser?.email;
@@ -257,7 +294,6 @@ export default function HistoryScreen() {
     setPratikModalGorunur(true);
   };
 
-  // 🎯 YENİ VE GELİŞTİRİLMİŞ: PDF Çıktı Alma Özelliği
   const pdfOlarakIndir = async () => {
     try {
       setIndirmeBasladi(true);
@@ -400,7 +436,6 @@ export default function HistoryScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: tema.arkaplan }]}>
-      {/* 🎯 GÜNCELLENEN: Sadece Başlık Kaldı (PDF Butonu Aşağı Gitti) */}
       <View style={styles.headerKapsayici}>
         <Text style={[styles.anaBaslik, { color: tema.metin }]}>
           Hata Defterim
@@ -423,7 +458,7 @@ export default function HistoryScreen() {
         <>
           <View style={styles.kategoriKapsayici}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {kategoriler.map((kategori, index) => (
+              {dinamikKategoriler.map((kategori, index) => (
                 <TouchableOpacity
                   key={index}
                   style={[
@@ -470,7 +505,7 @@ export default function HistoryScreen() {
               data={filtrelenmisSorular}
               keyExtractor={(item) => item.id}
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 80 }} // 🎯 YENİ: Listenin sonu FAB butonun altında kalmasın diye boşluk bırakıldı
+              contentContainerStyle={{ paddingBottom: 80 }}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={[
@@ -487,13 +522,17 @@ export default function HistoryScreen() {
                     style={styles.kucukFoto}
                   />
                   <View style={styles.kartBilgi}>
+                    {/* 🎯 GÜNCELLENEN KISIM: Ders Adı En Üste ve Kalın Puntuya Alındı */}
+                    {(item.subject || item.ders) && (
+                      <Text style={[styles.kartDersAd, { color: tema.metin }]}>
+                        {item.subject || item.ders}
+                      </Text>
+                    )}
+                    {/* Tarih sadeleştirildi ve ders adının altına alındı */}
                     <Text
                       style={[styles.kartTarih, { color: tema.ikincilMetin }]}
                     >
                       {new Date(item.tarih).toLocaleString("tr-TR")}
-                      {item.subject || item.ders
-                        ? ` • ${item.subject || item.ders}`
-                        : ""}
                     </Text>
                     <Text
                       style={[
@@ -523,7 +562,6 @@ export default function HistoryScreen() {
         </>
       )}
 
-      {/* 🎯 YENİ: Yüzen PDF Butonu (FAB - Floating Action Button) */}
       {filtrelenmisSorular.length > 0 && (
         <TouchableOpacity
           style={[styles.fabButon, { backgroundColor: tema.anaButon }]}
@@ -1080,7 +1118,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, padding: 20 },
   headerKapsayici: {
     flexDirection: "row",
-    justifyContent: "center", // 🎯 GÜNCELLENEN: Sadece başlık olduğu için ortalandı
+    justifyContent: "center",
     alignItems: "center",
     marginBottom: 20,
     marginTop: 20,
@@ -1115,11 +1153,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   kartBilgi: { flex: 1 },
+  // 🎯 YENİ EKLENEN STİL: Ders Adı
+  kartDersAd: {
+    fontSize: 15,
+    fontWeight: "bold",
+    marginBottom: 3,
+  },
   kartTarih: { fontSize: 12, marginBottom: 5 },
   kartDurum: { fontSize: 16, fontWeight: "bold" },
   kucukFoto: { width: 60, height: 60, borderRadius: 8, marginRight: 15 },
-
-  // 🎯 YENİ: Yüzen Buton (FAB) Stilleri
   fabButon: {
     position: "absolute",
     bottom: 30,
@@ -1133,7 +1175,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 5,
-    elevation: 8, // Android gölgesi
+    elevation: 8,
   },
   fabYazi: {
     color: "#fff",
@@ -1141,7 +1183,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     marginTop: -2,
   },
-
   modalArkaplan: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.8)",
@@ -1287,7 +1328,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     zIndex: 10,
   },
-
   pratikModalArkaplan: {
     backgroundColor: "rgba(0,0,0,0.6)",
     justifyContent: "flex-end",

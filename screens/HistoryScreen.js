@@ -453,7 +453,7 @@ export default function HistoryScreen() {
 
       <View style={styles.headerKapsayici}>
         <Text style={[styles.anaBaslik, { color: tema.metin }]}>
-          Hata Defterim
+          Geçmiş Sorular
         </Text>
       </View>
 

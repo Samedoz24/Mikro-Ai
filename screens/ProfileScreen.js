@@ -16,8 +16,9 @@ import {
   StatusBar,
 } from "react-native";
 
-// 🚀 YENİ: Başlığın çentiğin arkasına mükemmel oturması için Insets hook'u
+// 🚀 YENİ: Başlığın çentiğin arkasına mükemmel oturması için Insets kancası ve WebView
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { WebView } from "react-native-webview";
 
 // Firebase Kütüphaneleri
 import { auth, db, storage } from "../firebaseConfig";
@@ -60,7 +61,7 @@ import { colors } from "../theme";
 
 export default function ProfileScreen() {
   const user = auth.currentUser;
-  const insets = useSafeAreaInsets(); // 🚀 Cihazın çentik ve alt çizgi ölçülerini anlık alır
+  const insets = useSafeAreaInsets();
 
   const { tema, temaModu, temaDegistir } = useTheme();
 
@@ -88,6 +89,11 @@ export default function ProfileScreen() {
   const [toplamSoru, setToplamSoru] = useState(0);
   const [dersIstatistikleri, setDersIstatistikleri] = useState([]);
   const [istatistikYukleniyor, setIstatistikYukleniyor] = useState(true);
+
+  // 🚀 YENİ: WebView Modalları için Stateler
+  const [webViewModalGorunur, setWebViewModalGorunur] = useState(false);
+  const [webViewBaslik, setWebViewBaslik] = useState("");
+  const [webViewHtml, setWebViewHtml] = useState("");
 
   const rastgeleKodUret = () => {
     const karakterler = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -585,6 +591,144 @@ export default function ProfileScreen() {
     );
   };
 
+  // 🚀 YENİ: Uygulama İçi HTML Şablonları (Yapay Zeka Destekli)
+  const htmlSablonUret = (baslik, icerikHtml) => {
+    const isDark = temaModu === "dark";
+    const bg = isDark ? "#121212" : "#FFFFFF";
+    const metinRenk = isDark ? "#E5E7EB" : "#1F2937";
+    const ikincilMetinRenk = isDark ? "#9CA3AF" : "#4B5563";
+    const kutuBg = isDark ? "#1F2937" : "#F3F4F6";
+    const cerceveRenk = isDark ? "#374151" : "#E5E7EB";
+    const anaRenk = isDark ? "#6366F1" : "#4F46E5";
+
+    return `
+      <!DOCTYPE html>
+      <html lang="tr">
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: ${bg};
+            color: ${metinRenk};
+            padding: 24px;
+            margin: 0;
+            line-height: 1.6;
+          }
+          h1 {
+            font-size: 26px;
+            font-weight: 800;
+            color: ${metinRenk};
+            margin-bottom: 20px;
+            letter-spacing: -0.5px;
+          }
+          h2 {
+            font-size: 18px;
+            font-weight: 700;
+            color: ${metinRenk};
+            margin-top: 25px;
+            margin-bottom: 12px;
+            border-bottom: 1px solid ${cerceveRenk};
+            padding-bottom: 6px;
+          }
+          p, li {
+            font-size: 15px;
+            color: ${ikincilMetinRenk};
+            margin-bottom: 15px;
+          }
+          ul, ol {
+            padding-left: 20px;
+            margin-bottom: 20px;
+          }
+          li {
+            margin-bottom: 8px;
+          }
+          .card {
+            background-color: ${kutuBg};
+            border: 1px solid ${cerceveRenk};
+            border-radius: 14px;
+            padding: 16px;
+            margin-bottom: 20px;
+          }
+          .highlight {
+            color: ${anaRenk};
+            font-weight: bold;
+          }
+        </style>
+      </head>
+      <body>
+        <h1>${baslik}</h1>
+        ${icerikHtml}
+      </body>
+      </html>
+    `;
+  };
+
+  const acNasilKullanilir = () => {
+    const icerik = `
+      <div class="card">
+        <p>Mikro AI, çözemediğin okul sorularını saniyeler içinde analiz eden, adım adım çözüm sunan ve senin için benzer sorulardan pratik testler üreten kişisel yapay zeka öğretmenindir.</p>
+      </div>
+      
+      <h2>📸 1. Sorunun Fotoğrafını Çek</h2>
+      <ul>
+        <li>Uygulamanın ana ekranındaki <span class="highlight">"Kamerayı Aç"</span> butonuna dokun.</li>
+        <li>Çözmek istediğin sorunun fotoğrafını net ve düzgün bir açıyla çek.</li>
+        <li>Kadrajda sadece bir soru olmasına özen göster (diğer soruları kırparak gizle).</li>
+        <li>Okunabilirliğin yüksek olduğundan emin olunca <span class="highlight">"Gönder"</span> tuşuna bas.</li>
+      </ul>
+
+      <h2>🧠 2. Yapay Zeka Çözümünü İncele</h2>
+      <ul>
+        <li>Mikro AI sorunu saniyeler içinde analiz eder.</li>
+        <li>Hangi konuda olduğunu, kullanılan formülü ve adım adım çözüm yolunu sana gösterir.</li>
+        <li>En altta yer alan <span class="highlight">"Çözüm Kartını İndir"</span> butonuyla görseli galeriye kaydedebilirsin.</li>
+      </ul>
+
+      <h2>🎯 3. Benzer Sorularla Pratik Yap</h2>
+      <ul>
+        <li>Çözüm ekranının en altında yer alan <span class="highlight">"Kolay, Orta, Zor"</span> butonlarına basarak yapay zekanın o sorunun benzerinden senin için ürettiği ek test sorularını çöz.</li>
+        <li>Bu sayede konuyu sadece okuyarak değil, uygulayarak mükemmelce pekiştir.</li>
+      </ul>
+
+      <h2>📊 4. Hata Defterinden PDF Rapor Al</h2>
+      <ul>
+        <li>Çözdüğün tüm sorular <span class="highlight">"Hata Defterim"</span> sekmesinde ders ders otomatik olarak arşivlenir.</li>
+        <li>Ders bazlı filtreleme yapıp sağ alttaki <span class="highlight">"PDF"</span> tuşuna basarak, sınavdan önce tekrar etmen için özel tasarlanan çalışma kitapçığını indirebilirsin.</li>
+      </ul>
+    `;
+    setWebViewBaslik("Nasıl Kullanılır?");
+    setWebViewHtml(htmlSablonUret("Mikro AI Kullanım Kılavuzu", icerik));
+    setWebViewModalGorunur(true);
+  };
+
+  const acKullanimKosullari = () => {
+    const icerik = `
+      <div class="card">
+        <p>Mikro AI uygulamasını kullanarak, aşağıda belirtilen şartları ve gizlilik sözleşmesini kabul etmiş sayılırsınız.</p>
+      </div>
+
+      <h2>🔒 1. Gizlilik ve Veri Güvenliği</h2>
+      <p>Mikro AI, kullanıcıların yüklediği soru fotoğraflarını yapay zeka analizi sağlamak ve kişisel "Hata Defteri" arşivini oluşturmak amacıyla Firebase bulut sunucularında saklar. Fotoğraflarınız üçüncü şahıslara asla satılmaz veya reklam amaçlı kullanılmaz.</p>
+
+      <h2>⚡ 2. Adil Kullanım ve Kotalar</h2>
+      <ul>
+        <li>Ücretsiz sürümü kullanan öğrenciler için günlük kota sınırı <span class="highlight">3 soru</span> ile sınırlıdır.</li>
+        <li>Premium sürümü kullanan öğrenciler için günlük adil kullanım sınırı <span class="highlight">50 soru</span> olarak belirlenmiştir. Bu sınır sunucuların aşırı yüklenmesini engellemek için tasarlanmıştır.</li>
+      </ul>
+
+      <h2>📋 3. Sorumluluk Sınırları</h2>
+      <p>Yapay zeka tarafından sağlanan cevaplar eğitim amaçlı yardımcı kaynaklardır. Algoritmanın başarı oranı çok yüksek olsa da hata payı bulunabilir. Sınavlarda ve akademik değerlendirmelerde nihai karar ve sorumluluk kullanıcıya aittir.</p>
+
+      <h2>💎 4. Abonelik ve Ödemeler</h2>
+      <p>Abonelik yenilenmeleri platformların (App Store / Google Play Store) kendi kurallarına tabidir. İptal işlemlerini dilediğiniz zaman cihaz ayarlarınızdaki "Abonelikler" kısmından gerçekleştirebilirsiniz.</p>
+    `;
+    setWebViewBaslik("Kullanım Koşulları");
+    setWebViewHtml(htmlSablonUret("Yasal Koşullar ve Gizlilik", icerik));
+    setWebViewModalGorunur(true);
+  };
+
   const siniflar = [
     "1. Sınıf",
     "2. Sınıf",
@@ -686,9 +830,7 @@ export default function ProfileScreen() {
   };
 
   return (
-    // 🚀 DÜZELTME: SafeAreaView yerine normal View kullanıp, içindeki elemanları insets ile hizaladık
     <View style={[styles.container, { backgroundColor: tema.arkaplan }]}>
-      {/* Profil ekranındaki mavi başlığın üzerinde yazan saat ve şarj simgeleri beyaz olsun diye light-content */}
       <StatusBar
         barStyle="light-content"
         backgroundColor="transparent"
@@ -699,7 +841,6 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
       >
-        {/* 🚀 DÜZELTME: Mavi arka plan ekranın en üstüne kadar çıkar, içindeki profil resmi aşağıya itilir */}
         <View
           style={[
             styles.header,
@@ -801,7 +942,6 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {/* 🚀 DÜZELTME: Ferahlık için paddingHorizontal 24 yapıldı */}
         <View style={styles.content}>
           {rol === "ogrenci" && (
             <>
@@ -1144,10 +1284,9 @@ export default function ProfileScreen() {
             Destek ve Bilgi
           </Text>
 
+          {/* 🚀 DÜZELTME: "Nasıl Kullanılır" ve "Kullanım Koşulları" WebView'a bağlandı */}
           <TouchableOpacity
-            onPress={() =>
-              Alert.alert("Bilgi", "Kullanım rehberi yakında eklenecektir.")
-            }
+            onPress={acNasilKullanilir}
             style={[styles.menuItem, { backgroundColor: tema.kutuArkaplan }]}
           >
             <Ionicons
@@ -1160,10 +1299,9 @@ export default function ProfileScreen() {
               Nasıl Kullanılır?
             </Text>
           </TouchableOpacity>
+
           <TouchableOpacity
-            onPress={() =>
-              Alert.alert("Bilgi", "Kullanım koşulları yakında eklenecektir.")
-            }
+            onPress={acKullanimKosullari}
             style={[styles.menuItem, { backgroundColor: tema.kutuArkaplan }]}
           >
             <Ionicons
@@ -1176,6 +1314,7 @@ export default function ProfileScreen() {
               Kullanım Koşulları
             </Text>
           </TouchableOpacity>
+
           <View style={{ alignItems: "center", marginTop: 15 }}>
             <Text style={{ color: tema.ikincilMetin, fontSize: 13 }}>
               Versiyon 1.0.2
@@ -1468,6 +1607,56 @@ export default function ProfileScreen() {
             </Pressable>
           </Pressable>
         </Modal>
+
+        {/* 🚀 YENİ: Uygulama İçi Profesyonel WebView Modalı */}
+        <Modal
+          visible={webViewModalGorunur}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setWebViewModalGorunur(false)}
+        >
+          <View style={styles.webViewModalOverlay}>
+            <View
+              style={[
+                styles.webViewContainer,
+                { backgroundColor: tema.arkaplan },
+              ]}
+            >
+              {/* WebView Header (Başlık ve Kapat Butonu) */}
+              <View
+                style={[
+                  styles.webViewHeader,
+                  { borderBottomColor: tema.kutuCerceve },
+                ]}
+              >
+                <Text
+                  style={[styles.webViewHeaderBaslik, { color: tema.metin }]}
+                >
+                  {webViewBaslik}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setWebViewModalGorunur(false)}
+                  style={styles.webViewKapatButon}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name="close-circle"
+                    size={32}
+                    color={tema.ikincilMetin}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {/* WebView Tarayıcı Motoru */}
+              <WebView
+                originWhitelist={["*"]}
+                source={{ html: webViewHtml }}
+                style={{ flex: 1, backgroundColor: tema.arkaplan }}
+                showsVerticalScrollIndicator={false}
+              />
+            </View>
+          </View>
+        </Modal>
       </ScrollView>
     </View>
   );
@@ -1475,7 +1664,6 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  // 🚀 DÜZELTME: paddingVertical kaldırıldı. Alt ovalleştirme daha modernleştirildi.
   header: {
     alignItems: "center",
     borderBottomLeftRadius: 40,
@@ -1563,7 +1751,6 @@ const styles = StyleSheet.create({
   },
   xpYazisi: { color: "#fff", fontWeight: "bold", marginLeft: 5, fontSize: 14 },
 
-  // 🚀 DÜZELTME: Ekranın sağından solundan 24 birimlik ferah bir boşluk. Yukarıdan da 24 eklendi.
   content: {
     paddingHorizontal: 24,
     paddingTop: 24,
@@ -1579,7 +1766,7 @@ const styles = StyleSheet.create({
   rozetKutu: {
     width: 105,
     padding: 10,
-    borderRadius: 16, // Ovalleşti
+    borderRadius: 16,
     borderWidth: 1.5,
     alignItems: "center",
     marginRight: 12,
@@ -1595,8 +1782,8 @@ const styles = StyleSheet.create({
   streakKutu: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 20, // Ferahlatıldı
-    borderRadius: 16, // Ovalleşti
+    padding: 20,
+    borderRadius: 16,
     marginBottom: 16,
     borderWidth: 1.5,
   },
@@ -1604,7 +1791,7 @@ const styles = StyleSheet.create({
   streakBaslik: { fontSize: 17, fontWeight: "bold" },
   streakAltYazi: { fontSize: 12, marginTop: 2 },
 
-  kutu: { padding: 20, borderRadius: 16, marginBottom: 16, borderWidth: 1 }, // Ferahlatıldı
+  kutu: { padding: 20, borderRadius: 16, marginBottom: 16, borderWidth: 1 },
   kutuUstBaslik: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1625,7 +1812,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     padding: 16,
-    borderRadius: 16, // Ovalleşti
+    borderRadius: 16,
     marginBottom: 12,
   },
   menuIcon: { marginRight: 15 },
@@ -1672,5 +1859,34 @@ const styles = StyleSheet.create({
   },
   temaKartiYazi: {
     fontSize: 16,
+  },
+
+  // 🚀 YENİ: WebView Modal Stilleri (Tüm platformlara tam uyumlu)
+  webViewModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "flex-end",
+  },
+  webViewContainer: {
+    width: "100%",
+    height: "90%",
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    overflow: "hidden",
+  },
+  webViewHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 24,
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+  },
+  webViewHeaderBaslik: {
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+  webViewKapatButon: {
+    padding: 2,
   },
 });

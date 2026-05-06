@@ -28,6 +28,7 @@ import {
   collection,
   query,
   where,
+  getDoc,
 } from "firebase/firestore";
 import { ref, deleteObject } from "firebase/storage";
 
@@ -75,6 +76,7 @@ export default function ProfileScreen() {
   const [fotoYukleniyor, setFotoYukleniyor] = useState(false);
 
   const [kalanSoru, setKalanSoru] = useState(3);
+  const [maxKota, setMaxKota] = useState(3);
   const [seriGunu, setSeriGunu] = useState(0);
   const [baglantiKodu, setBaglantiKodu] = useState("Yükleniyor...");
 
@@ -95,7 +97,18 @@ export default function ProfileScreen() {
     let cihazAbonelik = () => {};
 
     const cihazKotasiDinle = async () => {
+      if (!user) return;
+
       try {
+        const kullaniciRef = doc(db, "kullanicilar", user.uid);
+        const kullaniciSnap = await getDoc(kullaniciRef);
+        const isPremium = kullaniciSnap.exists()
+          ? kullaniciSnap.data().premiumMu === true
+          : false;
+
+        const guncelMaxKota = isPremium ? 50 : 3;
+        setMaxKota(guncelMaxKota);
+
         const cihazId =
           Platform.OS === "android"
             ? Application.getAndroidId()
@@ -108,20 +121,51 @@ export default function ProfileScreen() {
           if (cihazSnap.exists()) {
             const data = cihazSnap.data();
             if (data.tarih === bugun) {
-              setKalanSoru(data.kalanSoru !== undefined ? data.kalanSoru : 3);
+              let dbKalan =
+                data.kalanSoru !== undefined ? data.kalanSoru : guncelMaxKota;
+              let dbToplam = data.toplamHak || 3;
+
+              // 🚀 AKILLI DÜZELTME ALGORİTMASI: Eğer limitler uyuşmuyorsa matematiği düzelt!
+              if (dbToplam !== guncelMaxKota) {
+                // Öğrencinin harcadığı soruyu bul (Örn: 3 - 1 = 2 soru harcamış)
+                const harcananSoru = dbToplam - dbKalan;
+
+                // Yeni kotadan harcananı çıkar (Örn: 50 - 2 = 48 kalan)
+                dbKalan = Math.max(0, guncelMaxKota - harcananSoru);
+
+                // Veritabanını hemen bu doğru bilgiyle onar
+                await setDoc(
+                  cihazRef,
+                  {
+                    kalanSoru: dbKalan,
+                    toplamHak: guncelMaxKota,
+                  },
+                  { merge: true }
+                );
+              }
+
+              setKalanSoru(dbKalan);
             } else {
-              setKalanSoru(3);
+              setKalanSoru(guncelMaxKota);
               await setDoc(
                 cihazRef,
-                { kalanSoru: 3, tarih: bugun },
+                {
+                  kalanSoru: guncelMaxKota,
+                  tarih: bugun,
+                  toplamHak: guncelMaxKota,
+                },
                 { merge: true }
               );
             }
           } else {
-            setKalanSoru(3);
+            setKalanSoru(guncelMaxKota);
             await setDoc(
               cihazRef,
-              { kalanSoru: 3, tarih: bugun },
+              {
+                kalanSoru: guncelMaxKota,
+                tarih: bugun,
+                toplamHak: guncelMaxKota,
+              },
               { merge: true }
             );
           }
@@ -133,7 +177,7 @@ export default function ProfileScreen() {
 
     cihazKotasiDinle();
     return () => cihazAbonelik();
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     let abonelik = () => {};
@@ -171,6 +215,10 @@ export default function ProfileScreen() {
             if (data.adSoyad) setAdSoyad(data.adSoyad);
             if (data.bildirimAktif !== undefined)
               setBildirimAktif(data.bildirimAktif);
+
+            if (data.premiumMu !== undefined) {
+              setMaxKota(data.premiumMu ? 50 : 3);
+            }
 
             if (data.baglantiKodu) {
               setBaglantiKodu(data.baglantiKodu);
@@ -675,7 +723,6 @@ export default function ProfileScreen() {
           </Text>
         )}
 
-        {/* 🚀 GÜNCELLENEN: İsim Düzenleme Alanı (Tamamı tıklanabilir ve adaptif) */}
         <View style={styles.isimDuzenlemeKutu}>
           {isimDuzenleniyor ? (
             <View style={styles.isimInputKapsayici}>
@@ -922,7 +969,7 @@ export default function ProfileScreen() {
                   Günlük Soru Kotası
                 </Text>
                 <Text style={[styles.kotaSayi, { color: tema.anaButon }]}>
-                  {kalanSoru} / 3
+                  {kalanSoru} / {maxKota}
                 </Text>
               </View>
               <View
@@ -936,7 +983,7 @@ export default function ProfileScreen() {
                     styles.barDolu,
                     {
                       backgroundColor: tema.anaButon,
-                      width: `${(kalanSoru / 3) * 100}%`,
+                      width: `${(kalanSoru / maxKota) * 100}%`,
                     },
                   ]}
                 />
@@ -1413,7 +1460,6 @@ const styles = StyleSheet.create({
     borderColor: "#fff",
   },
 
-  // 🚀 GÜNCELLENEN: Adaptif ve Genişletilmiş İsim Düzenleme Modu Stilleri
   isimDuzenlemeKutu: {
     minHeight: 40,
     justifyContent: "center",
@@ -1423,7 +1469,7 @@ const styles = StyleSheet.create({
   isimInputKapsayici: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.25)", // Adaptif "Hap (Pill)" tasarımı
+    backgroundColor: "rgba(255,255,255,0.25)",
     borderRadius: 12,
     paddingHorizontal: 15,
     paddingVertical: 6,

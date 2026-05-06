@@ -23,7 +23,6 @@ import * as Application from "expo-application";
 import ConfettiCannon from "react-native-confetti-cannon";
 
 import { auth, db, storage } from "../firebaseConfig";
-// ⚙️ setDoc eklendi (Cihaz kayıtları için)
 import {
   collection,
   addDoc,
@@ -49,7 +48,7 @@ export default function HomeScreen() {
 
   // 💎 PREMIUM MODAL STATE
   const [premiumModalGorunur, setPremiumModalGorunur] = useState(false);
-  const [seciliPaket, setSeciliPaket] = useState("yillik"); // Varsayılan paket
+  const [seciliPaket, setSeciliPaket] = useState("yillik");
 
   const { tema, temaModu } = useTheme();
   const user = auth.currentUser;
@@ -161,7 +160,6 @@ export default function HomeScreen() {
     }
   };
 
-  // 📱 Fiziksel Cihaz Kimliğini Alan Fonksiyon
   const getDeviceId = async () => {
     if (Platform.OS === "android") {
       return Application.getAndroidId();
@@ -181,10 +179,18 @@ export default function HomeScreen() {
         return;
       }
 
-      // 🛡️ CİHAZ KİMLİĞİ KONTROLÜ BAŞLIYOR (Sahte Hesap Engeli)
+      // 🚀 YENİ: Firebase'den kullanıcının Premium olup olmadığını kontrol et
+      const kullaniciRef = doc(db, "kullanicilar", auth.currentUser.uid);
+      const kullaniciSnap = await getDoc(kullaniciRef);
+      const isPremium = kullaniciSnap.exists()
+        ? kullaniciSnap.data().premiumMu === true
+        : false;
+
+      // 💎 Adil Kullanım Kotası: Premium ise 50, Değilse 3
+      const maxKota = isPremium ? 50 : 3;
+
       const cihazId = await getDeviceId();
 
-      // ⏱️ DÜZELTME: Türkiye saat dilimine uygun, yerel tarih (YYYY-MM-DD) alımı
       const simdi = new Date();
       const yyyy = simdi.getFullYear();
       const mm = String(simdi.getMonth() + 1).padStart(2, "0");
@@ -194,23 +200,36 @@ export default function HomeScreen() {
       const cihazRef = doc(db, "cihazHaklari", cihazId);
       const cihazSnap = await getDoc(cihazRef);
 
-      let mevcutKota = 3; // Her cihaza günlük 3 hak
+      let mevcutKota = maxKota;
 
       if (cihazSnap.exists()) {
         const data = cihazSnap.data();
         if (data.tarih === bugunYerel) {
-          // Eğer bugün zaten soru sorduysa, kalan kotasını al
-          if (data.kalanSoru !== undefined) {
-            mevcutKota = data.kalanSoru;
+          mevcutKota = data.kalanSoru !== undefined ? data.kalanSoru : maxKota;
+
+          // 🚀 YENİ: Zeka Algoritması. Kullanıcı bugün Premium aldıysa limitini anında 50'ye tamamla
+          const eskiToplamHak = data.toplamHak || 3;
+          if (maxKota === 50 && eskiToplamHak === 3) {
+            mevcutKota += 47; // 3'ten 50'ye yükseldi
+          } else if (maxKota === 3 && eskiToplamHak === 50) {
+            mevcutKota = Math.max(0, mevcutKota - 47); // Premium aboneliği bittiyse limitleri geri al
           }
         }
-        // Eğer tarih bugün değilse sistem otomatik olarak 3 kota kabul edecek ve yeni güne sıfırlanmış olacak.
       }
 
-      // 💎 ÇÖZÜM: Kotası biten CİHAZLARI doğrudan Premium Sayfasına yönlendiriyoruz
+      // 💎 LİMİT KONTROLÜ
       if (mevcutKota <= 0) {
         setYukleniyor(false);
-        setPremiumModalGorunur(true);
+        if (isPremium) {
+          // Premium bir kullanıcı 50 soruyu bitirdiyse adil kullanım uyarısı verilir
+          Alert.alert(
+            "Günlük Limit Doldu",
+            "Premium adil kullanım kotanızı (Günlük 50 Soru) doldurdunuz. Lütfen yarın tekrar deneyin."
+          );
+        } else {
+          // Normal bir kullanıcı 3 soruyu bitirdiyse satın alma ekranı açılır
+          setPremiumModalGorunur(true);
+        }
         return;
       }
 
@@ -241,7 +260,6 @@ export default function HomeScreen() {
       const data = JSON.parse(uploadResult.body);
       const downloadURL = `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodedYol}?alt=media&token=${data.downloadTokens}`;
 
-      // 🔐 DÜZELTME: Veri tabanına soru kaydedilirken güvenlik için kullaniciUid eklendi
       await addDoc(collection(db, "sorular"), {
         kullaniciUid: auth.currentUser.uid,
         kullaniciEposta: auth.currentUser.email,
@@ -250,12 +268,13 @@ export default function HomeScreen() {
         durum: "Bekliyor",
       });
 
-      // 🛡️ CİHAZIN KOTASINI 1 DÜŞÜR VE KAYDET (E-postadan bağımsız)
+      // 🛡️ YENİ: Cihazın kalan kotasını ve "Mevcut Limit Tipini (3 veya 50)" kaydet
       await setDoc(
         cihazRef,
         {
           kalanSoru: mevcutKota - 1,
           tarih: bugunYerel,
+          toplamHak: maxKota, // Limit takibi için eklendi
         },
         { merge: true }
       );
@@ -361,7 +380,7 @@ export default function HomeScreen() {
                 <View style={styles.avantajSatiri}>
                   <Ionicons name="checkmark-circle" size={22} color="#10B981" />
                   <Text style={[styles.avantajYazi, { color: tema.metin }]}>
-                    Sınırsız Soru Çözümü
+                    Sınırsız Soru Çözümü (Günde 50 Soru)
                   </Text>
                 </View>
                 <View style={styles.avantajSatiri}>

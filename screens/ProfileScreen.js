@@ -12,6 +12,7 @@ import {
   Image,
   ActivityIndicator,
   Platform,
+  Pressable,
 } from "react-native";
 
 // Firebase Kütüphaneleri
@@ -37,7 +38,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system/legacy";
 
-// 📱 CİHAZ KİMLİĞİ KÜTÜPHANESİ (Kota için eklendi)
+// 📱 CİHAZ KİMLİĞİ KÜTÜPHANESİ
 import * as Application from "expo-application";
 
 // 🔔 BİLDİRİM YÖNETİCİSİ VE KÜTÜPHANESİ
@@ -48,13 +49,16 @@ import {
   cancelAllNotifications,
 } from "../utils/notificationManager";
 
-// 🌗 TEMA YÖNETİCİSİ
+// 🌗 TEMA YÖNETİCİSİ VE RENKLER
 import { useTheme } from "../ThemeContext";
+import { colors } from "../theme";
 
 export default function ProfileScreen() {
   const user = auth.currentUser;
 
   const { tema, temaModu, temaDegistir } = useTheme();
+
+  const isGercektenKaranlik = tema.arkaplan === colors.dark.arkaplan;
 
   const [rol, setRol] = useState("ogrenci");
   const [sinifModalGorunur, setSinifModalGorunur] = useState(false);
@@ -63,15 +67,14 @@ export default function ProfileScreen() {
   const [temaModalGorunur, setTemaModalGorunur] = useState(false);
 
   const [adSoyad, setAdSoyad] = useState("");
+  const [isimDuzenleniyor, setIsimDuzenleniyor] = useState(false);
+
   const [bildirimAktif, setBildirimAktif] = useState(true);
 
   const [profilFoto, setProfilFoto] = useState(null);
-  const [kaydetmeBasarili, setKaydetmeBasarili] = useState(false);
   const [fotoYukleniyor, setFotoYukleniyor] = useState(false);
 
-  // KOTA STATE'İ
   const [kalanSoru, setKalanSoru] = useState(3);
-
   const [seriGunu, setSeriGunu] = useState(0);
   const [baglantiKodu, setBaglantiKodu] = useState("Yükleniyor...");
 
@@ -88,7 +91,6 @@ export default function ProfileScreen() {
     return kod;
   };
 
-  // 🛡️ YENİ: CİHAZ KOTASINI CANLI DİNLEYEN EFFECT
   useEffect(() => {
     let cihazAbonelik = () => {};
 
@@ -108,7 +110,6 @@ export default function ProfileScreen() {
             if (data.tarih === bugun) {
               setKalanSoru(data.kalanSoru !== undefined ? data.kalanSoru : 3);
             } else {
-              // Yeni güne geçilmiş, limiti 3 yap ve veritabanını güncelle
               setKalanSoru(3);
               await setDoc(
                 cihazRef,
@@ -117,7 +118,6 @@ export default function ProfileScreen() {
               );
             }
           } else {
-            // Cihaz uygulamayı ilk defa açıyor
             setKalanSoru(3);
             await setDoc(
               cihazRef,
@@ -135,7 +135,6 @@ export default function ProfileScreen() {
     return () => cihazAbonelik();
   }, []);
 
-  // KİŞİSEL BİLGİLERİ DİNLEYEN EFFECT (Kota kısmı buradan temizlendi)
   useEffect(() => {
     let abonelik = () => {};
 
@@ -303,10 +302,8 @@ export default function ProfileScreen() {
         const kullaniciRef = doc(db, "kullanicilar", user.uid);
         await updateDoc(kullaniciRef, { adSoyad: adSoyad });
       }
-
-      setKaydetmeBasarili(true);
-      setTimeout(() => setKaydetmeBasarili(false), 2500);
     }
+    setIsimDuzenleniyor(false);
   };
 
   const fotoAksiyonMenusu = () => {
@@ -634,6 +631,14 @@ export default function ProfileScreen() {
     },
   ];
 
+  const getModalButonStil = (mod) => {
+    const isSelected = temaModu === mod;
+    const bgColor = isSelected ? tema.metin : "transparent";
+    const textColor = isSelected ? tema.arkaplan : tema.metin;
+    const borderColor = isSelected ? "transparent" : tema.kutuCerceve;
+    return { bgColor, textColor, borderColor, isSelected };
+  };
+
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: tema.arkaplan }]}
@@ -670,9 +675,48 @@ export default function ProfileScreen() {
           </Text>
         )}
 
-        <Text style={styles.userName}>
-          {adSoyad || user?.email?.split("@")[0]}
-        </Text>
+        {/* 🚀 GÜNCELLENEN: İsim Düzenleme Alanı (Tamamı tıklanabilir ve adaptif) */}
+        <View style={styles.isimDuzenlemeKutu}>
+          {isimDuzenleniyor ? (
+            <View style={styles.isimInputKapsayici}>
+              <TextInput
+                style={styles.isimInput}
+                value={adSoyad}
+                onChangeText={setAdSoyad}
+                autoFocus={true}
+                placeholder="İsminiz"
+                placeholderTextColor="rgba(255,255,255,0.6)"
+                onSubmitEditing={isimKaydet}
+                returnKeyType="done"
+                selectionColor="#fff"
+              />
+              <TouchableOpacity
+                onPress={isimKaydet}
+                style={styles.isimOnayButon}
+              >
+                <Ionicons name="checkmark-circle" size={28} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={{ flexDirection: "row", alignItems: "center", padding: 4 }}
+              onPress={() => setIsimDuzenleniyor(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.userName}>
+                {adSoyad || user?.email?.split("@")[0]}
+              </Text>
+              <View style={{ marginLeft: 8 }}>
+                <Ionicons
+                  name="pencil"
+                  size={22}
+                  color="rgba(255,255,255,0.9)"
+                />
+              </View>
+            </TouchableOpacity>
+          )}
+        </View>
+
         <Text style={styles.userEmail}>{user?.email}</Text>
 
         {rol === "ogrenci" && (
@@ -704,7 +748,7 @@ export default function ProfileScreen() {
                     styles.rozetKutu,
                     {
                       backgroundColor: rozet.kazanildi
-                        ? temaModu === "dark"
+                        ? isGercektenKaranlik
                           ? "#1E293B"
                           : "#F0F9FF"
                         : tema.kutuArkaplan,
@@ -732,49 +776,10 @@ export default function ProfileScreen() {
           </>
         )}
 
-        <Text style={[styles.sectionTitle, { color: tema.metin }]}>
-          Kişisel Bilgiler
-        </Text>
-        <View
-          style={[
-            styles.kutu,
-            {
-              backgroundColor: tema.kutuArkaplan,
-              borderColor: tema.kutuCerceve,
-            },
-          ]}
-        >
-          <TextInput
-            style={{ color: tema.metin, fontSize: 16 }}
-            placeholder="Ad Soyad Giriniz"
-            placeholderTextColor={tema.ikincilMetin}
-            value={adSoyad}
-            onChangeText={setAdSoyad}
-            autoCorrect={false}
-            spellCheck={false}
-            onEndEditing={isimKaydet}
-          />
-          {kaydetmeBasarili && (
-            <Text
-              style={{
-                color: "#2ecc71",
-                fontSize: 13,
-                marginTop: 8,
-                fontWeight: "bold",
-              }}
-            >
-              ✓ Bilgiler güncellendi
-            </Text>
-          )}
-        </View>
-
         {rol === "ogrenci" && (
           <>
             <Text
-              style={[
-                styles.sectionTitle,
-                { color: tema.metin, marginTop: 20 },
-              ]}
+              style={[styles.sectionTitle, { color: tema.metin, marginTop: 5 }]}
             >
               Gelişim Durumum
             </Text>
@@ -1138,14 +1143,21 @@ export default function ProfileScreen() {
         animationType="slide"
         transparent={true}
       >
-        <View style={styles.modalArkaplan}>
-          <View
+        <Pressable
+          style={styles.modalArkaplan}
+          onPress={() => setSinifModalGorunur(false)}
+        >
+          <Pressable
             style={[styles.modalKutu, { backgroundColor: tema.kutuArkaplan }]}
+            onPress={(e) => e.stopPropagation()}
           >
             <Text style={[styles.modalBaslik, { color: tema.metin }]}>
               Sınıfını Güncelle
             </Text>
-            <ScrollView style={{ maxHeight: 350 }}>
+            <ScrollView
+              style={{ maxHeight: 350 }}
+              showsVerticalScrollIndicator={false}
+            >
               {siniflar.map((sinif, index) => (
                 <TouchableOpacity
                   key={index}
@@ -1179,8 +1191,8 @@ export default function ProfileScreen() {
                 Kapat
               </Text>
             </TouchableOpacity>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
 
       <Modal
@@ -1188,93 +1200,181 @@ export default function ProfileScreen() {
         animationType="slide"
         transparent={true}
       >
-        <View style={styles.modalArkaplan}>
-          <View
-            style={[styles.modalKutu, { backgroundColor: tema.kutuArkaplan }]}
+        <Pressable
+          style={styles.bottomSheetArkaplan}
+          onPress={() => setTemaModalGorunur(false)}
+        >
+          <Pressable
+            style={[
+              styles.bottomSheetKutu,
+              {
+                backgroundColor: isGercektenKaranlik
+                  ? "#1C1C1E"
+                  : tema.kutuArkaplan,
+              },
+            ]}
+            onPress={(e) => e.stopPropagation()}
           >
-            <Text style={[styles.modalBaslik, { color: tema.metin }]}>
-              Görünüm Modu Seç
+            <Text
+              style={[
+                styles.modalBaslik,
+                {
+                  color: tema.metin,
+                  fontSize: 20,
+                  marginBottom: 25,
+                  marginTop: 5,
+                },
+              ]}
+            >
+              Görünüm Tercihi
             </Text>
 
             <TouchableOpacity
               style={[
-                styles.modalSecenek,
-                { borderBottomColor: tema.kutuCerceve },
+                styles.temaKarti,
+                {
+                  backgroundColor: getModalButonStil("light").bgColor,
+                  borderColor: getModalButonStil("light").borderColor,
+                },
               ]}
               onPress={() => {
                 temaDegistir("light");
                 setTemaModalGorunur(false);
               }}
             >
+              <Ionicons
+                name={temaModu === "light" ? "sunny" : "sunny-outline"}
+                size={22}
+                color={getModalButonStil("light").textColor}
+                style={{ marginRight: 15 }}
+              />
               <Text
                 style={[
-                  styles.modalSecenekYazi,
+                  styles.temaKartiYazi,
                   {
-                    color: temaModu === "light" ? tema.anaButon : tema.metin,
-                    fontWeight: temaModu === "light" ? "bold" : "normal",
+                    color: getModalButonStil("light").textColor,
+                    fontWeight: getModalButonStil("light").isSelected
+                      ? "800"
+                      : "500",
                   },
                 ]}
               >
-                ☀️ Açık Mod
+                Açık Mod
               </Text>
+              {temaModu === "light" && (
+                <Ionicons
+                  name="checkmark-circle"
+                  size={22}
+                  color={getModalButonStil("light").textColor}
+                  style={{ marginLeft: "auto" }}
+                />
+              )}
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[
-                styles.modalSecenek,
-                { borderBottomColor: tema.kutuCerceve },
+                styles.temaKarti,
+                {
+                  backgroundColor: getModalButonStil("dark").bgColor,
+                  borderColor: getModalButonStil("dark").borderColor,
+                },
               ]}
               onPress={() => {
                 temaDegistir("dark");
                 setTemaModalGorunur(false);
               }}
             >
+              <Ionicons
+                name={temaModu === "dark" ? "moon" : "moon-outline"}
+                size={22}
+                color={getModalButonStil("dark").textColor}
+                style={{ marginRight: 15 }}
+              />
               <Text
                 style={[
-                  styles.modalSecenekYazi,
+                  styles.temaKartiYazi,
                   {
-                    color: temaModu === "dark" ? tema.anaButon : tema.metin,
-                    fontWeight: temaModu === "dark" ? "bold" : "normal",
+                    color: getModalButonStil("dark").textColor,
+                    fontWeight: getModalButonStil("dark").isSelected
+                      ? "800"
+                      : "500",
                   },
                 ]}
               >
-                🌙 Koyu Mod
+                Koyu Mod
               </Text>
+              {temaModu === "dark" && (
+                <Ionicons
+                  name="checkmark-circle"
+                  size={22}
+                  color={getModalButonStil("dark").textColor}
+                  style={{ marginLeft: "auto" }}
+                />
+              )}
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[
-                styles.modalSecenek,
-                { borderBottomColor: "transparent" },
+                styles.temaKarti,
+                {
+                  backgroundColor: getModalButonStil("system").bgColor,
+                  borderColor: getModalButonStil("system").borderColor,
+                },
               ]}
               onPress={() => {
                 temaDegistir("system");
                 setTemaModalGorunur(false);
               }}
             >
+              <Ionicons
+                name={
+                  temaModu === "system"
+                    ? "phone-portrait"
+                    : "phone-portrait-outline"
+                }
+                size={22}
+                color={getModalButonStil("system").textColor}
+                style={{ marginRight: 15 }}
+              />
               <Text
                 style={[
-                  styles.modalSecenekYazi,
+                  styles.temaKartiYazi,
                   {
-                    color: temaModu === "system" ? tema.anaButon : tema.metin,
-                    fontWeight: temaModu === "system" ? "bold" : "normal",
+                    color: getModalButonStil("system").textColor,
+                    fontWeight: getModalButonStil("system").isSelected
+                      ? "800"
+                      : "500",
                   },
                 ]}
               >
-                📱 Sistem Ayarı
+                Sistem Ayarı
               </Text>
+              {temaModu === "system" && (
+                <Ionicons
+                  name="checkmark-circle"
+                  size={22}
+                  color={getModalButonStil("system").textColor}
+                  style={{ marginLeft: "auto" }}
+                />
+              )}
             </TouchableOpacity>
 
             <TouchableOpacity
               onPress={() => setTemaModalGorunur(false)}
               style={styles.modalKapatButon}
             >
-              <Text style={{ color: tema.hataKirmizi, fontWeight: "bold" }}>
-                Kapat
+              <Text
+                style={{
+                  color: tema.ikincilMetin,
+                  fontWeight: "bold",
+                  fontSize: 16,
+                }}
+              >
+                Vazgeç
               </Text>
             </TouchableOpacity>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
     </ScrollView>
   );
@@ -1312,6 +1412,36 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#fff",
   },
+
+  // 🚀 GÜNCELLENEN: Adaptif ve Genişletilmiş İsim Düzenleme Modu Stilleri
+  isimDuzenlemeKutu: {
+    minHeight: 40,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 5,
+  },
+  isimInputKapsayici: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.25)", // Adaptif "Hap (Pill)" tasarımı
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    paddingVertical: 6,
+  },
+  isimInput: {
+    fontSize: 20,
+    color: "#fff",
+    fontWeight: "bold",
+    minWidth: 120,
+    maxWidth: 200,
+    textAlign: "center",
+    padding: 0,
+    margin: 0,
+  },
+  isimOnayButon: {
+    marginLeft: 10,
+  },
+
   userName: { fontSize: 22, color: "#fff", fontWeight: "bold" },
   userEmail: { fontSize: 14, color: "rgba(255,255,255,0.85)" },
 
@@ -1393,6 +1523,7 @@ const styles = StyleSheet.create({
   menuMetinAlan: { flex: 1 },
   menuBaslik: { fontSize: 15, fontWeight: "600" },
   menuAlt: { fontSize: 12, marginTop: 3 },
+
   modalArkaplan: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.6)",
@@ -1408,5 +1539,29 @@ const styles = StyleSheet.create({
   },
   modalSecenek: { paddingVertical: 16, borderBottomWidth: 0.5 },
   modalSecenekYazi: { fontSize: 16, textAlign: "center" },
-  modalKapatButon: { marginTop: 20, padding: 10, alignItems: "center" },
+  modalKapatButon: { marginTop: 25, padding: 10, alignItems: "center" },
+
+  bottomSheetArkaplan: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  bottomSheetKutu: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 25,
+    paddingBottom: Platform.OS === "ios" ? 45 : 30,
+  },
+  temaKarti: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    marginBottom: 12,
+  },
+  temaKartiYazi: {
+    fontSize: 16,
+  },
 });

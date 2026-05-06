@@ -11,7 +11,15 @@ import {
   ScrollView,
   Dimensions,
   Alert,
+  StatusBar,
+  Platform,
 } from "react-native";
+// 🚀 YENİ: Modern Güvenli Alan Kütüphanesi Eklendi
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+
 import { auth, db, storage } from "../firebaseConfig";
 
 // 📄 PDF ve Paylaşım Kütüphaneleri
@@ -40,6 +48,7 @@ const ekranYuksekligi = Dimensions.get("window").height;
 
 export default function HistoryScreen() {
   const { tema, temaModu } = useTheme();
+  const insets = useSafeAreaInsets(); // Modalların alt boşlukları için kullanılacak
 
   const [sorular, setSorular] = useState([]);
   const [yukleniyor, setYukleniyor] = useState(true);
@@ -423,19 +432,25 @@ export default function HistoryScreen() {
 
   if (yukleniyor) {
     return (
-      <View
+      <SafeAreaView
         style={[
-          styles.container,
+          styles.safeArea,
           { backgroundColor: tema.arkaplan, justifyContent: "center" },
         ]}
       >
         <ActivityIndicator size="large" color={tema.anaButon} />
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: tema.arkaplan }]}>
+    // 🚀 DÜZELTME: SafeAreaView Ana Kapsayıcı
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: tema.arkaplan }]}>
+      <StatusBar
+        barStyle={temaModu === "dark" ? "light-content" : "dark-content"}
+        backgroundColor={tema.arkaplan}
+      />
+
       <View style={styles.headerKapsayici}>
         <Text style={[styles.anaBaslik, { color: tema.metin }]}>
           Hata Defterim
@@ -457,7 +472,12 @@ export default function HistoryScreen() {
       ) : (
         <>
           <View style={styles.kategoriKapsayici}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              // Yatay kaydırmanın ekran dışına çıkıp nefes alması için yatay listeye özel padding
+              contentContainerStyle={{ paddingHorizontal: 24 }}
+            >
               {dinamikKategoriler.map((kategori, index) => (
                 <TouchableOpacity
                   key={index}
@@ -501,70 +521,77 @@ export default function HistoryScreen() {
               </Text>
             </View>
           ) : (
-            <FlatList
-              data={filtrelenmisSorular}
-              keyExtractor={(item) => item.id}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 80 }}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[
-                    styles.kart,
-                    {
-                      backgroundColor: tema.kutuArkaplan,
-                      borderColor: tema.kutuCerceve,
-                    },
-                  ]}
-                  onPress={() => soruDetayAc(item)}
-                >
-                  <Image
-                    source={{ uri: item.fotoLink }}
-                    style={styles.kucukFoto}
-                  />
-                  <View style={styles.kartBilgi}>
-                    {/* 🎯 GÜNCELLENEN KISIM: Ders Adı En Üste ve Kalın Puntuya Alındı */}
-                    {(item.subject || item.ders) && (
-                      <Text style={[styles.kartDersAd, { color: tema.metin }]}>
-                        {item.subject || item.ders}
+            // 🚀 DÜZELTME: İç Kapsayıcı 24 birimlik boşluk sadece listede uygulanır
+            <View style={styles.innerContainer}>
+              <FlatList
+                data={filtrelenmisSorular}
+                keyExtractor={(item) => item.id}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 100 }}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[
+                      styles.kart,
+                      {
+                        backgroundColor: tema.kutuArkaplan,
+                        borderColor: tema.kutuCerceve,
+                      },
+                    ]}
+                    onPress={() => soruDetayAc(item)}
+                  >
+                    <Image
+                      source={{ uri: item.fotoLink }}
+                      style={styles.kucukFoto}
+                    />
+                    <View style={styles.kartBilgi}>
+                      {(item.subject || item.ders) && (
+                        <Text
+                          style={[styles.kartDersAd, { color: tema.metin }]}
+                        >
+                          {item.subject || item.ders}
+                        </Text>
+                      )}
+                      <Text
+                        style={[styles.kartTarih, { color: tema.ikincilMetin }]}
+                      >
+                        {new Date(item.tarih).toLocaleString("tr-TR")}
                       </Text>
-                    )}
-                    {/* Tarih sadeleştirildi ve ders adının altına alındı */}
-                    <Text
-                      style={[styles.kartTarih, { color: tema.ikincilMetin }]}
-                    >
-                      {new Date(item.tarih).toLocaleString("tr-TR")}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.kartDurum,
-                        {
-                          color:
-                            item.durum === "Çözüldü"
-                              ? "#4CAF50"
-                              : tema.anaButon,
-                        },
-                      ]}
-                    >
-                      {item.durum === "Çözüldü"
-                        ? "✅ Çözüldü"
-                        : "⏳ " + item.durum}
-                    </Text>
-                  </View>
-                  <Ionicons
-                    name="chevron-forward-outline"
-                    size={20}
-                    color={tema.ikincilMetin}
-                  />
-                </TouchableOpacity>
-              )}
-            />
+                      <Text
+                        style={[
+                          styles.kartDurum,
+                          {
+                            color:
+                              item.durum === "Çözüldü"
+                                ? "#4CAF50"
+                                : tema.anaButon,
+                          },
+                        ]}
+                      >
+                        {item.durum === "Çözüldü"
+                          ? "✅ Çözüldü"
+                          : "⏳ " + item.durum}
+                      </Text>
+                    </View>
+                    <Ionicons
+                      name="chevron-forward-outline"
+                      size={20}
+                      color={tema.ikincilMetin}
+                    />
+                  </TouchableOpacity>
+                )}
+              />
+            </View>
           )}
         </>
       )}
 
+      {/* PDF BUTONU: SafeArea kullanıldığı için insets.bottom ile konumlandırılmalı (opsiyonel) */}
       {filtrelenmisSorular.length > 0 && (
         <TouchableOpacity
-          style={[styles.fabButon, { backgroundColor: tema.anaButon }]}
+          style={[
+            styles.fabButon,
+            { backgroundColor: tema.anaButon, bottom: 20 },
+          ]}
           onPress={pdfOlarakIndir}
           disabled={indirmeBasladi}
         >
@@ -602,7 +629,13 @@ export default function HistoryScreen() {
         ) : (
           <View style={styles.modalArkaplan}>
             <View
-              style={[styles.modalKutu, { backgroundColor: tema.kutuArkaplan }]}
+              style={[
+                styles.modalKutu,
+                {
+                  backgroundColor: tema.kutuArkaplan,
+                  paddingBottom: insets.bottom + 20,
+                }, // 🚀 DÜZELTME: Alt çizgi koruması
+              ]}
             >
               <View style={styles.modalUstKontroller}>
                 <TouchableOpacity
@@ -629,7 +662,7 @@ export default function HistoryScreen() {
                   </Text>
                   <Ionicons
                     name="close-outline"
-                    size={24}
+                    size={28}
                     color={tema.ikincilMetin}
                   />
                 </TouchableOpacity>
@@ -949,7 +982,10 @@ export default function HistoryScreen() {
                 <View
                   style={[
                     styles.pratikModalKutu,
-                    { backgroundColor: tema.kutuArkaplan },
+                    {
+                      backgroundColor: tema.kutuArkaplan,
+                      paddingBottom: insets.bottom + 20,
+                    },
                   ]}
                 >
                   <View style={styles.pratikUstKontroller}>
@@ -961,7 +997,7 @@ export default function HistoryScreen() {
                     >
                       <Ionicons
                         name="close-circle"
-                        size={28}
+                        size={32}
                         color={tema.ikincilMetin}
                       />
                     </TouchableOpacity>
@@ -1078,7 +1114,7 @@ export default function HistoryScreen() {
                           style={{
                             marginTop: 20,
                             padding: 15,
-                            borderRadius: 10,
+                            borderRadius: 12,
                             backgroundColor:
                               secilenSik === aktifPratikSoru.correct_option
                                 ? "#10B98120"
@@ -1089,6 +1125,7 @@ export default function HistoryScreen() {
                             style={{
                               textAlign: "center",
                               fontWeight: "bold",
+                              fontSize: 16,
                               color:
                                 secilenSik === aktifPratikSoru.correct_option
                                   ? "#10B981"
@@ -1110,62 +1147,72 @@ export default function HistoryScreen() {
           </View>
         )}
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
+  // 🚀 DÜZELTME: SafeAreaView Ana Kapsayıcı
+  safeArea: {
+    flex: 1,
+    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
+  },
+  // 🚀 DÜZELTME: Soru listesini saran iç kapsayıcı (ferahlık için sağ-sol boşluklu)
+  innerContainer: {
+    flex: 1,
+    paddingHorizontal: 24,
+  },
+
   headerKapsayici: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 20,
-    marginTop: 20,
+    marginTop: 15,
   },
   anaBaslik: {
-    fontSize: 24,
+    fontSize: 28, // Başlık büyütüldü
     fontWeight: "bold",
+    letterSpacing: 0.5,
   },
   kategoriKapsayici: {
-    marginBottom: 15,
+    marginBottom: 20,
   },
   kategoriButon: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 12, // Butonlar biraz dolgunlaştırıldı
     borderRadius: 20,
     marginRight: 10,
     borderWidth: 1,
   },
   kategoriYazi: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "bold",
   },
   bosMesajKutusu: { flex: 1, justifyContent: "center", alignItems: "center" },
   ikon: { marginBottom: 15, opacity: 0.8 },
   bosMesajYazisi: { fontSize: 16, textAlign: "center" },
   kart: {
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 15,
+    padding: 16, // Kart içi ferahlatıldı
+    borderRadius: 16, // Ovalleşti
+    marginBottom: 16,
     borderWidth: 1,
     flexDirection: "row",
     alignItems: "center",
   },
   kartBilgi: { flex: 1 },
-  // 🎯 YENİ EKLENEN STİL: Ders Adı
   kartDersAd: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "bold",
-    marginBottom: 3,
+    marginBottom: 4,
+    letterSpacing: 0.3,
   },
-  kartTarih: { fontSize: 12, marginBottom: 5 },
-  kartDurum: { fontSize: 16, fontWeight: "bold" },
-  kucukFoto: { width: 60, height: 60, borderRadius: 8, marginRight: 15 },
+  kartTarih: { fontSize: 13, marginBottom: 6 },
+  kartDurum: { fontSize: 15, fontWeight: "bold" },
+  kucukFoto: { width: 65, height: 65, borderRadius: 12, marginRight: 15 },
   fabButon: {
     position: "absolute",
-    bottom: 30,
-    right: 20,
+    right: 24,
     width: 65,
     height: 65,
     borderRadius: 35,
@@ -1179,47 +1226,48 @@ const styles = StyleSheet.create({
   },
   fabYazi: {
     color: "#fff",
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "bold",
     marginTop: -2,
   },
   modalArkaplan: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.8)",
+    backgroundColor: "rgba(0,0,0,0.85)", // Arka plan hafif koyulaştı
     justifyContent: "flex-end",
   },
   modalKutu: {
-    borderTopLeftRadius: 25,
-    borderTopRightRadius: 25,
-    padding: 25,
-    maxHeight: "95%",
+    borderTopLeftRadius: 30, // Ovalleşti
+    borderTopRightRadius: 30, // Ovalleşti
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    maxHeight: "92%",
   },
   modalUstKontroller: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 25,
   },
   kapatButon: { flexDirection: "row", alignItems: "center" },
-  modalKapatYazi: { fontWeight: "bold", fontSize: 16, marginRight: 2 },
+  modalKapatYazi: { fontWeight: "bold", fontSize: 17, marginRight: 4 },
   modalSilButon: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
   },
   modalSilButonYazi: {
     color: "#fff",
     fontWeight: "bold",
     fontSize: 16,
-    marginLeft: 5,
+    marginLeft: 6,
   },
   modalBuyukFoto: {
     width: "100%",
-    height: 200,
-    borderRadius: 15,
-    marginBottom: 15,
+    height: 220,
+    borderRadius: 16,
+    marginBottom: 20,
     resizeMode: "cover",
   },
   jsonArayuzKonteyner: { marginTop: 10 },
@@ -1231,57 +1279,69 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginBottom: 15,
   },
-  aiEtiketYazi: { color: "#fff", fontWeight: "bold", fontSize: 12 },
+  aiEtiketYazi: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 12,
+    letterSpacing: 0.5,
+  },
   cozumAnaBaslik: { fontSize: 26, fontWeight: "900", marginBottom: 20 },
   bilgiEtiketi: {
-    padding: 12,
-    borderRadius: 10,
+    padding: 14,
+    borderRadius: 12,
     borderWidth: 1,
     marginBottom: 20,
     alignItems: "center",
     borderColor: "#ccc",
   },
   formulKutu: {
-    padding: 18,
-    borderRadius: 12,
+    padding: 20,
+    borderRadius: 16,
     borderWidth: 1,
     borderStyle: "dashed",
-    marginBottom: 20,
+    marginBottom: 25,
   },
   formulMetin: {
-    fontSize: 20,
+    fontSize: 22,
     textAlign: "center",
     fontWeight: "bold",
     fontStyle: "italic",
-    marginTop: 5,
+    marginTop: 8,
   },
   kucukBaslik: {
+    fontSize: 15,
+    fontWeight: "bold",
+    marginBottom: 10,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  aciklamaMetin: { fontSize: 16, fontStyle: "italic", lineHeight: 24 },
+  adimlarKonteyner: { marginBottom: 25 },
+  adimlarAnaBaslik: { fontSize: 20, fontWeight: "bold", marginBottom: 15 },
+  adimKutusu: {
+    borderLeftWidth: 4,
+    borderRadius: 12,
+    padding: 18,
+    marginBottom: 15,
+  },
+  adimBaslik: {
     fontSize: 14,
     fontWeight: "bold",
     marginBottom: 8,
-    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
-  aciklamaMetin: { fontSize: 15, fontStyle: "italic", lineHeight: 22 },
-  adimlarKonteyner: { marginBottom: 25 },
-  adimlarAnaBaslik: { fontSize: 18, fontWeight: "bold", marginBottom: 15 },
-  adimKutusu: {
-    borderLeftWidth: 4,
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 12,
-  },
-  adimBaslik: { fontSize: 13, fontWeight: "bold", marginBottom: 6 },
-  adimIcerik: { fontSize: 16, lineHeight: 24 },
+  adimIcerik: { fontSize: 17, lineHeight: 26 },
   cevapKutusu: {
     borderWidth: 1,
-    borderRadius: 15,
-    padding: 20,
+    borderRadius: 16,
+    padding: 24,
     marginBottom: 25,
+    alignItems: "center", // Ortalandı
   },
-  cevapMetni: { fontSize: 28, fontWeight: "900" },
+  cevapMetni: { fontSize: 32, fontWeight: "900", marginTop: 5 },
   benzerSoruBolumu: {
-    marginTop: 10,
-    paddingTop: 20,
+    marginTop: 15,
+    paddingTop: 25,
     borderTopWidth: 1,
     borderTopColor: "rgba(150,150,150,0.2)",
   },
@@ -1292,9 +1352,9 @@ const styles = StyleSheet.create({
   },
   seviyeButon: {
     flex: 1,
-    paddingVertical: 12,
-    marginHorizontal: 5,
-    borderRadius: 10,
+    paddingVertical: 14,
+    marginHorizontal: 6,
+    borderRadius: 12,
     borderWidth: 1.5,
     alignItems: "center",
     justifyContent: "center",
@@ -1303,11 +1363,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    padding: 16,
-    borderRadius: 15,
-    marginTop: 10,
+    padding: 18,
+    borderRadius: 16,
+    marginTop: 15,
   },
-  indirButonuYazi: { color: "#fff", fontSize: 16, fontWeight: "bold" },
+  indirButonuYazi: { color: "#fff", fontSize: 17, fontWeight: "bold" },
   tamEkranArkaplan: {
     flex: 1,
     backgroundColor: "#000",
@@ -1324,63 +1384,65 @@ const styles = StyleSheet.create({
     top: 50,
     right: 20,
     backgroundColor: "rgba(255,255,255,0.2)",
-    padding: 10,
-    borderRadius: 20,
+    padding: 12,
+    borderRadius: 25,
     zIndex: 10,
   },
   pratikModalArkaplan: {
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: "rgba(0,0,0,0.7)", // Koyulaştı
     justifyContent: "flex-end",
   },
   pratikModalKutu: {
-    borderTopLeftRadius: 25,
-    borderTopRightRadius: 25,
-    padding: 25,
-    maxHeight: "75%",
-    minHeight: "45%",
+    borderTopLeftRadius: 30, // Ovalleşti
+    borderTopRightRadius: 30, // Ovalleşti
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    maxHeight: "80%",
+    minHeight: "50%",
   },
   pratikUstKontroller: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 25,
     borderBottomWidth: 1,
     borderBottomColor: "rgba(150,150,150,0.2)",
-    paddingBottom: 15,
+    paddingBottom: 18,
   },
   pratikBaslik: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "bold",
   },
   pratikSoruMetni: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: "600",
-    lineHeight: 26,
+    lineHeight: 28,
     marginBottom: 25,
   },
   sikKutusu: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 16,
-    borderRadius: 12,
+    padding: 18, // Ferahladı
+    borderRadius: 16, // Ovalleşti
     borderWidth: 2,
     marginBottom: 12,
   },
   harfDairesi: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 15,
   },
   harfYazisi: {
     fontWeight: "bold",
-    fontSize: 16,
+    fontSize: 17,
   },
   sikMetni: {
-    fontSize: 16,
+    fontSize: 17,
     flex: 1,
     fontWeight: "500",
+    lineHeight: 24,
   },
 });

@@ -12,7 +12,10 @@ import {
   ScrollView,
   Image,
   ActivityIndicator,
+  StatusBar,
 } from "react-native";
+// 🚀 YENİ: Modern Güvenli Alan Kütüphanesi Eklendi
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { auth } from "../firebaseConfig";
 import {
@@ -59,10 +62,9 @@ export default function LoginScreen({ setKullaniciRolu }) {
     try {
       await AsyncStorage.setItem("hedefRol", seciliRol);
       await createUserWithEmailAndPassword(auth, email, password);
-      // 🚀 Başarılıysa animasyonu durdurmuyoruz! Sayfa değişene kadar şıkça dönmeye devam edecek.
     } catch (e) {
       Alert.alert("Hata", e.message);
-      setYukleniyor(false); // Sadece hata olursa kilidi açıp butonu eski haline getiriyoruz
+      setYukleniyor(false);
     }
   };
 
@@ -116,12 +118,13 @@ export default function LoginScreen({ setKullaniciRolu }) {
       : "Öğrencinizin eğitim sürecini yakından takip etmek için veli hesabı oluşturun.";
 
   const dinamikStil = {
+    // 🚀 DÜZELTME: Sabit padding: 25 silindi, yerine sadece yanlardan ferahlık veren paddingHorizontal eklendi
     container: {
       flexGrow: 1,
       justifyContent: "center",
       alignItems: "center",
-      padding: 25,
-      backgroundColor: tema.arkaplan,
+      paddingHorizontal: 24,
+      paddingBottom: 40,
     },
     animasyonKutu: {
       width: 180,
@@ -134,28 +137,30 @@ export default function LoginScreen({ setKullaniciRolu }) {
       marginBottom: 8,
       color: tema.metin,
       textAlign: "center",
+      letterSpacing: 0.5,
     },
     altBaslik: {
       fontSize: 15,
       color: tema.ikincilMetin,
       textAlign: "center",
-      marginBottom: 25,
-      paddingHorizontal: 10,
+      marginBottom: 30,
+      lineHeight: 22,
     },
+    // 🚀 DÜZELTME: Height 55 -> 60 yapıldı (Fitts Kanunu - Kolay Tıklanabilirlik) ve Radius yumuşatıldı
     inputKutu: {
       flexDirection: "row",
       alignItems: "center",
       width: "100%",
-      height: 55,
+      height: 60,
       backgroundColor: tema.kutuArkaplan,
       borderWidth: 1.5,
       borderColor: tema.kutuCerceve,
-      borderRadius: 12,
-      paddingHorizontal: 15,
-      marginBottom: 15,
+      borderRadius: 16,
+      paddingHorizontal: 18,
+      marginBottom: 16,
     },
     inputIkon: {
-      marginRight: 10,
+      marginRight: 12,
     },
     input: {
       flex: 1,
@@ -164,11 +169,11 @@ export default function LoginScreen({ setKullaniciRolu }) {
     },
     butonAna: {
       width: "100%",
-      height: 55,
+      height: 60,
       backgroundColor: dinamikAnaRenk,
       justifyContent: "center",
       alignItems: "center",
-      borderRadius: 12,
+      borderRadius: 16,
       marginBottom: 15,
       shadowColor: dinamikAnaRenk,
       shadowOffset: { width: 0, height: 4 },
@@ -180,13 +185,13 @@ export default function LoginScreen({ setKullaniciRolu }) {
     butonGoogle: {
       flexDirection: "row",
       width: "100%",
-      height: 55,
+      height: 60,
       backgroundColor: tema.kutuArkaplan,
       borderWidth: 1.5,
       borderColor: tema.kutuCerceve,
       justifyContent: "center",
       alignItems: "center",
-      borderRadius: 12,
+      borderRadius: 16,
       marginBottom: 15,
     },
     butonAnaYazisi: {
@@ -210,16 +215,16 @@ export default function LoginScreen({ setKullaniciRolu }) {
       width: "100%",
       marginBottom: 30,
       backgroundColor: tema.kutuArkaplan,
-      borderRadius: 12,
-      padding: 5,
+      borderRadius: 16,
+      padding: 6,
       borderWidth: 1,
       borderColor: tema.kutuCerceve,
     },
     tabButon: {
       flex: 1,
-      paddingVertical: 12,
+      paddingVertical: 14,
       alignItems: "center",
-      borderRadius: 8,
+      borderRadius: 12,
     },
     tabYazi: { fontSize: 16, fontWeight: "bold" },
     cizgiKutu: {
@@ -234,16 +239,17 @@ export default function LoginScreen({ setKullaniciRolu }) {
       backgroundColor: tema.kutuCerceve,
     },
     cizgiYazi: {
-      marginHorizontal: 10,
+      marginHorizontal: 12,
       color: tema.ikincilMetin,
       fontSize: 14,
+      fontWeight: "500",
     },
     hesapGecisKarti: {
       flexDirection: "row",
       justifyContent: "center",
       alignItems: "center",
       marginTop: 25,
-      paddingVertical: 14,
+      paddingVertical: 16,
       paddingHorizontal: 25,
       backgroundColor: "transparent",
       borderRadius: 100,
@@ -309,134 +315,145 @@ export default function LoginScreen({ setKullaniciRolu }) {
   );
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={{ flex: 1, backgroundColor: tema.arkaplan }}
-    >
-      <ScrollView
-        contentContainerStyle={dinamikStil.container}
-        showsVerticalScrollIndicator={false}
+    // 🚀 DÜZELTME: Sayfa en dıştan Güvenli Alan ile kaplandı
+    <SafeAreaView style={{ flex: 1, backgroundColor: tema.arkaplan }}>
+      <StatusBar
+        barStyle={sistemTemasi === "dark" ? "light-content" : "dark-content"}
+        backgroundColor={tema.arkaplan}
+      />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
       >
-        <View style={dinamikStil.animasyonKutu}>
-          <LottieView
-            source={
-              seciliRol === "ogrenci"
-                ? require("../assets/animations/kamera.json")
-                : require("../assets/animations/veli.json")
+        <ScrollView
+          contentContainerStyle={dinamikStil.container}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={dinamikStil.animasyonKutu}>
+            <LottieView
+              source={
+                seciliRol === "ogrenci"
+                  ? require("../assets/animations/kamera.json")
+                  : require("../assets/animations/veli.json")
+              }
+              autoPlay
+              loop
+              style={{ width: "100%", height: "100%" }}
+            />
+          </View>
+
+          <Text style={dinamikStil.baslik}>{karsilamaMetni}</Text>
+          <Text style={dinamikStil.altBaslik}>{altMetin}</Text>
+
+          <RolSecici />
+
+          <View style={dinamikStil.inputKutu}>
+            <Ionicons
+              name="mail-outline"
+              size={22}
+              color={tema.ikincilMetin}
+              style={dinamikStil.inputIkon}
+            />
+            <TextInput
+              style={dinamikStil.input}
+              placeholderTextColor={tema.ikincilMetin}
+              placeholder="E-posta Adresiniz"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              editable={!(yukleniyor || googleYukleniyor)}
+            />
+          </View>
+
+          <View style={dinamikStil.inputKutu}>
+            <Ionicons
+              name="lock-closed-outline"
+              size={22}
+              color={tema.ikincilMetin}
+              style={dinamikStil.inputIkon}
+            />
+            <TextInput
+              style={dinamikStil.input}
+              placeholderTextColor={tema.ikincilMetin}
+              placeholder="Şifreniz"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={true}
+              editable={!(yukleniyor || googleYukleniyor)}
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[dinamikStil.butonAna, yukleniyor && { opacity: 0.7 }]}
+            onPress={
+              gosterilenSayfa === "giris" ? handleGirisYap : handleKayitOl
             }
-            autoPlay
-            loop
-            style={{ width: "100%", height: "100%" }}
-          />
-        </View>
-
-        <Text style={dinamikStil.baslik}>{karsilamaMetni}</Text>
-        <Text style={dinamikStil.altBaslik}>{altMetin}</Text>
-
-        <RolSecici />
-
-        <View style={dinamikStil.inputKutu}>
-          <Ionicons
-            name="mail-outline"
-            size={20}
-            color={tema.ikincilMetin}
-            style={dinamikStil.inputIkon}
-          />
-          <TextInput
-            style={dinamikStil.input}
-            placeholderTextColor={tema.ikincilMetin}
-            placeholder="E-posta Adresiniz"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            editable={!(yukleniyor || googleYukleniyor)}
-          />
-        </View>
-
-        <View style={dinamikStil.inputKutu}>
-          <Ionicons
-            name="lock-closed-outline"
-            size={20}
-            color={tema.ikincilMetin}
-            style={dinamikStil.inputIkon}
-          />
-          <TextInput
-            style={dinamikStil.input}
-            placeholderTextColor={tema.ikincilMetin}
-            placeholder="Şifreniz"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry={true}
-            editable={!(yukleniyor || googleYukleniyor)}
-          />
-        </View>
-
-        <TouchableOpacity
-          style={[dinamikStil.butonAna, yukleniyor && { opacity: 0.7 }]}
-          onPress={gosterilenSayfa === "giris" ? handleGirisYap : handleKayitOl}
-          disabled={yukleniyor || googleYukleniyor}
-        >
-          {yukleniyor ? (
-            <ActivityIndicator color="#ffffff" size="small" />
-          ) : (
-            <Text style={dinamikStil.butonAnaYazisi}>
-              {gosterilenSayfa === "giris" ? "Giriş Yap" : "Kayıt Ol"}
-            </Text>
-          )}
-        </TouchableOpacity>
-
-        <View style={dinamikStil.cizgiKutu}>
-          <View style={dinamikStil.cizgi} />
-          <Text style={dinamikStil.cizgiYazi}>veya</Text>
-          <View style={dinamikStil.cizgi} />
-        </View>
-
-        <TouchableOpacity
-          style={[
-            dinamikStil.butonGoogle,
-            googleYukleniyor && { opacity: 0.7 },
-          ]}
-          onPress={handleGoogleGiris}
-          disabled={yukleniyor || googleYukleniyor}
-        >
-          {googleYukleniyor ? (
-            <ActivityIndicator color={tema.metin} size="small" />
-          ) : (
-            <>
-              <Image
-                source={{
-                  uri: "https://cdn-icons-png.flaticon.com/512/2991/2991148.png",
-                }}
-                style={dinamikStil.googleLogo}
-              />
-              <Text style={dinamikStil.butonGoogleYazisi}>
-                {gosterilenSayfa === "giris"
-                  ? "Google ile Giriş Yap"
-                  : "Google ile Kayıt Ol"}
+            disabled={yukleniyor || googleYukleniyor}
+          >
+            {yukleniyor ? (
+              <ActivityIndicator color="#ffffff" size="small" />
+            ) : (
+              <Text style={dinamikStil.butonAnaYazisi}>
+                {gosterilenSayfa === "giris" ? "Giriş Yap" : "Kayıt Ol"}
               </Text>
-            </>
-          )}
-        </TouchableOpacity>
+            )}
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={dinamikStil.hesapGecisKarti}
-          activeOpacity={0.6}
-          onPress={() =>
-            setGosterilenSayfa(gosterilenSayfa === "giris" ? "kayit" : "giris")
-          }
-          disabled={yukleniyor || googleYukleniyor}
-        >
-          <Text style={dinamikStil.hesapGecisSoru}>
-            {gosterilenSayfa === "giris"
-              ? "Hesabınız yok mu?"
-              : "Zaten bir hesabınız var mı?"}
-          </Text>
-          <Text style={dinamikStil.hesapGecisAksiyon}>
-            {gosterilenSayfa === "giris" ? "Yeni Hesap Aç" : "Giriş Yap"}
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </KeyboardAvoidingView>
+          <View style={dinamikStil.cizgiKutu}>
+            <View style={dinamikStil.cizgi} />
+            <Text style={dinamikStil.cizgiYazi}>veya</Text>
+            <View style={dinamikStil.cizgi} />
+          </View>
+
+          <TouchableOpacity
+            style={[
+              dinamikStil.butonGoogle,
+              googleYukleniyor && { opacity: 0.7 },
+            ]}
+            onPress={handleGoogleGiris}
+            disabled={yukleniyor || googleYukleniyor}
+          >
+            {googleYukleniyor ? (
+              <ActivityIndicator color={tema.metin} size="small" />
+            ) : (
+              <>
+                <Image
+                  source={{
+                    uri: "https://cdn-icons-png.flaticon.com/512/2991/2991148.png",
+                  }}
+                  style={dinamikStil.googleLogo}
+                />
+                <Text style={dinamikStil.butonGoogleYazisi}>
+                  {gosterilenSayfa === "giris"
+                    ? "Google ile Giriş Yap"
+                    : "Google ile Kayıt Ol"}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={dinamikStil.hesapGecisKarti}
+            activeOpacity={0.6}
+            onPress={() =>
+              setGosterilenSayfa(
+                gosterilenSayfa === "giris" ? "kayit" : "giris"
+              )
+            }
+            disabled={yukleniyor || googleYukleniyor}
+          >
+            <Text style={dinamikStil.hesapGecisSoru}>
+              {gosterilenSayfa === "giris"
+                ? "Hesabınız yok mu?"
+                : "Zaten bir hesabınız var mı?"}
+            </Text>
+            <Text style={dinamikStil.hesapGecisAksiyon}>
+              {gosterilenSayfa === "giris" ? "Yeni Hesap Aç" : "Giriş Yap"}
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }

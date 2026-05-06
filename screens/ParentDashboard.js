@@ -12,7 +12,14 @@ import {
   ActivityIndicator,
   Image,
   Dimensions,
+  Platform,
+  StatusBar,
 } from "react-native";
+// 🚀 YENİ: Modern Güvenli Alan Kütüphanesi Eklendi
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
 // Firebase Araçları
@@ -37,6 +44,7 @@ const ekranYuksekligi = Dimensions.get("window").height;
 
 export default function ParentDashboard() {
   const { tema, temaModu } = useTheme();
+  const insets = useSafeAreaInsets(); // 🚀 Modalların alt boşlukları için
 
   // Veli Kontrol Stateleri
   const [veliModalGorunur, setVeliModalGorunur] = useState(false);
@@ -46,7 +54,6 @@ export default function ParentDashboard() {
 
   const [aktifOgrenci, setAktifOgrenci] = useState(null);
 
-  // 🎯 YENİ: Öğrenci fotoğraflarını hafızada tutacak state
   const [ogrenciFotolar, setOgrenciFotolar] = useState({});
 
   // WhatsApp Raporlama Stateleri
@@ -66,7 +73,6 @@ export default function ParentDashboard() {
   const [tamEkranModu, setTamEkranModu] = useState(false);
   const [cozumYukleniyor, setCozumYukleniyor] = useState(false);
 
-  // 1. ADIM: Velinin Verilerini Getir
   useEffect(() => {
     const veliVerileriniGetir = async () => {
       if (!auth.currentUser) return;
@@ -89,7 +95,6 @@ export default function ParentDashboard() {
     veliVerileriniGetir();
   }, []);
 
-  // 2. ADIM: Aktif Öğrencinin Sorularını ve TÜM Öğrencilerin Fotoğraflarını Çek
   useEffect(() => {
     const verileriCek = async () => {
       if (bagliOgrenciler.length === 0) {
@@ -109,7 +114,6 @@ export default function ParentDashboard() {
         let cozulmusSayaci = 0;
         let dersSayaclari = {};
 
-        // Döngü: Hem fotoğrafları alıyoruz hem de aktif öğrenciyse sorularını çekiyoruz
         for (const ogr of bagliOgrenciler) {
           const ogrRef = doc(db, "kullanicilar", ogr.id);
           const ogrSnap = await getDoc(ogrRef);
@@ -117,12 +121,10 @@ export default function ParentDashboard() {
           if (ogrSnap.exists() && ogrSnap.data().eposta) {
             const data = ogrSnap.data();
 
-            // 🎯 YENİ: Profil fotoğrafını hafızaya kaydet
             if (data.profilFoto) {
               geciciFotolar[ogr.id] = data.profilFoto;
             }
 
-            // Eğer bu öğrenci "Aktif" olarak seçtiğimiz öğrenciyse sorularını çek
             if (aktifOgrenci && ogr.id === aktifOgrenci.id) {
               const q = query(
                 collection(db, "sorular"),
@@ -151,7 +153,6 @@ export default function ParentDashboard() {
           }
         }
 
-        // State'leri Güncelle
         setOgrenciFotolar(geciciFotolar);
 
         tumSorular.sort((a, b) => new Date(b.tarih) - new Date(a.tarih));
@@ -350,419 +351,441 @@ export default function ParentDashboard() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: tema.arkaplan }}>
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Text style={[styles.baslik, { color: tema.metin }]}>
-            Veli Paneli
-          </Text>
-          <Text style={{ color: tema.ikincilMetin }}>
-            Öğrencinizin gelişimini buradan takip edin.
-          </Text>
-        </View>
+    // 🚀 DÜZELTME: Güvenli alan Ana Kapsayıcı
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: tema.arkaplan }]}>
+      <StatusBar
+        barStyle={temaModu === "dark" ? "light-content" : "dark-content"}
+        backgroundColor={tema.arkaplan}
+      />
 
-        {/* BAĞLI ÖĞRENCİLER LİSTESİ */}
-        <View
-          style={[
-            styles.kutu,
-            {
-              backgroundColor: tema.kutuArkaplan,
-              borderColor: tema.kutuCerceve,
-            },
-          ]}
-        >
-          <View style={styles.kutuUstBaslik}>
-            <Text
-              style={[
-                styles.kutuBaslik,
-                { color: tema.metin, marginBottom: 0 },
-              ]}
-            >
-              Bağlı Öğrenciler
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* 🚀 DÜZELTME: İç Kapsayıcı ferah boşluklarla korumaya alındı */}
+        <View style={styles.innerContainer}>
+          <View style={styles.header}>
+            <Text style={[styles.baslik, { color: tema.metin }]}>
+              Veli Paneli
             </Text>
-            <TouchableOpacity onPress={() => setVeliModalGorunur(true)}>
-              <Ionicons name="add-circle" size={28} color={tema.anaButon} />
-            </TouchableOpacity>
+            <Text
+              style={{ color: tema.ikincilMetin, fontSize: 15, lineHeight: 22 }}
+            >
+              Öğrencinizin gelişimini buradan takip edin.
+            </Text>
           </View>
 
-          {bagliOgrenciler.length > 0 ? (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={{ marginBottom: 5 }}
-            >
-              {bagliOgrenciler.map((ogr, index) => {
-                const seciliMi = aktifOgrenci?.id === ogr.id;
-                return (
-                  <TouchableOpacity
-                    key={index}
-                    onPress={() => setAktifOgrenci(ogr)}
-                    style={[
-                      styles.ogrenciSeciciKutu,
-                      {
-                        backgroundColor: seciliMi
-                          ? tema.anaButon
-                          : tema.arkaplan,
-                        borderColor: seciliMi
-                          ? tema.anaButon
-                          : tema.kutuCerceve,
-                      },
-                    ]}
-                  >
-                    {/* 🎯 YENİ: Varsa Fotoğrafı, Yoksa İkonu Göster */}
-                    {ogrenciFotolar[ogr.id] ? (
-                      <Image
-                        source={{ uri: ogrenciFotolar[ogr.id] }}
-                        style={[
-                          styles.ogrenciKucukFoto,
-                          { borderColor: seciliMi ? "#fff" : tema.kutuCerceve },
-                        ]}
-                      />
-                    ) : (
-                      <Ionicons
-                        name="person-circle-outline"
-                        size={28}
-                        color={seciliMi ? "#fff" : tema.ikincilMetin}
-                      />
-                    )}
-
-                    <Text
-                      style={[
-                        styles.ogrenciSeciciYazi,
-                        { color: seciliMi ? "#fff" : tema.metin },
-                      ]}
-                    >
-                      {ogr.isim}
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => ogrenciyiKaldir(ogr)}
-                      style={{ marginLeft: 10 }}
-                    >
-                      <Ionicons
-                        name="close-circle"
-                        size={20}
-                        color={
-                          seciliMi ? "#FFEBEB" : tema.hataKirmizi || "#EF4444"
-                        }
-                      />
-                    </TouchableOpacity>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          ) : (
-            <Text
-              style={{
-                color: tema.ikincilMetin,
-                textAlign: "center",
-                marginVertical: 10,
-              }}
-            >
-              Henüz bir öğrenci bağlamadınız. Sağ üstten ekleyebilirsiniz.
-            </Text>
-          )}
-        </View>
-
-        <View
-          style={[
-            styles.kutu,
-            {
-              backgroundColor: tema.kutuArkaplan,
-              borderColor: tema.kutuCerceve,
-            },
-          ]}
-        >
-          <Text
-            style={[styles.kutuBaslik, { color: tema.metin, marginBottom: 15 }]}
-          >
-            WhatsApp Raporlama (Cuma Günleri)
-          </Text>
-          <TextInput
+          {/* BAĞLI ÖĞRENCİLER LİSTESİ */}
+          <View
             style={[
-              styles.input,
+              styles.kutu,
               {
-                backgroundColor: tema.arkaplan,
-                color: tema.metin,
+                backgroundColor: tema.kutuArkaplan,
                 borderColor: tema.kutuCerceve,
               },
             ]}
-            placeholder="Örn: 5xxxxxxxxx"
-            placeholderTextColor={tema.ikincilMetin}
-            keyboardType="phone-pad"
-            value={whatsappNo}
-            onChangeText={setWhatsappNo}
-            onEndEditing={() => whatsappNumarasiKaydet(whatsappNo)}
-          />
-          <View style={styles.switchSatir}>
-            <Text style={[styles.switchYazi, { color: tema.metin }]}>
-              Haftalık Rapor İstiyorum
-            </Text>
-            <Switch
-              value={raporAktif}
-              onValueChange={raporTercihiKaydet}
-              trackColor={{ false: tema.kutuCerceve, true: tema.anaButon }}
-              thumbColor={"#fff"}
-            />
-          </View>
-        </View>
-
-        {aktifOgrenci ? (
-          <>
-            {/* 🎯 YENİ: Başlıkta da fotoğraf gösterimi */}
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                marginTop: 10,
-                marginBottom: 15,
-              }}
-            >
-              {ogrenciFotolar[aktifOgrenci.id] && (
-                <Image
-                  source={{ uri: ogrenciFotolar[aktifOgrenci.id] }}
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 20,
-                    marginRight: 12,
-                    borderWidth: 1,
-                    borderColor: tema.kutuCerceve,
-                  }}
-                />
-              )}
+          >
+            <View style={styles.kutuUstBaslik}>
               <Text
                 style={[
-                  styles.altBaslik,
+                  styles.kutuBaslik,
                   { color: tema.metin, marginBottom: 0 },
                 ]}
               >
-                {aktifOgrenci.isim}'in İstatistikleri
+                Bağlı Öğrenciler
               </Text>
+              <TouchableOpacity onPress={() => setVeliModalGorunur(true)}>
+                <Ionicons name="add-circle" size={32} color={tema.anaButon} />
+              </TouchableOpacity>
             </View>
 
-            <View style={styles.istatistikKutusu}>
-              <View
-                style={[
-                  styles.kart,
-                  {
-                    backgroundColor: tema.kutuArkaplan,
-                    borderColor: tema.kutuCerceve,
-                  },
-                ]}
+            {bagliOgrenciler.length > 0 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={{ marginBottom: 5 }}
               >
-                <Text style={[styles.kartSayi, { color: tema.anaButon }]}>
-                  {toplamSoruSayisi}
-                </Text>
-                <Text style={[styles.kartYazi, { color: tema.ikincilMetin }]}>
-                  Çözülen Soru
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.kart,
-                  {
-                    backgroundColor: tema.kutuArkaplan,
-                    borderColor: tema.kutuCerceve,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.kartSayi,
-                    { color: tema.aiButon || "#10B981" },
-                  ]}
-                >
-                  {`%${cozulmeOrani}`}
-                </Text>
-                <Text style={[styles.kartYazi, { color: tema.ikincilMetin }]}>
-                  Çözülme Oranı
-                </Text>
-              </View>
-            </View>
-
-            {dersIstatistikleri.length > 0 && (
-              <View
-                style={[
-                  styles.kutu,
-                  {
-                    backgroundColor: tema.kutuArkaplan,
-                    borderColor: tema.kutuCerceve,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.kutuBaslik,
-                    { color: tema.metin, marginBottom: 15 },
-                  ]}
-                >
-                  Derslere Göre Soru Dağılımı
-                </Text>
-
-                {dersIstatistikleri.map((istatistik, index) => (
-                  <View key={index} style={{ marginBottom: 12 }}>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                        marginBottom: 5,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          color: tema.metin,
-                          fontSize: 13,
-                          fontWeight: "500",
-                        }}
-                      >
-                        {istatistik.ders}
-                      </Text>
-                      <Text
-                        style={{
-                          color: tema.anaButon,
-                          fontSize: 13,
-                          fontWeight: "bold",
-                        }}
-                      >
-                        % {istatistik.yuzde} ({istatistik.sayi} Soru)
-                      </Text>
-                    </View>
-                    <View
+                {bagliOgrenciler.map((ogr, index) => {
+                  const seciliMi = aktifOgrenci?.id === ogr.id;
+                  return (
+                    <TouchableOpacity
+                      key={index}
+                      onPress={() => setAktifOgrenci(ogr)}
                       style={[
-                        styles.barArkaplan,
-                        { backgroundColor: tema.kutuCerceve },
-                      ]}
-                    >
-                      <View
-                        style={[
-                          styles.barDolu,
-                          {
-                            backgroundColor: tema.anaButon,
-                            width: `${istatistik.yuzde}%`,
-                          },
-                        ]}
-                      />
-                    </View>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            <Text
-              style={[styles.altBaslik, { color: tema.metin, marginTop: 10 }]}
-            >
-              {aktifOgrenci.isim}'in Son Çözdükleri
-            </Text>
-
-            {sorularYukleniyor ? (
-              <ActivityIndicator
-                size="large"
-                color={tema.anaButon}
-                style={{ marginTop: 20, marginBottom: 20 }}
-              />
-            ) : sonSorular.length > 0 ? (
-              sonSorular.map((item, index) => {
-                const okunanTarih = new Date(item.tarih).toLocaleDateString(
-                  "tr-TR"
-                );
-                const cozulduMu = item.durum === "Çözüldü";
-                const dersAdi = item.subject || item.ders || "Soru";
-
-                return (
-                  <TouchableOpacity
-                    key={index}
-                    onPress={() => soruDetayAc(item)}
-                    style={[
-                      styles.listeElemani,
-                      {
-                        backgroundColor: tema.kutuArkaplan,
-                        borderColor: tema.kutuCerceve,
-                      },
-                    ]}
-                  >
-                    <View
-                      style={{ flexDirection: "row", alignItems: "center" }}
-                    >
-                      {item.fotoLink && (
-                        <Image
-                          source={{ uri: item.fotoLink }}
-                          style={{
-                            width: 45,
-                            height: 45,
-                            borderRadius: 8,
-                            marginRight: 12,
-                          }}
-                        />
-                      )}
-                      <View>
-                        <Text
-                          style={[styles.listeBaslik, { color: tema.metin }]}
-                        >
-                          {dersAdi}
-                        </Text>
-                        <Text
-                          style={{
-                            color: tema.ikincilMetin,
-                            fontSize: 12,
-                            marginTop: 4,
-                          }}
-                        >
-                          {okunanTarih}
-                        </Text>
-                      </View>
-                    </View>
-                    <View
-                      style={[
-                        styles.durumKutusu,
+                        styles.ogrenciSeciciKutu,
                         {
-                          backgroundColor: cozulduMu
-                            ? (tema.aiButon || "#10B981") + "20"
+                          backgroundColor: seciliMi
+                            ? tema.anaButon
+                            : tema.arkaplan,
+                          borderColor: seciliMi
+                            ? tema.anaButon
                             : tema.kutuCerceve,
                         },
                       ]}
                     >
+                      {ogrenciFotolar[ogr.id] ? (
+                        <Image
+                          source={{ uri: ogrenciFotolar[ogr.id] }}
+                          style={[
+                            styles.ogrenciKucukFoto,
+                            {
+                              borderColor: seciliMi ? "#fff" : tema.kutuCerceve,
+                            },
+                          ]}
+                        />
+                      ) : (
+                        <Ionicons
+                          name="person-circle-outline"
+                          size={28}
+                          color={seciliMi ? "#fff" : tema.ikincilMetin}
+                        />
+                      )}
+
                       <Text
-                        style={{
-                          color: cozulduMu
-                            ? tema.aiButon || "#10B981"
-                            : tema.ikincilMetin,
-                          fontWeight: "bold",
-                          fontSize: 12,
-                        }}
+                        style={[
+                          styles.ogrenciSeciciYazi,
+                          { color: seciliMi ? "#fff" : tema.metin },
+                        ]}
                       >
-                        {item.durum}
+                        {ogr.isim}
                       </Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })
+                      <TouchableOpacity
+                        onPress={() => ogrenciyiKaldir(ogr)}
+                        style={{ marginLeft: 12 }}
+                      >
+                        <Ionicons
+                          name="close-circle"
+                          size={22}
+                          color={
+                            seciliMi ? "#FFEBEB" : tema.hataKirmizi || "#EF4444"
+                          }
+                        />
+                      </TouchableOpacity>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
             ) : (
               <Text
                 style={{
                   color: tema.ikincilMetin,
                   textAlign: "center",
-                  marginTop: 10,
-                  marginBottom: 30,
+                  marginVertical: 10,
+                  lineHeight: 22,
                 }}
               >
-                Bu öğrenci henüz soru göndermedi.
+                Henüz bir öğrenci bağlamadınız. Sağ üstten ekleyebilirsiniz.
               </Text>
             )}
-          </>
-        ) : (
-          <Text
-            style={{
-              color: tema.ikincilMetin,
-              textAlign: "center",
-              marginTop: 10,
-              marginBottom: 30,
-            }}
-          >
-            Yukarıdan bir öğrenci seçin.
-          </Text>
-        )}
+          </View>
 
-        <View style={{ height: 40 }} />
+          <View
+            style={[
+              styles.kutu,
+              {
+                backgroundColor: tema.kutuArkaplan,
+                borderColor: tema.kutuCerceve,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.kutuBaslik,
+                { color: tema.metin, marginBottom: 15 },
+              ]}
+            >
+              WhatsApp Raporlama (Cuma Günleri)
+            </Text>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: tema.arkaplan,
+                  color: tema.metin,
+                  borderColor: tema.kutuCerceve,
+                },
+              ]}
+              placeholder="Örn: 5xxxxxxxxx"
+              placeholderTextColor={tema.ikincilMetin}
+              keyboardType="phone-pad"
+              value={whatsappNo}
+              onChangeText={setWhatsappNo}
+              onEndEditing={() => whatsappNumarasiKaydet(whatsappNo)}
+            />
+            <View style={styles.switchSatir}>
+              <Text style={[styles.switchYazi, { color: tema.metin }]}>
+                Haftalık Rapor İstiyorum
+              </Text>
+              <Switch
+                value={raporAktif}
+                onValueChange={raporTercihiKaydet}
+                trackColor={{ false: tema.kutuCerceve, true: tema.anaButon }}
+                thumbColor={"#fff"}
+              />
+            </View>
+          </View>
+
+          {aktifOgrenci ? (
+            <>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginTop: 15,
+                  marginBottom: 15,
+                }}
+              >
+                {ogrenciFotolar[aktifOgrenci.id] && (
+                  <Image
+                    source={{ uri: ogrenciFotolar[aktifOgrenci.id] }}
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 22,
+                      marginRight: 12,
+                      borderWidth: 1,
+                      borderColor: tema.kutuCerceve,
+                    }}
+                  />
+                )}
+                <Text
+                  style={[
+                    styles.altBaslik,
+                    { color: tema.metin, marginBottom: 0 },
+                  ]}
+                >
+                  {aktifOgrenci.isim}'in İstatistikleri
+                </Text>
+              </View>
+
+              <View style={styles.istatistikKutusu}>
+                <View
+                  style={[
+                    styles.kart,
+                    {
+                      backgroundColor: tema.kutuArkaplan,
+                      borderColor: tema.kutuCerceve,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.kartSayi, { color: tema.anaButon }]}>
+                    {toplamSoruSayisi}
+                  </Text>
+                  <Text style={[styles.kartYazi, { color: tema.ikincilMetin }]}>
+                    Çözülen Soru
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.kart,
+                    {
+                      backgroundColor: tema.kutuArkaplan,
+                      borderColor: tema.kutuCerceve,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.kartSayi,
+                      { color: tema.aiButon || "#10B981" },
+                    ]}
+                  >
+                    {`%${cozulmeOrani}`}
+                  </Text>
+                  <Text style={[styles.kartYazi, { color: tema.ikincilMetin }]}>
+                    Çözülme Oranı
+                  </Text>
+                </View>
+              </View>
+
+              {dersIstatistikleri.length > 0 && (
+                <View
+                  style={[
+                    styles.kutu,
+                    {
+                      backgroundColor: tema.kutuArkaplan,
+                      borderColor: tema.kutuCerceve,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.kutuBaslik,
+                      { color: tema.metin, marginBottom: 20 },
+                    ]}
+                  >
+                    Derslere Göre Soru Dağılımı
+                  </Text>
+
+                  {dersIstatistikleri.map((istatistik, index) => (
+                    <View key={index} style={{ marginBottom: 15 }}>
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          justifyContent: "space-between",
+                          marginBottom: 8,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: tema.metin,
+                            fontSize: 14,
+                            fontWeight: "600",
+                          }}
+                        >
+                          {istatistik.ders}
+                        </Text>
+                        <Text
+                          style={{
+                            color: tema.anaButon,
+                            fontSize: 14,
+                            fontWeight: "bold",
+                          }}
+                        >
+                          % {istatistik.yuzde} ({istatistik.sayi} Soru)
+                        </Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.barArkaplan,
+                          { backgroundColor: tema.kutuCerceve },
+                        ]}
+                      >
+                        <View
+                          style={[
+                            styles.barDolu,
+                            {
+                              backgroundColor: tema.anaButon,
+                              width: `${istatistik.yuzde}%`,
+                            },
+                          ]}
+                        />
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              <Text
+                style={[styles.altBaslik, { color: tema.metin, marginTop: 15 }]}
+              >
+                {aktifOgrenci.isim}'in Son Çözdükleri
+              </Text>
+
+              {sorularYukleniyor ? (
+                <ActivityIndicator
+                  size="large"
+                  color={tema.anaButon}
+                  style={{ marginTop: 30, marginBottom: 30 }}
+                />
+              ) : sonSorular.length > 0 ? (
+                sonSorular.map((item, index) => {
+                  const okunanTarih = new Date(item.tarih).toLocaleDateString(
+                    "tr-TR"
+                  );
+                  const cozulduMu = item.durum === "Çözüldü";
+                  const dersAdi = item.subject || item.ders || "Soru";
+
+                  return (
+                    <TouchableOpacity
+                      key={index}
+                      onPress={() => soruDetayAc(item)}
+                      style={[
+                        styles.listeElemani,
+                        {
+                          backgroundColor: tema.kutuArkaplan,
+                          borderColor: tema.kutuCerceve,
+                        },
+                      ]}
+                    >
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          flex: 1,
+                        }}
+                      >
+                        {item.fotoLink && (
+                          <Image
+                            source={{ uri: item.fotoLink }}
+                            style={{
+                              width: 50,
+                              height: 50,
+                              borderRadius: 10,
+                              marginRight: 15,
+                            }}
+                          />
+                        )}
+                        <View style={{ flex: 1, paddingRight: 10 }}>
+                          <Text
+                            style={[styles.listeBaslik, { color: tema.metin }]}
+                            numberOfLines={1}
+                          >
+                            {dersAdi}
+                          </Text>
+                          <Text
+                            style={{
+                              color: tema.ikincilMetin,
+                              fontSize: 13,
+                              marginTop: 5,
+                            }}
+                          >
+                            {okunanTarih}
+                          </Text>
+                        </View>
+                      </View>
+                      <View
+                        style={[
+                          styles.durumKutusu,
+                          {
+                            backgroundColor: cozulduMu
+                              ? (tema.aiButon || "#10B981") + "20"
+                              : tema.kutuCerceve,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={{
+                            color: cozulduMu
+                              ? tema.aiButon || "#10B981"
+                              : tema.ikincilMetin,
+                            fontWeight: "bold",
+                            fontSize: 13,
+                          }}
+                        >
+                          {item.durum}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })
+              ) : (
+                <Text
+                  style={{
+                    color: tema.ikincilMetin,
+                    textAlign: "center",
+                    marginTop: 20,
+                    marginBottom: 40,
+                    lineHeight: 22,
+                  }}
+                >
+                  Bu öğrenci henüz soru göndermedi.
+                </Text>
+              )}
+            </>
+          ) : (
+            <Text
+              style={{
+                color: tema.ikincilMetin,
+                textAlign: "center",
+                marginTop: 20,
+                marginBottom: 40,
+                lineHeight: 22,
+              }}
+            >
+              Yukarıdan bir öğrenci seçin.
+            </Text>
+          )}
+
+          <View style={{ height: 60 }} />
+        </View>
       </ScrollView>
 
       {/* Çözüm İnceleme Modalı */}
@@ -790,13 +813,16 @@ export default function ParentDashboard() {
             <View
               style={[
                 styles.modalDetayKutu,
-                { backgroundColor: tema.kutuArkaplan },
+                {
+                  backgroundColor: tema.kutuArkaplan,
+                  paddingBottom: insets.bottom + 20, // 🚀 DÜZELTME: Alt boşluk koruması
+                },
               ]}
             >
               <View style={styles.modalUstKontroller}>
                 <Text
                   style={{
-                    fontSize: 18,
+                    fontSize: 20,
                     fontWeight: "bold",
                     color: tema.metin,
                   }}
@@ -817,7 +843,7 @@ export default function ParentDashboard() {
                   </Text>
                   <Ionicons
                     name="close-outline"
-                    size={24}
+                    size={28}
                     color={tema.ikincilMetin}
                   />
                 </TouchableOpacity>
@@ -834,9 +860,11 @@ export default function ParentDashboard() {
                 )}
 
                 {cozumYukleniyor ? (
-                  <View style={{ padding: 40, alignItems: "center" }}>
+                  <View style={{ padding: 50, alignItems: "center" }}>
                     <ActivityIndicator size="large" color={tema.anaButon} />
-                    <Text style={{ color: tema.metin, marginTop: 15 }}>
+                    <Text
+                      style={{ color: tema.metin, marginTop: 20, fontSize: 16 }}
+                    >
                       Çözüm dosyası çekiliyor...
                     </Text>
                   </View>
@@ -860,7 +888,13 @@ export default function ParentDashboard() {
                         },
                       ]}
                     >
-                      <Text style={{ color: tema.metin, fontWeight: "600" }}>
+                      <Text
+                        style={{
+                          color: tema.metin,
+                          fontWeight: "600",
+                          fontSize: 15,
+                        }}
+                      >
                         📚 {seciliSoru.cozumDetayi.subject} ›{" "}
                         {seciliSoru.cozumDetayi.topic}
                       </Text>
@@ -932,7 +966,7 @@ export default function ParentDashboard() {
                     </View>
 
                     {seciliSoru.cozumKartiLink && (
-                      <View style={{ marginBottom: 25 }}>
+                      <View style={{ marginBottom: 30 }}>
                         <Text
                           style={[
                             styles.adimlarAnaBaslik,
@@ -952,12 +986,14 @@ export default function ParentDashboard() {
                     )}
                   </View>
                 ) : (
-                  <View style={{ padding: 40, alignItems: "center" }}>
+                  <View style={{ padding: 50, alignItems: "center" }}>
                     <Text
                       style={{
                         color: tema.metin,
                         marginTop: 15,
                         textAlign: "center",
+                        fontSize: 16,
+                        lineHeight: 24,
                       }}
                     >
                       Yapay zeka analiz dosyası bekleniyor...
@@ -985,7 +1021,9 @@ export default function ParentDashboard() {
                 {
                   color: tema.ikincilMetin,
                   textAlign: "center",
-                  marginBottom: 15,
+                  marginBottom: 20,
+                  fontSize: 15,
+                  lineHeight: 22,
                 },
               ]}
             >
@@ -1014,7 +1052,13 @@ export default function ParentDashboard() {
                 onPress={() => setVeliModalGorunur(false)}
                 style={styles.modalIptalButon}
               >
-                <Text style={{ color: tema.ikincilMetin, fontWeight: "bold" }}>
+                <Text
+                  style={{
+                    color: tema.ikincilMetin,
+                    fontWeight: "bold",
+                    fontSize: 16,
+                  }}
+                >
                   İptal
                 </Text>
               </TouchableOpacity>
@@ -1033,7 +1077,9 @@ export default function ParentDashboard() {
                 {yukleniyor ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={{ color: "#fff", fontWeight: "bold" }}>
+                  <Text
+                    style={{ color: "#fff", fontWeight: "bold", fontSize: 16 }}
+                  >
                     Bağla
                   </Text>
                 )}
@@ -1042,188 +1088,218 @@ export default function ParentDashboard() {
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
-  header: { marginBottom: 20, marginTop: 10 },
-  baslik: { fontSize: 24, fontWeight: "bold", marginBottom: 5 },
-  kutu: { padding: 20, borderRadius: 12, borderWidth: 1, marginBottom: 20 },
-  kutuBaslik: { fontSize: 16, fontWeight: "bold", marginBottom: 10 },
+  // 🚀 DÜZELTME: SafeAreaView Ana Kapsayıcı
+  safeArea: {
+    flex: 1,
+    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
+  },
+  // 🚀 DÜZELTME: Sayfa içi ferahlık boşluğu (Sağdan soldan)
+  innerContainer: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingTop: 10,
+  },
+
+  header: { marginBottom: 25, marginTop: 10 },
+  baslik: {
+    fontSize: 28,
+    fontWeight: "bold",
+    marginBottom: 8,
+    letterSpacing: 0.5,
+  },
+  kutu: { padding: 24, borderRadius: 20, borderWidth: 1, marginBottom: 24 }, // Padding 20->24, Radius 12->20
+  kutuBaslik: { fontSize: 18, fontWeight: "bold", marginBottom: 12 },
   kutuUstBaslik: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 15,
+    marginBottom: 20,
   },
 
   // Öğrenci Seçici (Tab) Stilleri
   ogrenciSeciciKutu: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 15,
-    borderRadius: 20,
-    borderWidth: 1,
-    marginRight: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 24,
+    borderWidth: 1.5, // Daha belirgin çerçeve
+    marginRight: 12,
   },
-  ogrenciSeciciYazi: { fontSize: 14, fontWeight: "bold", marginLeft: 8 },
+  ogrenciSeciciYazi: { fontSize: 15, fontWeight: "bold", marginLeft: 10 },
   ogrenciKucukFoto: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     borderWidth: 1.5,
   },
 
-  input: { borderWidth: 1, borderRadius: 10, padding: 12, fontSize: 16 },
+  input: { borderWidth: 1, borderRadius: 12, padding: 16, fontSize: 17 }, // Büyütüldü
   switchSatir: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 15,
+    marginTop: 20,
   },
-  switchYazi: { fontSize: 16, fontWeight: "500" },
-  altBaslik: { fontSize: 18, fontWeight: "bold", marginBottom: 15 },
+  switchYazi: { fontSize: 16, fontWeight: "600" },
+  altBaslik: { fontSize: 20, fontWeight: "bold", marginBottom: 20 },
   istatistikKutusu: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 25,
+    marginBottom: 30,
   },
   kart: {
     flex: 1,
-    padding: 20,
-    borderRadius: 12,
+    padding: 24, // Ferahlatıldı
+    borderRadius: 20, // Radius 12->20
     borderWidth: 1,
     alignItems: "center",
-    marginHorizontal: 5,
+    marginHorizontal: 6,
   },
-  kartSayi: { fontSize: 24, fontWeight: "bold", marginBottom: 5 },
-  kartYazi: { fontSize: 12, fontWeight: "500", textAlign: "center" },
+  kartSayi: { fontSize: 28, fontWeight: "bold", marginBottom: 8 },
+  kartYazi: { fontSize: 13, fontWeight: "600", textAlign: "center" },
 
   barArkaplan: {
-    height: 6,
-    borderRadius: 3,
+    height: 8, // Kalınlaştırıldı
+    borderRadius: 4,
     width: "100%",
     overflow: "hidden",
   },
-  barDolu: { height: "100%", borderRadius: 3 },
+  barDolu: { height: "100%", borderRadius: 4 },
 
   listeElemani: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 15,
-    borderRadius: 10,
+    padding: 18, // Büyütüldü
+    borderRadius: 16, // Radius artırıldı
     borderWidth: 1,
-    marginBottom: 10,
+    marginBottom: 12,
   },
-  listeBaslik: { fontSize: 16, fontWeight: "600" },
-  durumKutusu: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6 },
+  listeBaslik: { fontSize: 17, fontWeight: "700" },
+  durumKutusu: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
 
   modalOgrenciArkaplan: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "rgba(0,0,0,0.6)",
     justifyContent: "center",
-    padding: 20,
+    padding: 24, // Dış boşluk ferahlatıldı
   },
-  modalKutu: { borderRadius: 15, padding: 20 },
+  modalKutu: { borderRadius: 24, padding: 25 },
   modalBaslik: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "bold",
     textAlign: "center",
     marginBottom: 15,
   },
   modalInput: {
     borderWidth: 1,
-    borderRadius: 10,
-    padding: 15,
-    fontSize: 20,
+    borderRadius: 16, // Büyütüldü
+    padding: 18,
+    fontSize: 24, // Punto büyüdü
     textAlign: "center",
-    letterSpacing: 2,
+    letterSpacing: 4, // Harf arası açıldı
+    fontWeight: "bold",
   },
   modalButonSatir: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 15,
+    marginTop: 20,
   },
-  modalIptalButon: { padding: 15, flex: 1, alignItems: "center" },
+  modalIptalButon: { padding: 16, flex: 1, alignItems: "center" },
   modalOnayButon: {
-    padding: 15,
+    padding: 16,
     flex: 1,
-    borderRadius: 10,
+    borderRadius: 14,
     alignItems: "center",
   },
 
   // Soru Detay Modalı Stilleri
   modalArkaplan: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.8)",
+    backgroundColor: "rgba(0,0,0,0.85)", // Hafif koyulaştı
     justifyContent: "flex-end",
   },
   modalDetayKutu: {
-    borderTopLeftRadius: 25,
-    borderTopRightRadius: 25,
-    padding: 25,
-    maxHeight: "95%",
+    borderTopLeftRadius: 30, // Ovallik arttı
+    borderTopRightRadius: 30,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    maxHeight: "92%",
   },
   modalUstKontroller: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 25,
   },
   kapatButon: { flexDirection: "row", alignItems: "center" },
-  modalKapatYazi: { fontWeight: "bold", fontSize: 16, marginRight: 2 },
+  modalKapatYazi: { fontWeight: "bold", fontSize: 17, marginRight: 4 },
   modalBuyukFoto: {
     width: "100%",
-    height: 200,
-    borderRadius: 15,
-    marginBottom: 15,
+    height: 240, // Biraz daha büyütüldü
+    borderRadius: 20,
+    marginBottom: 20,
     resizeMode: "cover",
   },
   jsonArayuzKonteyner: { marginTop: 10 },
   aiEtiketKutusu: {
     backgroundColor: "#1E293B",
     alignSelf: "flex-start",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 20,
     marginBottom: 15,
   },
-  aiEtiketYazi: { color: "#fff", fontWeight: "bold", fontSize: 12 },
-  cozumAnaBaslik: { fontSize: 26, fontWeight: "900", marginBottom: 20 },
+  aiEtiketYazi: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 13,
+    letterSpacing: 0.5,
+  },
+  cozumAnaBaslik: { fontSize: 28, fontWeight: "900", marginBottom: 20 },
   bilgiEtiketi: {
-    padding: 12,
-    borderRadius: 10,
+    padding: 16, // Büyütüldü
+    borderRadius: 14,
     borderWidth: 1,
-    marginBottom: 20,
+    marginBottom: 25,
     alignItems: "center",
     borderColor: "#ccc",
   },
   adimlarKonteyner: { marginBottom: 25 },
-  adimlarAnaBaslik: { fontSize: 18, fontWeight: "bold", marginBottom: 15 },
+  adimlarAnaBaslik: { fontSize: 20, fontWeight: "bold", marginBottom: 15 },
   adimKutusu: {
     borderLeftWidth: 4,
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 12,
-  },
-  adimBaslik: { fontSize: 13, fontWeight: "bold", marginBottom: 6 },
-  adimIcerik: { fontSize: 16, lineHeight: 24 },
-  cevapKutusu: {
-    borderWidth: 1,
-    borderRadius: 15,
+    borderRadius: 12,
     padding: 20,
-    marginBottom: 25,
+    marginBottom: 15,
   },
-  cevapMetni: { fontSize: 28, fontWeight: "900" },
-  kucukBaslik: {
+  adimBaslik: {
     fontSize: 14,
     fontWeight: "bold",
     marginBottom: 8,
+    letterSpacing: 0.5,
+  },
+  adimIcerik: { fontSize: 17, lineHeight: 26 },
+  cevapKutusu: {
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 25,
+    marginBottom: 30,
+    alignItems: "center",
+  },
+  cevapMetni: { fontSize: 32, fontWeight: "900", marginTop: 5 },
+  kucukBaslik: {
+    fontSize: 15,
+    fontWeight: "bold",
+    marginBottom: 10,
     textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   tamEkranArkaplan: {
     flex: 1,
@@ -1241,8 +1317,8 @@ const styles = StyleSheet.create({
     top: 50,
     right: 20,
     backgroundColor: "rgba(255,255,255,0.2)",
-    padding: 10,
-    borderRadius: 20,
+    padding: 12,
+    borderRadius: 25,
     zIndex: 10,
   },
 });

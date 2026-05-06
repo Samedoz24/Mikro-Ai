@@ -17,6 +17,9 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 
+// 🚀 YENİ: Modern Güvenli Alan Sağlayıcısı eklendi
+import { SafeAreaProvider } from "react-native-safe-area-context";
+
 import { ThemeProvider, useTheme } from "./ThemeContext";
 import { sendQuestionSolvedNotification } from "./utils/notificationManager";
 
@@ -43,9 +46,6 @@ function MainApp() {
   useEffect(() => {
     const abonelik = onAuthStateChanged(auth, async (aktifKullanici) => {
       if (aktifKullanici) {
-        // 🚀 DÜZELTME: Buradaki "setYukleniyor(true);" komutu SİLİNDİ.
-        // Artık Firebase verileri çekerken kullanıcıyı kaba bir şekilde boş sayfaya atmayacak!
-
         try {
           const userDocRef = doc(db, "kullanicilar", aktifKullanici.uid);
           const userDoc = await getDoc(userDocRef);
@@ -97,7 +97,6 @@ function MainApp() {
       } else {
         setKullanici(null);
       }
-      // Sadece uygulamanın ilk açılışındaki siyah ekranı kaldırmak için false yapıyoruz
       setYukleniyor(false);
     });
 
@@ -181,20 +180,15 @@ function MainApp() {
 
             return <Ionicons name={iconName} size={size} color={color} />;
           },
-          headerTitleAlign: "center",
+          // 🚀 MUAZZAM UX GÜNCELLEMESİ: Üstteki kaba başlık şeridi tamamen yok edildi!
+          headerShown: false,
+
           tabBarActiveTintColor: tema.anaButon,
           tabBarInactiveTintColor: tema.ikincilMetin,
           tabBarStyle: {
             backgroundColor: tema.kutuArkaplan,
             borderTopColor: tema.kutuCerceve,
           },
-          headerStyle: {
-            backgroundColor: tema.kutuArkaplan,
-            borderBottomColor: tema.kutuCerceve,
-            borderBottomWidth: 1,
-          },
-          headerTintColor: tema.metin,
-          headerTitleStyle: { fontWeight: "bold" },
         })}
       >
         {kullaniciRolu === "ogrenci" ? (
@@ -245,8 +239,11 @@ function MainApp() {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <MainApp />
-    </ThemeProvider>
+    // 🚀 YENİ: Modern Güvenli Alan Sağlayıcısı
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <MainApp />
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }

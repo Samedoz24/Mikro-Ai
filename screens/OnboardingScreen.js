@@ -6,6 +6,7 @@ import {
   FlatList,
   Dimensions,
   TouchableOpacity,
+  StatusBar,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import LottieView from "lottie-react-native";
@@ -50,7 +51,7 @@ const SLIDES = [
 ];
 
 export default function OnboardingScreen({ onTamamla }) {
-  const { tema } = useTheme();
+  const { tema, temaModu } = useTheme();
   const [mevcutSayfa, setMevcutSayfa] = useState(0);
   const flatListRef = useRef(null);
 
@@ -97,6 +98,11 @@ export default function OnboardingScreen({ onTamamla }) {
     <SafeAreaView
       style={[styles.container, { backgroundColor: tema.arkaplan }]}
     >
+      <StatusBar
+        barStyle={temaModu === "dark" ? "light-content" : "dark-content"}
+        backgroundColor={tema.arkaplan}
+      />
+
       <FlatList
         ref={flatListRef}
         data={SLIDES}
@@ -120,7 +126,7 @@ export default function OnboardingScreen({ onTamamla }) {
                 {
                   backgroundColor:
                     mevcutSayfa === index ? tema.anaButon : tema.kutuCerceve,
-                  width: mevcutSayfa === index ? 20 : 10,
+                  width: mevcutSayfa === index ? 24 : 8,
                 },
               ]}
             />
@@ -130,6 +136,7 @@ export default function OnboardingScreen({ onTamamla }) {
         <TouchableOpacity
           style={[styles.buton, { backgroundColor: tema.anaButon }]}
           onPress={IleriGit}
+          activeOpacity={0.8}
         >
           <Text style={styles.butonYazi}>
             {mevcutSayfa === SLIDES.length - 1 ? "Hemen Başla" : "İleri"}
@@ -156,9 +163,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  // 🚀 DÜZELTME: Evrensel (Responsive) Boyutlandırma Algoritması Eklendi
   animasyon: {
-    width: width * 0.8,
-    height: width * 0.8,
+    width: Math.min(width * 0.7, 320), // Telefonlarda %70 oran, Tabletlerde maks 320px
+    height: Math.min(width * 0.7, 320),
   },
   metinKonteyner: {
     flex: 0.4,
@@ -166,21 +174,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   baslik: {
-    fontSize: 26,
-    fontWeight: "bold",
+    fontSize: 28,
+    fontWeight: "900",
     textAlign: "center",
-    marginBottom: 15,
+    marginBottom: 16,
+    letterSpacing: 0.5,
   },
   aciklama: {
     fontSize: 16,
     textAlign: "center",
-    lineHeight: 24,
+    lineHeight: 26,
   },
   altKisim: {
     height: height * 0.2,
     justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingBottom: 40,
+    paddingHorizontal: 24,
+    paddingBottom: 20,
+    paddingTop: 10,
   },
   noktaKonteyner: {
     flexDirection: "row",
@@ -188,19 +198,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   nokta: {
-    height: 10,
-    borderRadius: 5,
+    height: 8,
+    borderRadius: 4,
     marginHorizontal: 5,
   },
   buton: {
-    height: 55,
-    borderRadius: 12,
+    height: 60,
+    borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
   },
   butonYazi: {
     color: "#fff",
     fontSize: 18,
     fontWeight: "bold",
+    letterSpacing: 0.5,
   },
 });

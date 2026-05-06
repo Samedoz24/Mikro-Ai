@@ -11,12 +11,16 @@ import {
   Modal,
   Dimensions,
   ScrollView,
+  StatusBar,
 } from "react-native";
+// 🚀 DÜZELTME: Eski uyarı veren kütüphane yerine yeni modern kütüphane eklendi!
+import { SafeAreaView } from "react-native-safe-area-context";
+
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import { Ionicons } from "@expo/vector-icons";
 
-// 📱 Cihaz Kimliği Kütüphanesi (Sahte hesapları engeller)
+// 📱 Cihaz Kimliği Kütüphanesi
 import * as Application from "expo-application";
 
 // 🎉 Konfeti Animasyonu Kütüphanesi
@@ -42,11 +46,9 @@ export default function HomeScreen() {
   const [yukleniyor, setYukleniyor] = useState(false);
   const [image, setImage] = useState(null);
 
-  // 🚀 SERİ MODAL STATE
   const [seriModalGorunur, setSeriModalGorunur] = useState(false);
   const [guncelSeriSayisi, setGuncelSeriSayisi] = useState(0);
 
-  // 💎 PREMIUM MODAL STATE
   const [premiumModalGorunur, setPremiumModalGorunur] = useState(false);
   const [seciliPaket, setSeciliPaket] = useState("yillik");
 
@@ -179,16 +181,13 @@ export default function HomeScreen() {
         return;
       }
 
-      // 🚀 YENİ: Firebase'den kullanıcının Premium olup olmadığını kontrol et
       const kullaniciRef = doc(db, "kullanicilar", auth.currentUser.uid);
       const kullaniciSnap = await getDoc(kullaniciRef);
       const isPremium = kullaniciSnap.exists()
         ? kullaniciSnap.data().premiumMu === true
         : false;
 
-      // 💎 Adil Kullanım Kotası: Premium ise 50, Değilse 3
       const maxKota = isPremium ? 50 : 3;
-
       const cihazId = await getDeviceId();
 
       const simdi = new Date();
@@ -207,27 +206,23 @@ export default function HomeScreen() {
         if (data.tarih === bugunYerel) {
           mevcutKota = data.kalanSoru !== undefined ? data.kalanSoru : maxKota;
 
-          // 🚀 YENİ: Zeka Algoritması. Kullanıcı bugün Premium aldıysa limitini anında 50'ye tamamla
           const eskiToplamHak = data.toplamHak || 3;
           if (maxKota === 50 && eskiToplamHak === 3) {
-            mevcutKota += 47; // 3'ten 50'ye yükseldi
+            mevcutKota += 47;
           } else if (maxKota === 3 && eskiToplamHak === 50) {
-            mevcutKota = Math.max(0, mevcutKota - 47); // Premium aboneliği bittiyse limitleri geri al
+            mevcutKota = Math.max(0, mevcutKota - 47);
           }
         }
       }
 
-      // 💎 LİMİT KONTROLÜ
       if (mevcutKota <= 0) {
         setYukleniyor(false);
         if (isPremium) {
-          // Premium bir kullanıcı 50 soruyu bitirdiyse adil kullanım uyarısı verilir
           Alert.alert(
             "Günlük Limit Doldu",
             "Premium adil kullanım kotanızı (Günlük 50 Soru) doldurdunuz. Lütfen yarın tekrar deneyin."
           );
         } else {
-          // Normal bir kullanıcı 3 soruyu bitirdiyse satın alma ekranı açılır
           setPremiumModalGorunur(true);
         }
         return;
@@ -268,13 +263,12 @@ export default function HomeScreen() {
         durum: "Bekliyor",
       });
 
-      // 🛡️ YENİ: Cihazın kalan kotasını ve "Mevcut Limit Tipini (3 veya 50)" kaydet
       await setDoc(
         cihazRef,
         {
           kalanSoru: mevcutKota - 1,
           tarih: bugunYerel,
-          toplamHak: maxKota, // Limit takibi için eklendi
+          toplamHak: maxKota,
         },
         { merge: true }
       );
@@ -299,353 +293,403 @@ export default function HomeScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: tema.arkaplan }]}>
-      {/* 🚀 SERİ MODALI */}
-      <Modal visible={seriModalGorunur} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          {seriModalGorunur && (
-            <ConfettiCannon
-              count={200}
-              origin={{ x: screenWidth / 2, y: -20 }}
-              autoStart={true}
-              fadeOut={true}
-              fallSpeed={2500}
-            />
-          )}
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: tema.arkaplan }]}>
+      <StatusBar
+        barStyle={temaModu === "dark" ? "light-content" : "dark-content"}
+        backgroundColor={tema.arkaplan}
+      />
 
-          <View
-            style={[styles.modalKutu, { backgroundColor: tema.kutuArkaplan }]}
-          >
-            <View style={styles.ikonCember}>
-              <Ionicons name="flame" size={50} color="#FF9800" />
+      <View style={styles.innerContainer}>
+        <Modal visible={seriModalGorunur} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            {seriModalGorunur && (
+              <ConfettiCannon
+                count={200}
+                origin={{ x: screenWidth / 2, y: -20 }}
+                autoStart={true}
+                fadeOut={true}
+                fallSpeed={2500}
+              />
+            )}
+
+            <View
+              style={[styles.modalKutu, { backgroundColor: tema.kutuArkaplan }]}
+            >
+              <View style={styles.ikonCember}>
+                <Ionicons name="flame" size={50} color="#FF9800" />
+              </View>
+              <Text style={[styles.modalBaslik, { color: tema.metin }]}>
+                {guncelSeriSayisi} GÜNLÜK SERİ!
+              </Text>
+              <Text style={[styles.modalMesaj, { color: tema.ikincilMetin }]}>
+                Harika gidiyorsun! Bugün de buradasın ve serini korudun. Hadi
+                bir soru çözerek günü taçlandır!
+              </Text>
+              <TouchableOpacity
+                onPress={() => setSeriModalGorunur(false)}
+                style={[styles.modalButon, { backgroundColor: tema.anaButon }]}
+              >
+                <Text style={styles.modalButonYazi}>Devam Et</Text>
+              </TouchableOpacity>
             </View>
-            <Text style={[styles.modalBaslik, { color: tema.metin }]}>
-              {guncelSeriSayisi} GÜNLÜK SERİ!
-            </Text>
-            <Text style={[styles.modalMesaj, { color: tema.ikincilMetin }]}>
-              Harika gidiyorsun! Bugün de buradasın ve serini korudun. Hadi bir
-              soru çözerek günü taçlandır!
-            </Text>
-            <TouchableOpacity
-              onPress={() => setSeriModalGorunur(false)}
-              style={[styles.modalButon, { backgroundColor: tema.anaButon }]}
-            >
-              <Text style={styles.modalButonYazi}>Devam Et</Text>
-            </TouchableOpacity>
           </View>
-        </View>
-      </Modal>
+        </Modal>
 
-      {/* 💎 PREMIUM MODALI (Altın Fiyatlandırma Stratejisi İle) */}
-      <Modal visible={premiumModalGorunur} transparent animationType="slide">
-        <TouchableOpacity
-          style={styles.premiumOverlay}
-          activeOpacity={1}
-          onPress={() => setPremiumModalGorunur(false)}
-        >
+        <Modal visible={premiumModalGorunur} transparent animationType="slide">
           <TouchableOpacity
+            style={styles.premiumOverlay}
             activeOpacity={1}
-            style={[
-              styles.premiumKutu,
-              { backgroundColor: temaModu === "dark" ? "#1E293B" : "#fff" },
-            ]}
+            onPress={() => setPremiumModalGorunur(false)}
           >
             <TouchableOpacity
-              style={styles.kapatIkon}
-              onPress={() => setPremiumModalGorunur(false)}
+              activeOpacity={1}
+              style={[
+                styles.premiumKutu,
+                { backgroundColor: temaModu === "dark" ? "#1E293B" : "#fff" },
+              ]}
             >
-              <Ionicons name="close" size={28} color={tema.ikincilMetin} />
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.kapatIkon}
+                onPress={() => setPremiumModalGorunur(false)}
+              >
+                <Ionicons name="close" size={28} color={tema.ikincilMetin} />
+              </TouchableOpacity>
 
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{
-                alignItems: "center",
-                paddingBottom: 20,
-              }}
-            >
-              <View style={styles.premiumIkonCember}>
-                <Ionicons name="star" size={40} color="#FFD700" />
-              </View>
-
-              <Text style={[styles.premiumAnaBaslik, { color: tema.metin }]}>
-                Premium'a Geç
-              </Text>
-              <Text style={styles.premiumAltYazi}>
-                Bugünkü ücretsiz hakların bitti. Sınırları kaldır ve tüm
-                özelliklere anında eriş!
-              </Text>
-
-              <View style={styles.avantajKutusu}>
-                <View style={styles.avantajSatiri}>
-                  <Ionicons name="checkmark-circle" size={22} color="#10B981" />
-                  <Text style={[styles.avantajYazi, { color: tema.metin }]}>
-                    Sınırsız Soru Çözümü (Günde 50 Soru)
-                  </Text>
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{
+                  alignItems: "center",
+                  paddingBottom: 20,
+                }}
+              >
+                <View style={styles.premiumIkonCember}>
+                  <Ionicons name="star" size={40} color="#FFD700" />
                 </View>
-                <View style={styles.avantajSatiri}>
-                  <Ionicons name="checkmark-circle" size={22} color="#10B981" />
-                  <Text style={[styles.avantajYazi, { color: tema.metin }]}>
-                    Anında Detaylı Açıklamalar
-                  </Text>
-                </View>
-                <View style={styles.avantajSatiri}>
-                  <Ionicons name="checkmark-circle" size={22} color="#10B981" />
-                  <Text style={[styles.avantajYazi, { color: tema.metin }]}>
-                    Hata Defterini PDF İndirme
-                  </Text>
-                </View>
-                <View style={styles.avantajSatiri}>
-                  <Ionicons name="checkmark-circle" size={22} color="#10B981" />
-                  <Text style={[styles.avantajYazi, { color: tema.metin }]}>
-                    VIP Öncelikli Sunucu Hızı
-                  </Text>
-                </View>
-              </View>
 
-              <View style={styles.paketlerKapsayici}>
-                {/* AYLIK PAKET */}
-                <TouchableOpacity
-                  onPress={() => setSeciliPaket("aylik")}
-                  style={[
-                    styles.paketKutu,
-                    {
-                      borderColor:
-                        seciliPaket === "aylik" ? "#FFD700" : tema.kutuCerceve,
-                      backgroundColor:
-                        seciliPaket === "aylik"
-                          ? temaModu === "dark"
-                            ? "#332a00"
-                            : "#FFFBEB"
-                          : tema.arkaplan,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.paketIsmi, { color: tema.metin }]}>
-                    1 Aylık
-                  </Text>
-                  <Text style={[styles.paketFiyat, { color: tema.metin }]}>
-                    349 ₺
-                  </Text>
-                </TouchableOpacity>
+                <Text style={[styles.premiumAnaBaslik, { color: tema.metin }]}>
+                  Premium'a Geç
+                </Text>
+                <Text style={styles.premiumAltYazi}>
+                  Bugünkü ücretsiz hakların bitti. Sınırları kaldır ve tüm
+                  özelliklere anında eriş!
+                </Text>
 
-                {/* 3 AYLIK PAKET */}
-                <TouchableOpacity
-                  onPress={() => setSeciliPaket("uc_aylik")}
-                  style={[
-                    styles.paketKutu,
-                    {
-                      borderColor:
-                        seciliPaket === "uc_aylik"
-                          ? "#FFD700"
-                          : tema.kutuCerceve,
-                      backgroundColor:
-                        seciliPaket === "uc_aylik"
-                          ? temaModu === "dark"
-                            ? "#332a00"
-                            : "#FFFBEB"
-                          : tema.arkaplan,
-                    },
-                  ]}
-                >
-                  <View style={styles.indirimEtiketi}>
-                    <Text style={styles.indirimYazisi}>%23 İndirim</Text>
-                  </View>
-                  <Text style={[styles.paketIsmi, { color: tema.metin }]}>
-                    3 Aylık
-                  </Text>
-                  <Text style={[styles.paketFiyat, { color: tema.metin }]}>
-                    799 ₺
-                  </Text>
-                  <Text style={styles.eskiFiyat}>1047 ₺</Text>
-                </TouchableOpacity>
-
-                {/* YILLIK PAKET */}
-                <TouchableOpacity
-                  onPress={() => setSeciliPaket("yillik")}
-                  style={[
-                    styles.paketKutu,
-                    {
-                      borderColor:
-                        seciliPaket === "yillik" ? "#FFD700" : tema.kutuCerceve,
-                      backgroundColor:
-                        seciliPaket === "yillik"
-                          ? temaModu === "dark"
-                            ? "#332a00"
-                            : "#FFFBEB"
-                          : tema.arkaplan,
-                    },
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.indirimEtiketi,
-                      { backgroundColor: "#FFD700" },
-                    ]}
-                  >
-                    <Text style={[styles.indirimYazisi, { color: "#000" }]}>
-                      En Popüler
+                <View style={styles.avantajKutusu}>
+                  <View style={styles.avantajSatiri}>
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={22}
+                      color="#10B981"
+                    />
+                    <Text style={[styles.avantajYazi, { color: tema.metin }]}>
+                      Sınırsız Soru Çözümü (Günde 50 Soru)
                     </Text>
                   </View>
-                  <Text style={[styles.paketIsmi, { color: tema.metin }]}>
-                    12 Aylık
-                  </Text>
-                  <Text style={[styles.paketFiyat, { color: tema.metin }]}>
-                    1999 ₺
-                  </Text>
-                  <Text style={styles.eskiFiyat}>4188 ₺</Text>
-                  <Text
-                    style={{
-                      fontSize: 10,
-                      color: tema.ikincilMetin,
-                      marginTop: 2,
-                    }}
+                  <View style={styles.avantajSatiri}>
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={22}
+                      color="#10B981"
+                    />
+                    <Text style={[styles.avantajYazi, { color: tema.metin }]}>
+                      Anında Detaylı Açıklamalar
+                    </Text>
+                  </View>
+                  <View style={styles.avantajSatiri}>
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={22}
+                      color="#10B981"
+                    />
+                    <Text style={[styles.avantajYazi, { color: tema.metin }]}>
+                      Hata Defterini PDF İndirme
+                    </Text>
+                  </View>
+                  <View style={styles.avantajSatiri}>
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={22}
+                      color="#10B981"
+                    />
+                    <Text style={[styles.avantajYazi, { color: tema.metin }]}>
+                      VIP Öncelikli Sunucu Hızı
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.paketlerKapsayici}>
+                  <TouchableOpacity
+                    onPress={() => setSeciliPaket("aylik")}
+                    style={[
+                      styles.paketKutu,
+                      {
+                        borderColor:
+                          seciliPaket === "aylik"
+                            ? "#FFD700"
+                            : tema.kutuCerceve,
+                        backgroundColor:
+                          seciliPaket === "aylik"
+                            ? temaModu === "dark"
+                              ? "#332a00"
+                              : "#FFFBEB"
+                            : tema.arkaplan,
+                      },
+                    ]}
                   >
-                    %52 İndirim
-                  </Text>
+                    <Text style={[styles.paketIsmi, { color: tema.metin }]}>
+                      1 Aylık
+                    </Text>
+                    <Text style={[styles.paketFiyat, { color: tema.metin }]}>
+                      349 ₺
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => setSeciliPaket("uc_aylik")}
+                    style={[
+                      styles.paketKutu,
+                      {
+                        borderColor:
+                          seciliPaket === "uc_aylik"
+                            ? "#FFD700"
+                            : tema.kutuCerceve,
+                        backgroundColor:
+                          seciliPaket === "uc_aylik"
+                            ? temaModu === "dark"
+                              ? "#332a00"
+                              : "#FFFBEB"
+                            : tema.arkaplan,
+                      },
+                    ]}
+                  >
+                    <View style={styles.indirimEtiketi}>
+                      <Text style={styles.indirimYazisi}>%23 İndirim</Text>
+                    </View>
+                    <Text style={[styles.paketIsmi, { color: tema.metin }]}>
+                      3 Aylık
+                    </Text>
+                    <Text style={[styles.paketFiyat, { color: tema.metin }]}>
+                      799 ₺
+                    </Text>
+                    <Text style={styles.eskiFiyat}>1047 ₺</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => setSeciliPaket("yillik")}
+                    style={[
+                      styles.paketKutu,
+                      {
+                        borderColor:
+                          seciliPaket === "yillik"
+                            ? "#FFD700"
+                            : tema.kutuCerceve,
+                        backgroundColor:
+                          seciliPaket === "yillik"
+                            ? temaModu === "dark"
+                              ? "#332a00"
+                              : "#FFFBEB"
+                            : tema.arkaplan,
+                      },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.indirimEtiketi,
+                        { backgroundColor: "#FFD700" },
+                      ]}
+                    >
+                      <Text style={[styles.indirimYazisi, { color: "#000" }]}>
+                        En Popüler
+                      </Text>
+                    </View>
+                    <Text style={[styles.paketIsmi, { color: tema.metin }]}>
+                      12 Aylık
+                    </Text>
+                    <Text style={[styles.paketFiyat, { color: tema.metin }]}>
+                      1999 ₺
+                    </Text>
+                    <Text style={styles.eskiFiyat}>4188 ₺</Text>
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        color: tema.ikincilMetin,
+                        marginTop: 2,
+                      }}
+                    >
+                      %52 İndirim
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity
+                  onPress={premiumSatinAl}
+                  style={styles.satinAlButon}
+                >
+                  <Text style={styles.satinAlYazi}>Devam Et</Text>
                 </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity
-                onPress={premiumSatinAl}
-                style={styles.satinAlButon}
-              >
-                <Text style={styles.satinAlYazi}>Devam Et</Text>
-              </TouchableOpacity>
-            </ScrollView>
+              </ScrollView>
+            </TouchableOpacity>
           </TouchableOpacity>
+        </Modal>
+
+        <View style={styles.header}>
+          <Text style={[styles.baslik, { color: tema.metin }]}>
+            Soru Tarayıcı
+          </Text>
+          <Text style={[styles.altYazi, { color: tema.ikincilMetin }]}>
+            Çözemediğin sorunun fotoğrafını çek, yapay zeka özel hocan anında
+            anlatsın.
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={!image ? kamerayiAc : undefined}
+          style={[
+            styles.onizlemeKutusu,
+            {
+              backgroundColor: tema.kutuArkaplan,
+              borderColor: tema.anaButon,
+              borderStyle: image ? "solid" : "dashed",
+            },
+          ]}
+        >
+          {image ? (
+            <Image source={{ uri: image }} style={styles.foto} />
+          ) : (
+            <View style={styles.bosDurum}>
+              <Ionicons
+                name="camera-outline"
+                size={60}
+                color={tema.ikincilMetin}
+                style={styles.ikon}
+              />
+              <Text style={[styles.bosDurumYazi, { color: tema.ikincilMetin }]}>
+                Kamerayı açmak için butona dokun
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
-      </Modal>
 
-      <View style={styles.header}>
-        <Text style={[styles.baslik, { color: tema.metin }]}>
-          Soru Tarayıcı
-        </Text>
-        <Text style={[styles.altYazi, { color: tema.ikincilMetin }]}>
-          Çözemediğin sorunun fotoğrafını çek, yapay zeka özel hocan anında
-          anlatsın.
-        </Text>
-      </View>
-
-      <TouchableOpacity
-        activeOpacity={0.8}
-        onPress={!image ? kamerayiAc : undefined}
-        style={[
-          styles.onizlemeKutusu,
-          {
-            backgroundColor: tema.kutuArkaplan,
-            borderColor: tema.anaButon,
-            borderStyle: image ? "solid" : "dashed",
-          },
-        ]}
-      >
-        {image ? (
-          <Image source={{ uri: image }} style={styles.foto} />
-        ) : (
-          <View style={styles.bosDurum}>
-            <Ionicons
-              name="camera-outline"
-              size={60}
-              color={tema.ikincilMetin}
-              style={styles.ikon}
-            />
-            <Text style={[styles.bosDurumYazi, { color: tema.ikincilMetin }]}>
-              Kamerayı açmak için butona dokun
-            </Text>
-          </View>
-        )}
-      </TouchableOpacity>
-
-      <View style={styles.butonAlani}>
-        {!image ? (
-          <TouchableOpacity
-            onPress={kamerayiAc}
-            style={[styles.tekliButon, { backgroundColor: tema.anaButon }]}
-          >
-            <Text style={styles.butonYazi}>Kamerayı Aç</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.ikiliButonKutusu}>
+        <View style={styles.butonAlani}>
+          {!image ? (
             <TouchableOpacity
-              onPress={fotografiIptalEt}
-              disabled={yukleniyor}
-              style={[
-                styles.ikiliButon,
-                {
-                  backgroundColor: tema.hataKirmizi,
-                  marginRight: 10,
-                  opacity: yukleniyor ? 0.5 : 1,
-                },
-              ]}
+              onPress={kamerayiAc}
+              style={[styles.tekliButon, { backgroundColor: tema.anaButon }]}
             >
-              <Text style={styles.butonYazi}>İptal Et</Text>
+              <Text style={styles.butonYazi}>Kamerayı Aç</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              onPress={fotografiGonder}
-              disabled={yukleniyor}
-              style={[
-                styles.ikiliButon,
-                {
-                  backgroundColor: yukleniyor
-                    ? tema.ikincilMetin
-                    : tema.anaButon,
-                },
-              ]}
-            >
-              {yukleniyor ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.butonYazi}>Gönder</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        )}
+          ) : (
+            <View style={styles.ikiliButonKutusu}>
+              <TouchableOpacity
+                onPress={fotografiIptalEt}
+                disabled={yukleniyor}
+                style={[
+                  styles.ikiliButon,
+                  {
+                    backgroundColor: tema.hataKirmizi,
+                    marginRight: 15,
+                    opacity: yukleniyor ? 0.5 : 1,
+                  },
+                ]}
+              >
+                <Text style={styles.butonYazi}>İptal Et</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={fotografiGonder}
+                disabled={yukleniyor}
+                style={[
+                  styles.ikiliButon,
+                  {
+                    backgroundColor: yukleniyor
+                      ? tema.ikincilMetin
+                      : tema.anaButon,
+                  },
+                ]}
+              >
+                {yukleniyor ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.butonYazi}>Gönder</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
-  header: { marginTop: 20, marginBottom: 30, alignItems: "center" },
-  baslik: { fontSize: 28, fontWeight: "bold", marginBottom: 10 },
+  safeArea: {
+    flex: 1,
+    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
+  },
+  innerContainer: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingTop: 15,
+    paddingBottom: 20,
+  },
+  header: { marginBottom: 35, alignItems: "center" },
+  baslik: {
+    fontSize: 28,
+    fontWeight: "bold",
+    marginBottom: 10,
+    letterSpacing: 0.5,
+  },
   altYazi: {
     fontSize: 15,
     textAlign: "center",
-    paddingHorizontal: 10,
+    paddingHorizontal: 5,
     lineHeight: 22,
   },
   onizlemeKutusu: {
     flex: 1,
     borderWidth: 2,
-    borderRadius: 20,
+    borderRadius: 24,
     justifyContent: "center",
     alignItems: "center",
     overflow: "hidden",
-    marginBottom: 30,
+    marginBottom: 35,
   },
   bosDurum: { alignItems: "center", padding: 20 },
   ikon: { marginBottom: 15, opacity: 0.8 },
   bosDurumYazi: { fontSize: 16, textAlign: "center", fontWeight: "500" },
   foto: { width: "100%", height: "100%", resizeMode: "cover" },
-  butonAlani: { paddingBottom: 20 },
+  butonAlani: {
+    paddingBottom: Platform.OS === "ios" ? 10 : 20,
+  },
   tekliButon: {
     paddingVertical: 18,
-    borderRadius: 15,
+    borderRadius: 16,
     alignItems: "center",
     elevation: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
   },
   ikiliButonKutusu: { flexDirection: "row", justifyContent: "space-between" },
   ikiliButon: {
     flex: 1,
     paddingVertical: 18,
-    borderRadius: 15,
+    borderRadius: 16,
     alignItems: "center",
     elevation: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
   },
-  butonYazi: { color: "#fff", fontSize: 16, fontWeight: "bold" },
+  butonYazi: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+    letterSpacing: 0.5,
+  },
 
-  // Seri Modal Stilleri
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.75)",
@@ -697,7 +741,6 @@ const styles = StyleSheet.create({
     fontSize: 17,
   },
 
-  // 💎 PREMIUM MODAL STİLLERİ
   premiumOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.85)",

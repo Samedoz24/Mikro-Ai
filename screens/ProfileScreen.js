@@ -14,11 +14,14 @@ import {
   Platform,
   Pressable,
   StatusBar,
+  Share,
+  Linking,
+  KeyboardAvoidingView,
 } from "react-native";
 
-// 🚀 YENİ: Başlığın çentiğin arkasına mükemmel oturması için Insets kancası ve WebView
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
+import { useIsFocused } from "@react-navigation/native";
 
 // Firebase Kütüphaneleri
 import { auth, db, storage } from "../firebaseConfig";
@@ -39,15 +42,9 @@ import { ref, deleteObject } from "firebase/storage";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
-
-// 📷 Resim ve Dosya Kütüphaneleri
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system/legacy";
-
-// 📱 CİHAZ KİMLİĞİ KÜTÜPHANESİ
 import * as Application from "expo-application";
-
-// 🔔 BİLDİRİM YÖNETİCİSİ VE KÜTÜPHANESİ
 import * as Notifications from "expo-notifications";
 import {
   registerForPushNotificationsAsync,
@@ -55,16 +52,15 @@ import {
   cancelAllNotifications,
 } from "../utils/notificationManager";
 
-// 🌗 TEMA YÖNETİCİSİ VE RENKLER
 import { useTheme } from "../ThemeContext";
 import { colors } from "../theme";
 
 export default function ProfileScreen() {
   const user = auth.currentUser;
   const insets = useSafeAreaInsets();
+  const isFocused = useIsFocused();
 
   const { tema, temaModu, temaDegistir } = useTheme();
-
   const isGercektenKaranlik = tema.arkaplan === colors.dark.arkaplan;
 
   const [rol, setRol] = useState("ogrenci");
@@ -90,10 +86,13 @@ export default function ProfileScreen() {
   const [dersIstatistikleri, setDersIstatistikleri] = useState([]);
   const [istatistikYukleniyor, setIstatistikYukleniyor] = useState(true);
 
-  // 🚀 YENİ: WebView Modalları için Stateler
   const [webViewModalGorunur, setWebViewModalGorunur] = useState(false);
   const [webViewBaslik, setWebViewBaslik] = useState("");
   const [webViewHtml, setWebViewHtml] = useState("");
+
+  const [hesapSilModalGorunur, setHesapSilModalGorunur] = useState(false);
+  const [silOnayMetni, setSilOnayMetni] = useState("");
+  const [hesapSiliniyor, setHesapSiliniyor] = useState(false);
 
   const rastgeleKodUret = () => {
     const karakterler = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -543,71 +542,89 @@ export default function ProfileScreen() {
     );
   };
 
-  const hesabiSil = () => {
-    Alert.alert(
-      "Hesabı Sil",
-      "Tüm verileriniz kalıcı olarak silinecektir. Bu işlem geri alınamaz.",
-      [
-        { text: "Vazgeç", style: "cancel" },
-        {
-          text: "Sil",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              if (user) {
-                await cancelAllNotifications();
-                await deleteDoc(doc(db, "kullanicilar", user.uid));
-                await AsyncStorage.multiRemove([
-                  "adSoyad",
-                  "seciliSinif",
-                  "kullaniciRolu",
-                  "bildirimAktif",
-                  "profilFoto",
-                  "seriGunu",
-                ]);
-                await deleteUser(user);
-              }
-            } catch (error) {
-              if (error.code === "auth/requires-recent-login") {
-                Alert.alert(
-                  "Güvenlik Doğrulaması",
-                  "Güvenliğiniz için hesabınızı silmeden önce yeniden giriş yapmanız gerekiyor. Lütfen çıkış yapıp tekrar giriş yapın.",
-                  [
-                    { text: "İptal", style: "cancel" },
-                    {
-                      text: "Çıkış Yap",
-                      onPress: cikisYap,
-                      style: "destructive",
-                    },
-                  ]
-                );
-              } else {
-                Alert.alert("Hata", "Hesap silinirken hata oluştu.");
-              }
-            }
-          },
-        },
-      ]
-    );
+  const bizeUlasin = () => {
+    Linking.openURL(
+      "mailto:destek@mikroai.com?subject=Mikro AI Destek Talebi&body=Merhaba, şöyle bir konu hakkında yardıma ihtiyacım var: "
+    ).catch(() => {
+      Alert.alert(
+        "Hata",
+        "Telefonunuzda kurulu bir mail uygulaması bulunamadı."
+      );
+    });
   };
 
-  // 🚀 YENİ: Uygulama İçi HTML Şablonları (Yapay Zeka Destekli)
-  const htmlSablonUret = (baslik, icerikHtml) => {
+  // 🚀 GÜNCELLENEN: Paylaşım Linki daha profesyonel hale getirildi
+  const uygulamayiPaylas = async () => {
+    try {
+      await Share.share({
+        message:
+          "Mikro AI ile çözemediğim soru kalmadı! 🚀 Yapay zeka destekli bu harika eğitim uygulaması çok yakında App Store ve Google Play'de. Hazır ol!",
+      });
+    } catch (error) {
+      console.log("Paylaşım hatası:", error);
+    }
+  };
+
+  const guvenliHesabiSil = async () => {
+    if (silOnayMetni !== "SİL") {
+      Alert.alert("Hata", "Lütfen kutucuğa büyük harflerle SİL yazın.");
+      return;
+    }
+
+    setHesapSiliniyor(true);
+    try {
+      if (user) {
+        await cancelAllNotifications();
+        await deleteDoc(doc(db, "kullanicilar", user.uid));
+        await AsyncStorage.multiRemove([
+          "adSoyad",
+          "seciliSinif",
+          "kullaniciRolu",
+          "bildirimAktif",
+          "profilFoto",
+          "seriGunu",
+        ]);
+        await deleteUser(user);
+      }
+    } catch (error) {
+      setHesapSiliniyor(false);
+      setHesapSilModalGorunur(false);
+      if (error.code === "auth/requires-recent-login") {
+        Alert.alert(
+          "Güvenlik Doğrulaması",
+          "Güvenliğiniz için hesabınızı silmeden önce yeniden giriş yapmanız gerekiyor. Lütfen çıkış yapıp tekrar giriş yapın.",
+          [
+            { text: "İptal", style: "cancel" },
+            {
+              text: "Çıkış Yap",
+              onPress: cikisYap,
+              style: "destructive",
+            },
+          ]
+        );
+      } else {
+        Alert.alert("Hata", "Hesap silinirken hata oluştu.");
+      }
+    }
+  };
+
+  const htmlSablonUret = (baslik, altBaslik, icerikHtml) => {
     const isDark = temaModu === "dark";
     const bg = isDark ? "#121212" : "#FFFFFF";
     const metinRenk = isDark ? "#E5E7EB" : "#1F2937";
     const ikincilMetinRenk = isDark ? "#9CA3AF" : "#4B5563";
-    const kutuBg = isDark ? "#1F2937" : "#F3F4F6";
-    const cerceveRenk = isDark ? "#374151" : "#E5E7EB";
-    const anaRenk = isDark ? "#6366F1" : "#4F46E5";
+    const kutuBg = isDark ? "#1F2937" : "#F8FAFC";
+    const cerceveRenk = isDark ? "#374151" : "#E2E8F0";
+    const anaRenk = isDark ? "#818CF8" : "#4F46E5";
 
     return `
       <!DOCTYPE html>
       <html lang="tr">
       <head>
         <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
         <style>
+          * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
           body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: ${bg};
@@ -616,50 +633,93 @@ export default function ProfileScreen() {
             margin: 0;
             line-height: 1.6;
           }
+          .header-group { margin-bottom: 30px; }
           h1 {
-            font-size: 26px;
+            font-size: 28px;
             font-weight: 800;
             color: ${metinRenk};
-            margin-bottom: 20px;
-            letter-spacing: -0.5px;
+            margin: 0 0 8px 0;
+            letter-spacing: -0.8px;
+          }
+          .sub-title {
+            font-size: 16px;
+            color: ${anaRenk};
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 4px;
           }
           h2 {
-            font-size: 18px;
+            font-size: 19px;
             font-weight: 700;
             color: ${metinRenk};
-            margin-top: 25px;
+            margin-top: 32px;
             margin-bottom: 12px;
-            border-bottom: 1px solid ${cerceveRenk};
-            padding-bottom: 6px;
+            display: flex;
+            align-items: center;
+          }
+          h2::before {
+            content: "";
+            width: 4px;
+            height: 20px;
+            background-color: ${anaRenk};
+            margin-right: 12px;
+            border-radius: 2px;
           }
           p, li {
             font-size: 15px;
             color: ${ikincilMetinRenk};
-            margin-bottom: 15px;
+            margin-bottom: 16px;
           }
-          ul, ol {
-            padding-left: 20px;
-            margin-bottom: 20px;
+          ul {
+            padding: 0;
+            list-style: none;
+            margin-bottom: 24px;
           }
           li {
-            margin-bottom: 8px;
+            position: relative;
+            padding-left: 28px;
+            margin-bottom: 14px;
+          }
+          li::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: ${anaRenk};
+            font-weight: bold;
           }
           .card {
             background-color: ${kutuBg};
             border: 1px solid ${cerceveRenk};
-            border-radius: 14px;
-            padding: 16px;
-            margin-bottom: 20px;
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 28px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
           }
           .highlight {
-            color: ${anaRenk};
-            font-weight: bold;
+            color: ${metinRenk};
+            font-weight: 700;
+            background-color: ${anaRenk}20;
+            padding: 2px 6px;
+            border-radius: 6px;
+          }
+          .footer-note {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid ${cerceveRenk};
+            font-size: 13px;
+            text-align: center;
+            font-style: italic;
           }
         </style>
       </head>
       <body>
-        <h1>${baslik}</h1>
+        <div class="header-group">
+          <div class="sub-title">${altBaslik}</div>
+          <h1>${baslik}</h1>
+        </div>
         ${icerikHtml}
+        <div class="footer-note">Mikro AI Eğitim Teknolojileri</div>
       </body>
       </html>
     `;
@@ -668,64 +728,66 @@ export default function ProfileScreen() {
   const acNasilKullanilir = () => {
     const icerik = `
       <div class="card">
-        <p>Mikro AI, çözemediğin okul sorularını saniyeler içinde analiz eden, adım adım çözüm sunan ve senin için benzer sorulardan pratik testler üreten kişisel yapay zeka öğretmenindir.</p>
+        <p>Mikro AI, çözemediğin soruları saniyeler içinde analiz eden ve sana özel adım adım çözüm yolları üreten akıllı eğitim asistanındır.</p>
       </div>
       
-      <h2>📸 1. Sorunun Fotoğrafını Çek</h2>
+      <h2>📸 1. Soruyu Gönder</h2>
       <ul>
-        <li>Uygulamanın ana ekranındaki <span class="highlight">"Kamerayı Aç"</span> butonuna dokun.</li>
-        <li>Çözmek istediğin sorunun fotoğrafını net ve düzgün bir açıyla çek.</li>
-        <li>Kadrajda sadece bir soru olmasına özen göster (diğer soruları kırparak gizle).</li>
-        <li>Okunabilirliğin yüksek olduğundan emin olunca <span class="highlight">"Gönder"</span> tuşuna bas.</li>
+        <li>Ana ekrandaki <span class="highlight">Kamerayı Aç</span> butonunu kullan.</li>
+        <li>Soruyu net bir şekilde kadraja al ve fotoğrafını çek.</li>
+        <li>Karmaşıklığı önlemek için ekranda sadece <span class="highlight">tek bir soru</span> olmasına dikkat et.</li>
       </ul>
 
-      <h2>🧠 2. Yapay Zeka Çözümünü İncele</h2>
+      <h2>🧠 2. Analiz ve Çözüm</h2>
       <ul>
-        <li>Mikro AI sorunu saniyeler içinde analiz eder.</li>
-        <li>Hangi konuda olduğunu, kullanılan formülü ve adım adım çözüm yolunu sana gösterir.</li>
-        <li>En altta yer alan <span class="highlight">"Çözüm Kartını İndir"</span> butonuyla görseli galeriye kaydedebilirsin.</li>
+        <li>Yapay zeka sorunun konusunu ve çözüm mantığını anında çıkarır.</li>
+        <li>Kullanılan formülleri ve mantıksal adımları detaylıca oku.</li>
+        <li>Çözümü cihazına indirmek için <span class="highlight">Çözüm Kartını İndir</span> butonuna dokun.</li>
       </ul>
 
-      <h2>🎯 3. Benzer Sorularla Pratik Yap</h2>
+      <h2>🎯 3. Benzer Sorularla Pekiştir</h2>
       <ul>
-        <li>Çözüm ekranının en altında yer alan <span class="highlight">"Kolay, Orta, Zor"</span> butonlarına basarak yapay zekanın o sorunun benzerinden senin için ürettiği ek test sorularını çöz.</li>
-        <li>Bu sayede konuyu sadece okuyarak değil, uygulayarak mükemmelce pekiştir.</li>
+        <li>Çözümün altındaki zorluk seviyelerini seçerek benzer sorular üret.</li>
+        <li>Pratik testleri çözerek konuyu tam olarak öğrendiğinden emin ol.</li>
       </ul>
 
-      <h2>📊 4. Hata Defterinden PDF Rapor Al</h2>
+      <h2>📊 4. Hata Defteri Yönetimi</h2>
       <ul>
-        <li>Çözdüğün tüm sorular <span class="highlight">"Hata Defterim"</span> sekmesinde ders ders otomatik olarak arşivlenir.</li>
-        <li>Ders bazlı filtreleme yapıp sağ alttaki <span class="highlight">"PDF"</span> tuşuna basarak, sınavdan önce tekrar etmen için özel tasarlanan çalışma kitapçığını indirebilirsin.</li>
+        <li>Tüm geçmişin otomatik olarak arşivlenir.</li>
+        <li>PDF oluşturma özelliği ile kendine özel <span class="highlight">çalışma fasikülleri</span> hazırla.</li>
       </ul>
     `;
     setWebViewBaslik("Nasıl Kullanılır?");
-    setWebViewHtml(htmlSablonUret("Mikro AI Kullanım Kılavuzu", icerik));
+    setWebViewHtml(
+      htmlSablonUret("Kullanım Rehberi", "Öğrenci Portalı", icerik)
+    );
     setWebViewModalGorunur(true);
   };
 
   const acKullanimKosullari = () => {
     const icerik = `
       <div class="card">
-        <p>Mikro AI uygulamasını kullanarak, aşağıda belirtilen şartları ve gizlilik sözleşmesini kabul etmiş sayılırsınız.</p>
+        <p>Mikro AI platformuna hoş geldiniz. Bu belge, uygulamamızı kullanırken uyulması gereken kuralları ve veri güvenliği esaslarını içerir.</p>
       </div>
 
-      <h2>🔒 1. Gizlilik ve Veri Güvenliği</h2>
-      <p>Mikro AI, kullanıcıların yüklediği soru fotoğraflarını yapay zeka analizi sağlamak ve kişisel "Hata Defteri" arşivini oluşturmak amacıyla Firebase bulut sunucularında saklar. Fotoğraflarınız üçüncü şahıslara asla satılmaz veya reklam amaçlı kullanılmaz.</p>
+      <h2>🔒 Gizlilik ve Veri Güvenliği</h2>
+      <p>Yüklediğiniz tüm fotoğraflar ve verileriniz uçtan uca şifreli sunucularda barındırılır. Verileriniz üçüncü taraflarla reklam veya pazarlama amacıyla paylaşılmaz.</p>
 
-      <h2>⚡ 2. Adil Kullanım ve Kotalar</h2>
+      <h2>⚡ Hizmet Limitleri</h2>
       <ul>
-        <li>Ücretsiz sürümü kullanan öğrenciler için günlük kota sınırı <span class="highlight">3 soru</span> ile sınırlıdır.</li>
-        <li>Premium sürümü kullanan öğrenciler için günlük adil kullanım sınırı <span class="highlight">50 soru</span> olarak belirlenmiştir. Bu sınır sunucuların aşırı yüklenmesini engellemek için tasarlanmıştır.</li>
+        <li>Standart kullanım günlük <span class="highlight">3 soru</span> ile sınırlıdır.</li>
+        <li>Premium üyeler için sınır <span class="highlight">50 soru/gün</span> olarak belirlenmiştir.</li>
+        <li>Bu limitler sunucu stabilitesini korumak adına uygulanmaktadır.</li>
       </ul>
 
-      <h2>📋 3. Sorumluluk Sınırları</h2>
-      <p>Yapay zeka tarafından sağlanan cevaplar eğitim amaçlı yardımcı kaynaklardır. Algoritmanın başarı oranı çok yüksek olsa da hata payı bulunabilir. Sınavlarda ve akademik değerlendirmelerde nihai karar ve sorumluluk kullanıcıya aittir.</p>
+      <h2>📋 Sorumluluk Reddini Bildiririz</h2>
+      <p>Yapay zeka çözümleri yüksek doğruluk oranına sahip olsa da, bu bir eğitim destek aracıdır. Sınav başarılarınızdaki nihai sorumluluk kullanıcıya aittir.</p>
 
-      <h2>💎 4. Abonelik ve Ödemeler</h2>
-      <p>Abonelik yenilenmeleri platformların (App Store / Google Play Store) kendi kurallarına tabidir. İptal işlemlerini dilediğiniz zaman cihaz ayarlarınızdaki "Abonelikler" kısmından gerçekleştirebilirsiniz.</p>
+      <h2>💎 Abonelik Şartları</h2>
+      <p>Abonelikler ve ödeme işlemleri doğrudan App Store veya Play Store üzerinden yönetilir. İptal ve iade süreçleri ilgili mağaza politikalarına tabidir.</p>
     `;
     setWebViewBaslik("Kullanım Koşulları");
-    setWebViewHtml(htmlSablonUret("Yasal Koşullar ve Gizlilik", icerik));
+    setWebViewHtml(htmlSablonUret("Yasal Şartlar", "Hukuki Metin", icerik));
     setWebViewModalGorunur(true);
   };
 
@@ -754,6 +816,10 @@ export default function ProfileScreen() {
 
   const kullaniciPuan = toplamSoru * 50 + seriGunu * 20;
   const kullaniciSeviye = Math.floor(kullaniciPuan / 1000) + 1;
+
+  const seviyeIcinGerekenXP = 1000;
+  const mevcutSeviyeXP = kullaniciPuan % seviyeIcinGerekenXP;
+  const ilerlemeYuzdesi = (mevcutSeviyeXP / seviyeIcinGerekenXP) * 100;
 
   const rozetler = [
     {
@@ -821,8 +887,17 @@ export default function ProfileScreen() {
     },
   ];
 
+  // 🚀 GÜNCELLENEN: Modala sadece açık (light) mod seçildiğinde uygulamanın kendi mavisini verir, diğerlerini normal bırakır
   const getModalButonStil = (mod) => {
     const isSelected = temaModu === mod;
+
+    if (mod === "light") {
+      const bgColor = isSelected ? tema.anaButon : "transparent";
+      const textColor = isSelected ? "#fff" : tema.metin;
+      const borderColor = isSelected ? "transparent" : tema.kutuCerceve;
+      return { bgColor, textColor, borderColor, isSelected };
+    }
+
     const bgColor = isSelected ? tema.metin : "transparent";
     const textColor = isSelected ? tema.arkaplan : tema.metin;
     const borderColor = isSelected ? "transparent" : tema.kutuCerceve;
@@ -832,14 +907,21 @@ export default function ProfileScreen() {
   return (
     <View style={[styles.container, { backgroundColor: tema.arkaplan }]}>
       <StatusBar
-        barStyle="light-content"
+        barStyle={
+          isFocused
+            ? "light-content"
+            : temaModu === "dark"
+            ? "light-content"
+            : "dark-content"
+        }
         backgroundColor="transparent"
         translucent={true}
       />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
+        // 🚀 GÜNCELLENEN: Alt padding sorunu düzeltildi, gereksiz fazlalık atıldı
+        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) }}
       >
         <View
           style={[
@@ -847,7 +929,7 @@ export default function ProfileScreen() {
             {
               backgroundColor: tema.anaButon,
               paddingTop: insets.top + 20,
-              paddingBottom: 30,
+              paddingBottom: 35,
             },
           ]}
         >
@@ -932,12 +1014,31 @@ export default function ProfileScreen() {
           <Text style={styles.userEmail}>{user?.email}</Text>
 
           {rol === "ogrenci" && (
-            <View style={styles.seviyeVeXpKapsayici}>
-              <Text style={styles.seviyeYazisi}>Seviye {kullaniciSeviye}</Text>
-              <View style={styles.xpKutusu}>
-                <Ionicons name="star" size={16} color="#FFD700" />
-                <Text style={styles.xpYazisi}>{kullaniciPuan} XP</Text>
+            <View
+              style={{
+                alignItems: "center",
+                width: "100%",
+                paddingHorizontal: 40,
+                marginTop: 15,
+              }}
+            >
+              <View style={styles.seviyeVeXpKapsayici}>
+                <Text style={styles.seviyeYazisi}>
+                  Seviye {kullaniciSeviye}
+                </Text>
+                <View style={styles.xpKutusu}>
+                  <Ionicons name="star" size={16} color="#FFD700" />
+                  <Text style={styles.xpYazisi}>{kullaniciPuan} XP</Text>
+                </View>
               </View>
+              <View style={styles.xpBarArkaplan}>
+                <View
+                  style={[styles.xpBarDolu, { width: `${ilerlemeYuzdesi}%` }]}
+                />
+              </View>
+              <Text style={styles.xpKalanYazi}>
+                Sonraki seviyeye {seviyeIcinGerekenXP - mevcutSeviyeXP} XP kaldı
+              </Text>
             </View>
           )}
         </View>
@@ -1284,7 +1385,36 @@ export default function ProfileScreen() {
             Destek ve Bilgi
           </Text>
 
-          {/* 🚀 DÜZELTME: "Nasıl Kullanılır" ve "Kullanım Koşulları" WebView'a bağlandı */}
+          <TouchableOpacity
+            onPress={uygulamayiPaylas}
+            style={[styles.menuItem, { backgroundColor: tema.kutuArkaplan }]}
+          >
+            <Ionicons
+              name="share-social-outline"
+              size={22}
+              color={tema.metin}
+              style={styles.menuIcon}
+            />
+            <Text style={[styles.menuBaslik, { color: tema.metin }]}>
+              Uygulamayı Paylaş
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={bizeUlasin}
+            style={[styles.menuItem, { backgroundColor: tema.kutuArkaplan }]}
+          >
+            <Ionicons
+              name="mail-outline"
+              size={22}
+              color={tema.metin}
+              style={styles.menuIcon}
+            />
+            <Text style={[styles.menuBaslik, { color: tema.metin }]}>
+              Bize Ulaşın / Hata Bildir
+            </Text>
+          </TouchableOpacity>
+
           <TouchableOpacity
             onPress={acNasilKullanilir}
             style={[styles.menuItem, { backgroundColor: tema.kutuArkaplan }]}
@@ -1340,8 +1470,9 @@ export default function ProfileScreen() {
               Oturumu Kapat
             </Text>
           </TouchableOpacity>
+
           <TouchableOpacity
-            onPress={hesabiSil}
+            onPress={() => setHesapSilModalGorunur(true)}
             style={[
               styles.menuItem,
               {
@@ -1608,7 +1739,6 @@ export default function ProfileScreen() {
           </Pressable>
         </Modal>
 
-        {/* 🚀 YENİ: Uygulama İçi Profesyonel WebView Modalı */}
         <Modal
           visible={webViewModalGorunur}
           animationType="slide"
@@ -1622,7 +1752,6 @@ export default function ProfileScreen() {
                 { backgroundColor: tema.arkaplan },
               ]}
             >
-              {/* WebView Header (Başlık ve Kapat Butonu) */}
               <View
                 style={[
                   styles.webViewHeader,
@@ -1646,8 +1775,6 @@ export default function ProfileScreen() {
                   />
                 </TouchableOpacity>
               </View>
-
-              {/* WebView Tarayıcı Motoru */}
               <WebView
                 originWhitelist={["*"]}
                 source={{ html: webViewHtml }}
@@ -1656,6 +1783,123 @@ export default function ProfileScreen() {
               />
             </View>
           </View>
+        </Modal>
+
+        <Modal
+          visible={hesapSilModalGorunur}
+          animationType="slide"
+          transparent={true}
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.modalArkaplan}
+          >
+            <View
+              style={[styles.modalKutu, { backgroundColor: tema.kutuArkaplan }]}
+            >
+              <View style={{ alignItems: "center", marginBottom: 20 }}>
+                <Ionicons name="warning" size={48} color={tema.hataKirmizi} />
+              </View>
+
+              <Text style={[styles.modalBaslik, { color: tema.metin }]}>
+                Hesabı Kalıcı Olarak Sil
+              </Text>
+
+              <Text
+                style={{
+                  color: tema.ikincilMetin,
+                  textAlign: "center",
+                  marginBottom: 20,
+                  lineHeight: 22,
+                }}
+              >
+                Tüm çözülen sorularınız, hata defteriniz ve istatistikleriniz
+                kalıcı olarak silinecektir. Bu işlem{" "}
+                <Text style={{ fontWeight: "bold", color: tema.metin }}>
+                  geri alınamaz.
+                </Text>
+              </Text>
+
+              <Text
+                style={{
+                  color: tema.metin,
+                  fontWeight: "600",
+                  marginBottom: 8,
+                  textAlign: "center",
+                }}
+              >
+                Onaylamak için aşağıya SİL yazın:
+              </Text>
+
+              <TextInput
+                style={[
+                  styles.silInput,
+                  {
+                    backgroundColor: tema.arkaplan,
+                    color: tema.hataKirmizi,
+                    borderColor:
+                      silOnayMetni === "SİL"
+                        ? tema.hataKirmizi
+                        : tema.kutuCerceve,
+                  },
+                ]}
+                placeholder="SİL"
+                placeholderTextColor={tema.ikincilMetin}
+                autoCapitalize="characters"
+                value={silOnayMetni}
+                onChangeText={setSilOnayMetni}
+              />
+
+              <View style={styles.modalButonSatir}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setHesapSilModalGorunur(false);
+                    setSilOnayMetni("");
+                  }}
+                  style={styles.modalIptalButon}
+                >
+                  <Text
+                    style={{
+                      color: tema.ikincilMetin,
+                      fontWeight: "bold",
+                      fontSize: 16,
+                    }}
+                  >
+                    Vazgeç
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={guvenliHesabiSil}
+                  disabled={silOnayMetni !== "SİL" || hesapSiliniyor}
+                  style={[
+                    styles.modalOnayButon,
+                    {
+                      backgroundColor:
+                        silOnayMetni === "SİL"
+                          ? tema.hataKirmizi
+                          : tema.kutuCerceve,
+                    },
+                  ]}
+                >
+                  {hesapSiliniyor ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text
+                      style={{
+                        color:
+                          silOnayMetni === "SİL" ? "#fff" : tema.ikincilMetin,
+                        fontWeight: "bold",
+                        fontSize: 16,
+                      }}
+                    >
+                      Hesabımı Sil
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
         </Modal>
       </ScrollView>
     </View>
@@ -1728,12 +1972,17 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     letterSpacing: 0.5,
   },
-  userEmail: { fontSize: 14, color: "rgba(255,255,255,0.85)" },
+  userEmail: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.85)",
+    marginBottom: 15,
+  },
 
   seviyeVeXpKapsayici: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 10,
+    justifyContent: "center",
+    width: "100%",
   },
   seviyeYazisi: {
     color: "#fff",
@@ -1751,10 +2000,31 @@ const styles = StyleSheet.create({
   },
   xpYazisi: { color: "#fff", fontWeight: "bold", marginLeft: 5, fontSize: 14 },
 
+  xpBarArkaplan: {
+    width: "100%",
+    height: 6,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderRadius: 3,
+    marginTop: 15,
+    overflow: "hidden",
+  },
+  xpBarDolu: {
+    height: "100%",
+    backgroundColor: "#FFD700",
+    borderRadius: 3,
+  },
+  xpKalanYazi: {
+    color: "rgba(255,255,255,0.8)",
+    fontSize: 12,
+    marginTop: 8,
+    fontWeight: "500",
+  },
+
   content: {
     paddingHorizontal: 24,
     paddingTop: 24,
-    paddingBottom: 40,
+    // 🚀 DÜZELTME: Eski 40 paddingi silinerek alt kısımdaki devasa kayma sorunu çözüldü.
+    paddingBottom: 20,
   },
   sectionTitle: {
     fontSize: 18,
@@ -1831,11 +2101,34 @@ const styles = StyleSheet.create({
     fontSize: 19,
     fontWeight: "bold",
     textAlign: "center",
-    marginBottom: 20,
+    marginBottom: 15,
   },
   modalSecenek: { paddingVertical: 16, borderBottomWidth: 0.5 },
   modalSecenekYazi: { fontSize: 16, textAlign: "center" },
   modalKapatButon: { marginTop: 25, padding: 10, alignItems: "center" },
+
+  silInput: {
+    borderWidth: 2,
+    borderRadius: 12,
+    padding: 15,
+    fontSize: 20,
+    fontWeight: "bold",
+    textAlign: "center",
+    letterSpacing: 3,
+    marginBottom: 10,
+  },
+  modalButonSatir: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 15,
+  },
+  modalIptalButon: { padding: 15, flex: 1, alignItems: "center" },
+  modalOnayButon: {
+    padding: 15,
+    flex: 1,
+    borderRadius: 14,
+    alignItems: "center",
+  },
 
   bottomSheetArkaplan: {
     flex: 1,
@@ -1861,7 +2154,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 
-  // 🚀 YENİ: WebView Modal Stilleri (Tüm platformlara tam uyumlu)
   webViewModalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.6)",

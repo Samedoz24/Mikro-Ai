@@ -13,17 +13,16 @@ import {
   ScrollView,
   StatusBar,
 } from "react-native";
-// 🚀 DÜZELTME: Eski uyarı veren kütüphane yerine yeni modern kütüphane eklendi!
+
 import { SafeAreaView } from "react-native-safe-area-context";
+// 🚀 YENİ: Sayfa odağını anlamak için eklendi
+import { useIsFocused } from "@react-navigation/native";
 
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import { Ionicons } from "@expo/vector-icons";
 
-// 📱 Cihaz Kimliği Kütüphanesi
 import * as Application from "expo-application";
-
-// 🎉 Konfeti Animasyonu Kütüphanesi
 import ConfettiCannon from "react-native-confetti-cannon";
 
 import { auth, db, storage } from "../firebaseConfig";
@@ -37,8 +36,9 @@ import {
 } from "firebase/firestore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// 🌗 Tema Sistemi
 import { useTheme } from "../ThemeContext";
+// 🚀 YENİ: Gerçek karanlık mod kontrolü için colors eklendi
+import { colors } from "../theme";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -54,6 +54,10 @@ export default function HomeScreen() {
 
   const { tema, temaModu } = useTheme();
   const user = auth.currentUser;
+
+  // 🚀 YENİ: Sayfa odakta mı ve gerçekten karanlık mı kontrolleri
+  const isFocused = useIsFocused();
+  const isGercektenKaranlik = tema.arkaplan === colors.dark.arkaplan;
 
   useEffect(() => {
     const seriKontrol = async () => {
@@ -294,10 +298,13 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: tema.arkaplan }]}>
-      <StatusBar
-        barStyle={temaModu === "dark" ? "light-content" : "dark-content"}
-        backgroundColor={tema.arkaplan}
-      />
+      {/* 🚀 DÜZELTME: Sadece bu sayfadaysak StatusBar çalışır ve çakışma yapmaz */}
+      {isFocused && (
+        <StatusBar
+          barStyle={isGercektenKaranlik ? "light-content" : "dark-content"}
+          backgroundColor={tema.arkaplan}
+        />
+      )}
 
       <View style={styles.innerContainer}>
         <Modal visible={seriModalGorunur} transparent animationType="fade">
@@ -345,7 +352,7 @@ export default function HomeScreen() {
               activeOpacity={1}
               style={[
                 styles.premiumKutu,
-                { backgroundColor: temaModu === "dark" ? "#1E293B" : "#fff" },
+                { backgroundColor: isGercektenKaranlik ? "#1E293B" : "#fff" },
               ]}
             >
               <TouchableOpacity
@@ -429,7 +436,7 @@ export default function HomeScreen() {
                             : tema.kutuCerceve,
                         backgroundColor:
                           seciliPaket === "aylik"
-                            ? temaModu === "dark"
+                            ? isGercektenKaranlik
                               ? "#332a00"
                               : "#FFFBEB"
                             : tema.arkaplan,
@@ -455,7 +462,7 @@ export default function HomeScreen() {
                             : tema.kutuCerceve,
                         backgroundColor:
                           seciliPaket === "uc_aylik"
-                            ? temaModu === "dark"
+                            ? isGercektenKaranlik
                               ? "#332a00"
                               : "#FFFBEB"
                             : tema.arkaplan,
@@ -485,7 +492,7 @@ export default function HomeScreen() {
                             : tema.kutuCerceve,
                         backgroundColor:
                           seciliPaket === "yillik"
-                            ? temaModu === "dark"
+                            ? isGercektenKaranlik
                               ? "#332a00"
                               : "#FFFBEB"
                             : tema.arkaplan,
@@ -658,9 +665,7 @@ const styles = StyleSheet.create({
   ikon: { marginBottom: 15, opacity: 0.8 },
   bosDurumYazi: { fontSize: 16, textAlign: "center", fontWeight: "500" },
   foto: { width: "100%", height: "100%", resizeMode: "cover" },
-  butonAlani: {
-    paddingBottom: Platform.OS === "ios" ? 10 : 20,
-  },
+  butonAlani: { paddingBottom: Platform.OS === "ios" ? 10 : 20 },
   tekliButon: {
     paddingVertical: 18,
     borderRadius: 16,
@@ -689,7 +694,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     letterSpacing: 0.5,
   },
-
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.75)",
@@ -735,12 +739,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     elevation: 3,
   },
-  modalButonYazi: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: 17,
-  },
-
+  modalButonYazi: { color: "#fff", fontWeight: "bold", fontSize: 17 },
   premiumOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.85)",
@@ -782,20 +781,13 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     paddingHorizontal: 10,
   },
-  avantajKutusu: {
-    width: "100%",
-    marginBottom: 25,
-  },
+  avantajKutusu: { width: "100%", marginBottom: 25 },
   avantajSatiri: {
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 12,
   },
-  avantajYazi: {
-    fontSize: 15,
-    fontWeight: "500",
-    marginLeft: 10,
-  },
+  avantajYazi: { fontSize: 15, fontWeight: "500", marginLeft: 10 },
   paketlerKapsayici: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -811,16 +803,8 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
     position: "relative",
   },
-  paketIsmi: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 8,
-    marginTop: 5,
-  },
-  paketFiyat: {
-    fontSize: 18,
-    fontWeight: "900",
-  },
+  paketIsmi: { fontSize: 14, fontWeight: "600", marginBottom: 8, marginTop: 5 },
+  paketFiyat: { fontSize: 18, fontWeight: "900" },
   eskiFiyat: {
     fontSize: 12,
     color: "#9CA3AF",
@@ -835,11 +819,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 10,
   },
-  indirimYazisi: {
-    color: "#fff",
-    fontSize: 10,
-    fontWeight: "bold",
-  },
+  indirimYazisi: { color: "#fff", fontSize: 10, fontWeight: "bold" },
   satinAlButon: {
     backgroundColor: "#FFD700",
     width: "100%",

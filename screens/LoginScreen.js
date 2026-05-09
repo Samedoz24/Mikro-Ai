@@ -14,7 +14,7 @@ import {
   ActivityIndicator,
   StatusBar,
 } from "react-native";
-// 🚀 YENİ: Modern Güvenli Alan Kütüphanesi Eklendi
+
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { auth } from "../firebaseConfig";
@@ -50,6 +50,9 @@ export default function LoginScreen({ setKullaniciRolu }) {
 
   const sistemTemasi = useColorScheme();
   const tema = sistemTemasi === "dark" ? colors.dark : colors.light;
+
+  // 🚀 DÜZELTME: useIsFocused kaldırıldı, sadece gerçek karanlık mod kontrolü kaldı.
+  const isGercektenKaranlik = tema.arkaplan === colors.dark.arkaplan;
 
   const dinamikAnaRenk = seciliRol === "veli" ? "#4F46E5" : tema.anaButon;
 
@@ -118,7 +121,6 @@ export default function LoginScreen({ setKullaniciRolu }) {
       : "Öğrencinizin eğitim sürecini yakından takip etmek için veli hesabı oluşturun.";
 
   const dinamikStil = {
-    // 🚀 DÜZELTME: Sabit padding: 25 silindi, yerine sadece yanlardan ferahlık veren paddingHorizontal eklendi
     container: {
       flexGrow: 1,
       justifyContent: "center",
@@ -146,7 +148,6 @@ export default function LoginScreen({ setKullaniciRolu }) {
       marginBottom: 30,
       lineHeight: 22,
     },
-    // 🚀 DÜZELTME: Height 55 -> 60 yapıldı (Fitts Kanunu - Kolay Tıklanabilirlik) ve Radius yumuşatıldı
     inputKutu: {
       flexDirection: "row",
       alignItems: "center",
@@ -315,10 +316,10 @@ export default function LoginScreen({ setKullaniciRolu }) {
   );
 
   return (
-    // 🚀 DÜZELTME: Sayfa en dıştan Güvenli Alan ile kaplandı
     <SafeAreaView style={{ flex: 1, backgroundColor: tema.arkaplan }}>
+      {/* 🚀 DÜZELTME: Doğrudan karanlık/açık mod kontrolü yapıyoruz */}
       <StatusBar
-        barStyle={sistemTemasi === "dark" ? "light-content" : "dark-content"}
+        barStyle={isGercektenKaranlik ? "light-content" : "dark-content"}
         backgroundColor={tema.arkaplan}
       />
       <KeyboardAvoidingView

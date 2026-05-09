@@ -15,14 +15,15 @@ import {
   Platform,
   StatusBar,
 } from "react-native";
-// 🚀 YENİ: Modern Güvenli Alan Kütüphanesi Eklendi
+
 import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
+// 🚀 YENİ: Sayfa odağını anlamak için eklendi
+import { useIsFocused } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 
-// Firebase Araçları
 import { auth, db, storage } from "../firebaseConfig";
 import {
   doc,
@@ -38,36 +39,37 @@ import {
 import { ref, getDownloadURL } from "firebase/storage";
 
 import { useTheme } from "../ThemeContext";
+// 🚀 YENİ: Gerçek karanlık mod kontrolü için
+import { colors } from "../theme";
 
 const ekranGenisligi = Dimensions.get("window").width;
 const ekranYuksekligi = Dimensions.get("window").height;
 
 export default function ParentDashboard() {
   const { tema, temaModu } = useTheme();
-  const insets = useSafeAreaInsets(); // 🚀 Modalların alt boşlukları için
+  const insets = useSafeAreaInsets();
 
-  // Veli Kontrol Stateleri
+  // 🚀 YENİ: Sayfa odakta mı ve gerçekten karanlık mı kontrolleri
+  const isFocused = useIsFocused();
+  const isGercektenKaranlik = tema.arkaplan === colors.dark.arkaplan;
+
   const [veliModalGorunur, setVeliModalGorunur] = useState(false);
   const [ogrenciKoduInput, setOgrenciKoduInput] = useState("");
   const [bagliOgrenciler, setBagliOgrenciler] = useState([]);
   const [yukleniyor, setYukleniyor] = useState(false);
 
   const [aktifOgrenci, setAktifOgrenci] = useState(null);
-
   const [ogrenciFotolar, setOgrenciFotolar] = useState({});
 
-  // WhatsApp Raporlama Stateleri
   const [whatsappNo, setWhatsappNo] = useState("");
   const [raporAktif, setRaporAktif] = useState(false);
 
-  // 📊 İstatistik Stateleri
   const [sonSorular, setSonSorular] = useState([]);
   const [toplamSoruSayisi, setToplamSoruSayisi] = useState(0);
   const [cozulmeOrani, setCozulmeOrani] = useState(0);
   const [sorularYukleniyor, setSorularYukleniyor] = useState(false);
   const [dersIstatistikleri, setDersIstatistikleri] = useState([]);
 
-  // Soru Detayı Gösterme Stateleri
   const [seciliSoru, setSeciliSoru] = useState(null);
   const [detayModalGorunur, setDetayModalGorunur] = useState(false);
   const [tamEkranModu, setTamEkranModu] = useState(false);
@@ -250,7 +252,7 @@ export default function ParentDashboard() {
   const ogrenciyiKaldir = (ogrenci) => {
     Alert.alert(
       "Öğrenciyi Kaldır",
-      `${ogrenci.isim} isimli öğrencinin bağlantısını kesmek istediğinize emin misiniz?`,
+      `${ogrenci.isim} isimli öğrencinin bağlantısını kesmek istediğinize emin misin?`,
       [
         { text: "Vazgeç", style: "cancel" },
         {
@@ -351,15 +353,16 @@ export default function ParentDashboard() {
   };
 
   return (
-    // 🚀 DÜZELTME: Güvenli alan Ana Kapsayıcı
     <SafeAreaView style={[styles.safeArea, { backgroundColor: tema.arkaplan }]}>
-      <StatusBar
-        barStyle={temaModu === "dark" ? "light-content" : "dark-content"}
-        backgroundColor={tema.arkaplan}
-      />
+      {/* 🚀 DÜZELTME: Sadece bu sayfadaysak StatusBar çalışır ve çakışma yapmaz */}
+      {isFocused && (
+        <StatusBar
+          barStyle={isGercektenKaranlik ? "light-content" : "dark-content"}
+          backgroundColor={tema.arkaplan}
+        />
+      )}
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* 🚀 DÜZELTME: İç Kapsayıcı ferah boşluklarla korumaya alındı */}
         <View style={styles.innerContainer}>
           <View style={styles.header}>
             <Text style={[styles.baslik, { color: tema.metin }]}>
@@ -372,7 +375,6 @@ export default function ParentDashboard() {
             </Text>
           </View>
 
-          {/* BAĞLI ÖĞRENCİLER LİSTESİ */}
           <View
             style={[
               styles.kutu,
@@ -788,7 +790,6 @@ export default function ParentDashboard() {
         </View>
       </ScrollView>
 
-      {/* Çözüm İnceleme Modalı */}
       <Modal
         visible={detayModalGorunur}
         animationType="slide"
@@ -815,7 +816,7 @@ export default function ParentDashboard() {
                 styles.modalDetayKutu,
                 {
                   backgroundColor: tema.kutuArkaplan,
-                  paddingBottom: insets.bottom + 20, // 🚀 DÜZELTME: Alt boşluk koruması
+                  paddingBottom: insets.bottom + 20,
                 },
               ]}
             >
@@ -883,8 +884,9 @@ export default function ParentDashboard() {
                       style={[
                         styles.bilgiEtiketi,
                         {
-                          backgroundColor:
-                            temaModu === "dark" ? "#1A1A1A" : "#F9FAFB",
+                          backgroundColor: isGercektenKaranlik
+                            ? "#1A1A1A"
+                            : "#F9FAFB",
                         },
                       ]}
                     >
@@ -909,8 +911,9 @@ export default function ParentDashboard() {
                         style={[
                           styles.adimKutusu,
                           {
-                            backgroundColor:
-                              temaModu === "dark" ? "#1E293B" : "#EFF6FF",
+                            backgroundColor: isGercektenKaranlik
+                              ? "#1E293B"
+                              : "#EFF6FF",
                             borderLeftColor: tema.anaButon,
                           },
                         ]}
@@ -932,8 +935,9 @@ export default function ParentDashboard() {
                       style={[
                         styles.cevapKutusu,
                         {
-                          backgroundColor:
-                            temaModu === "dark" ? "#064E3B" : "#ECFDF5",
+                          backgroundColor: isGercektenKaranlik
+                            ? "#064E3B"
+                            : "#ECFDF5",
                           borderColor: "#10B981",
                         },
                       ]}
@@ -942,7 +946,7 @@ export default function ParentDashboard() {
                         style={[
                           styles.kucukBaslik,
                           {
-                            color: temaModu === "dark" ? "#34D399" : "#059669",
+                            color: isGercektenKaranlik ? "#34D399" : "#059669",
                           },
                         ]}
                       >
@@ -952,7 +956,7 @@ export default function ParentDashboard() {
                         style={[
                           styles.cevapMetni,
                           {
-                            color: temaModu === "dark" ? "#A7F3D0" : "#065F46",
+                            color: isGercektenKaranlik ? "#A7F3D0" : "#065F46",
                           },
                         ]}
                       >
@@ -1007,7 +1011,6 @@ export default function ParentDashboard() {
         )}
       </Modal>
 
-      {/* Veli Bağlantı Modalı */}
       <Modal visible={veliModalGorunur} animationType="fade" transparent={true}>
         <View style={styles.modalOgrenciArkaplan}>
           <View
@@ -1093,18 +1096,15 @@ export default function ParentDashboard() {
 }
 
 const styles = StyleSheet.create({
-  // 🚀 DÜZELTME: SafeAreaView Ana Kapsayıcı
   safeArea: {
     flex: 1,
     paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
   },
-  // 🚀 DÜZELTME: Sayfa içi ferahlık boşluğu (Sağdan soldan)
   innerContainer: {
     flex: 1,
     paddingHorizontal: 24,
     paddingTop: 10,
   },
-
   header: { marginBottom: 25, marginTop: 10 },
   baslik: {
     fontSize: 28,
@@ -1112,7 +1112,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     letterSpacing: 0.5,
   },
-  kutu: { padding: 24, borderRadius: 20, borderWidth: 1, marginBottom: 24 }, // Padding 20->24, Radius 12->20
+  kutu: { padding: 24, borderRadius: 20, borderWidth: 1, marginBottom: 24 },
   kutuBaslik: { fontSize: 18, fontWeight: "bold", marginBottom: 12 },
   kutuUstBaslik: {
     flexDirection: "row",
@@ -1120,15 +1120,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
   },
-
-  // Öğrenci Seçici (Tab) Stilleri
   ogrenciSeciciKutu: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 24,
-    borderWidth: 1.5, // Daha belirgin çerçeve
+    borderWidth: 1.5,
     marginRight: 12,
   },
   ogrenciSeciciYazi: { fontSize: 15, fontWeight: "bold", marginLeft: 10 },
@@ -1138,8 +1136,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1.5,
   },
-
-  input: { borderWidth: 1, borderRadius: 12, padding: 16, fontSize: 17 }, // Büyütüldü
+  input: { borderWidth: 1, borderRadius: 12, padding: 16, fontSize: 17 },
   switchSatir: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1155,40 +1152,37 @@ const styles = StyleSheet.create({
   },
   kart: {
     flex: 1,
-    padding: 24, // Ferahlatıldı
-    borderRadius: 20, // Radius 12->20
+    padding: 24,
+    borderRadius: 20,
     borderWidth: 1,
     alignItems: "center",
     marginHorizontal: 6,
   },
   kartSayi: { fontSize: 28, fontWeight: "bold", marginBottom: 8 },
   kartYazi: { fontSize: 13, fontWeight: "600", textAlign: "center" },
-
   barArkaplan: {
-    height: 8, // Kalınlaştırıldı
+    height: 8,
     borderRadius: 4,
     width: "100%",
     overflow: "hidden",
   },
   barDolu: { height: "100%", borderRadius: 4 },
-
   listeElemani: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 18, // Büyütüldü
-    borderRadius: 16, // Radius artırıldı
+    padding: 18,
+    borderRadius: 16,
     borderWidth: 1,
     marginBottom: 12,
   },
   listeBaslik: { fontSize: 17, fontWeight: "700" },
   durumKutusu: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-
   modalOgrenciArkaplan: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.6)",
     justifyContent: "center",
-    padding: 24, // Dış boşluk ferahlatıldı
+    padding: 24,
   },
   modalKutu: { borderRadius: 24, padding: 25 },
   modalBaslik: {
@@ -1199,11 +1193,11 @@ const styles = StyleSheet.create({
   },
   modalInput: {
     borderWidth: 1,
-    borderRadius: 16, // Büyütüldü
+    borderRadius: 16,
     padding: 18,
-    fontSize: 24, // Punto büyüdü
+    fontSize: 24,
     textAlign: "center",
-    letterSpacing: 4, // Harf arası açıldı
+    letterSpacing: 4,
     fontWeight: "bold",
   },
   modalButonSatir: {
@@ -1218,15 +1212,13 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
   },
-
-  // Soru Detay Modalı Stilleri
   modalArkaplan: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.85)", // Hafif koyulaştı
+    backgroundColor: "rgba(0,0,0,0.85)",
     justifyContent: "flex-end",
   },
   modalDetayKutu: {
-    borderTopLeftRadius: 30, // Ovallik arttı
+    borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     paddingHorizontal: 24,
     paddingTop: 24,
@@ -1242,7 +1234,7 @@ const styles = StyleSheet.create({
   modalKapatYazi: { fontWeight: "bold", fontSize: 17, marginRight: 4 },
   modalBuyukFoto: {
     width: "100%",
-    height: 240, // Biraz daha büyütüldü
+    height: 240,
     borderRadius: 20,
     marginBottom: 20,
     resizeMode: "cover",
@@ -1264,7 +1256,7 @@ const styles = StyleSheet.create({
   },
   cozumAnaBaslik: { fontSize: 28, fontWeight: "900", marginBottom: 20 },
   bilgiEtiketi: {
-    padding: 16, // Büyütüldü
+    padding: 16,
     borderRadius: 14,
     borderWidth: 1,
     marginBottom: 25,

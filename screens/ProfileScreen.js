@@ -553,7 +553,6 @@ export default function ProfileScreen() {
     });
   };
 
-  // 🚀 GÜNCELLENEN: Paylaşım Linki daha profesyonel hale getirildi
   const uygulamayiPaylas = async () => {
     try {
       await Share.share({
@@ -609,7 +608,8 @@ export default function ProfileScreen() {
   };
 
   const htmlSablonUret = (baslik, altBaslik, icerikHtml) => {
-    const isDark = temaModu === "dark";
+    // 🚀 DÜZELTME: isGercektenKaranlik kullanıldı
+    const isDark = isGercektenKaranlik;
     const bg = isDark ? "#121212" : "#FFFFFF";
     const metinRenk = isDark ? "#E5E7EB" : "#1F2937";
     const ikincilMetinRenk = isDark ? "#9CA3AF" : "#4B5563";
@@ -887,7 +887,6 @@ export default function ProfileScreen() {
     },
   ];
 
-  // 🚀 GÜNCELLENEN: Modala sadece açık (light) mod seçildiğinde uygulamanın kendi mavisini verir, diğerlerini normal bırakır
   const getModalButonStil = (mod) => {
     const isSelected = temaModu === mod;
 
@@ -906,21 +905,17 @@ export default function ProfileScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: tema.arkaplan }]}>
-      <StatusBar
-        barStyle={
-          isFocused
-            ? "light-content"
-            : temaModu === "dark"
-            ? "light-content"
-            : "dark-content"
-        }
-        backgroundColor="transparent"
-        translucent={true}
-      />
+      {/* 🚀 DÜZELTME: Sadece sayfa odaktaysa StatusBar devreye girer. Rengini de Gerçek Karanlık olup olmamasına göre belirler. */}
+      {isFocused && (
+        <StatusBar
+          barStyle={isGercektenKaranlik ? "light-content" : "dark-content"}
+          backgroundColor="transparent"
+          translucent={true}
+        />
+      )}
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        // 🚀 GÜNCELLENEN: Alt padding sorunu düzeltildi, gereksiz fazlalık atıldı
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) }}
       >
         <View
@@ -2023,7 +2018,6 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 24,
     paddingTop: 24,
-    // 🚀 DÜZELTME: Eski 40 paddingi silinerek alt kısımdaki devasa kayma sorunu çözüldü.
     paddingBottom: 20,
   },
   sectionTitle: {

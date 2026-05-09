@@ -10,7 +10,13 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import LottieView from "lottie-react-native";
+
+// 🚀 YENİ: Ekosistem uyumu için odakta mı kontrolü eklendi
+import { useIsFocused } from "@react-navigation/native";
+
 import { useTheme } from "../ThemeContext";
+// 🚀 YENİ: Gerçek karanlık mod kontrolü için renkler eklendi
+import { colors } from "../theme";
 
 const { width, height } = Dimensions.get("window");
 
@@ -52,6 +58,11 @@ const SLIDES = [
 
 export default function OnboardingScreen({ onTamamla }) {
   const { tema, temaModu } = useTheme();
+
+  // 🚀 DÜZELTME: Gerçek arka plan rengine göre Status Bar belirleme
+  const isGercektenKaranlik = tema.arkaplan === colors.dark.arkaplan;
+  const isFocused = useIsFocused();
+
   const [mevcutSayfa, setMevcutSayfa] = useState(0);
   const flatListRef = useRef(null);
 
@@ -98,10 +109,13 @@ export default function OnboardingScreen({ onTamamla }) {
     <SafeAreaView
       style={[styles.container, { backgroundColor: tema.arkaplan }]}
     >
-      <StatusBar
-        barStyle={temaModu === "dark" ? "light-content" : "dark-content"}
-        backgroundColor={tema.arkaplan}
-      />
+      {/* 🚀 DÜZELTME: Sadece ekrandayken gerçek temaya göre Status Bar çalışır */}
+      {isFocused && (
+        <StatusBar
+          barStyle={isGercektenKaranlik ? "light-content" : "dark-content"}
+          backgroundColor={tema.arkaplan}
+        />
+      )}
 
       <FlatList
         ref={flatListRef}
@@ -163,9 +177,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  // 🚀 DÜZELTME: Evrensel (Responsive) Boyutlandırma Algoritması Eklendi
   animasyon: {
-    width: Math.min(width * 0.7, 320), // Telefonlarda %70 oran, Tabletlerde maks 320px
+    width: Math.min(width * 0.7, 320),
     height: Math.min(width * 0.7, 320),
   },
   metinKonteyner: {

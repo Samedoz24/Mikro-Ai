@@ -14,15 +14,17 @@ import {
   StatusBar,
   Platform,
 } from "react-native";
-// 🚀 YENİ: Modern Güvenli Alan Kütüphanesi Eklendi
+
 import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
+// 🚀 YENİ: Sayfa odağını anlamak ve StatusBar çakışmasını önlemek için eklendi
+import { useIsFocused } from "@react-navigation/native";
+
 import { auth, db, storage } from "../firebaseConfig";
 
-// 📄 PDF ve Paylaşım Kütüphaneleri
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 
@@ -42,13 +44,18 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as MediaLibrary from "expo-media-library";
 
 import { useTheme } from "../ThemeContext";
+import { colors } from "../theme";
 
 const ekranGenisligi = Dimensions.get("window").width;
 const ekranYuksekligi = Dimensions.get("window").height;
 
 export default function HistoryScreen() {
   const { tema, temaModu } = useTheme();
-  const insets = useSafeAreaInsets(); // Modalların alt boşlukları için kullanılacak
+  const insets = useSafeAreaInsets();
+
+  // 🚀 EKLENDİ: Sayfa odakta mı kontrolü
+  const isFocused = useIsFocused();
+  const isGercektenKaranlik = tema.arkaplan === colors.dark.arkaplan;
 
   const [sorular, setSorular] = useState([]);
   const [yukleniyor, setYukleniyor] = useState(true);
@@ -444,16 +451,18 @@ export default function HistoryScreen() {
   }
 
   return (
-    // 🚀 DÜZELTME: SafeAreaView Ana Kapsayıcı
     <SafeAreaView style={[styles.safeArea, { backgroundColor: tema.arkaplan }]}>
-      <StatusBar
-        barStyle={temaModu === "dark" ? "light-content" : "dark-content"}
-        backgroundColor={tema.arkaplan}
-      />
+      {/* 🚀 DÜZELTME: Sadece sayfa odaktaysa StatusBar çalışır ve gerçek karanlık rengi alır */}
+      {isFocused && (
+        <StatusBar
+          barStyle={isGercektenKaranlik ? "light-content" : "dark-content"}
+          backgroundColor={tema.arkaplan}
+        />
+      )}
 
       <View style={styles.headerKapsayici}>
         <Text style={[styles.anaBaslik, { color: tema.metin }]}>
-          Geçmiş Sorular
+          Hata Defterim
         </Text>
       </View>
 
@@ -475,7 +484,6 @@ export default function HistoryScreen() {
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              // Yatay kaydırmanın ekran dışına çıkıp nefes alması için yatay listeye özel padding
               contentContainerStyle={{ paddingHorizontal: 24 }}
             >
               {dinamikKategoriler.map((kategori, index) => (
@@ -521,7 +529,6 @@ export default function HistoryScreen() {
               </Text>
             </View>
           ) : (
-            // 🚀 DÜZELTME: İç Kapsayıcı 24 birimlik boşluk sadece listede uygulanır
             <View style={styles.innerContainer}>
               <FlatList
                 data={filtrelenmisSorular}
@@ -585,7 +592,6 @@ export default function HistoryScreen() {
         </>
       )}
 
-      {/* PDF BUTONU: SafeArea kullanıldığı için insets.bottom ile konumlandırılmalı (opsiyonel) */}
       {filtrelenmisSorular.length > 0 && (
         <TouchableOpacity
           style={[
@@ -634,7 +640,7 @@ export default function HistoryScreen() {
                 {
                   backgroundColor: tema.kutuArkaplan,
                   paddingBottom: insets.bottom + 20,
-                }, // 🚀 DÜZELTME: Alt çizgi koruması
+                },
               ]}
             >
               <View style={styles.modalUstKontroller}>
@@ -700,12 +706,19 @@ export default function HistoryScreen() {
                       style={[
                         styles.bilgiEtiketi,
                         {
-                          backgroundColor:
-                            temaModu === "dark" ? "#1A1A1A" : "#F9FAFB",
+                          backgroundColor: isGercektenKaranlik
+                            ? "#1A1A1A"
+                            : "#F9FAFB",
                         },
                       ]}
                     >
-                      <Text style={{ color: tema.metin, fontWeight: "600" }}>
+                      <Text
+                        style={{
+                          color: tema.metin,
+                          fontWeight: "600",
+                          fontSize: 15,
+                        }}
+                      >
                         📚 {seciliSoru.cozumDetayi.subject} ›{" "}
                         {seciliSoru.cozumDetayi.topic}
                       </Text>
@@ -745,8 +758,9 @@ export default function HistoryScreen() {
                         style={[
                           styles.adimKutusu,
                           {
-                            backgroundColor:
-                              temaModu === "dark" ? "#1E293B" : "#EFF6FF",
+                            backgroundColor: isGercektenKaranlik
+                              ? "#1E293B"
+                              : "#EFF6FF",
                             borderLeftColor: tema.anaButon,
                           },
                         ]}
@@ -768,8 +782,9 @@ export default function HistoryScreen() {
                       style={[
                         styles.cevapKutusu,
                         {
-                          backgroundColor:
-                            temaModu === "dark" ? "#064E3B" : "#ECFDF5",
+                          backgroundColor: isGercektenKaranlik
+                            ? "#064E3B"
+                            : "#ECFDF5",
                           borderColor: "#10B981",
                         },
                       ]}
@@ -778,7 +793,7 @@ export default function HistoryScreen() {
                         style={[
                           styles.kucukBaslik,
                           {
-                            color: temaModu === "dark" ? "#34D399" : "#059669",
+                            color: isGercektenKaranlik ? "#34D399" : "#059669",
                           },
                         ]}
                       >
@@ -788,7 +803,7 @@ export default function HistoryScreen() {
                         style={[
                           styles.cevapMetni,
                           {
-                            color: temaModu === "dark" ? "#A7F3D0" : "#065F46",
+                            color: isGercektenKaranlik ? "#A7F3D0" : "#065F46",
                           },
                         ]}
                       >
@@ -823,7 +838,7 @@ export default function HistoryScreen() {
                     )}
 
                     {seciliSoru.cozumKartiLink && (
-                      <View style={{ marginBottom: 25 }}>
+                      <View style={{ marginBottom: 30 }}>
                         <Text
                           style={[
                             styles.adimlarAnaBaslik,
@@ -924,12 +939,12 @@ export default function HistoryScreen() {
                   </View>
                 ) : (
                   <View style={{ padding: 40, alignItems: "center" }}>
-                    <ActivityIndicator size="large" color={tema.anaButon} />
                     <Text
                       style={{
                         color: tema.metin,
                         marginTop: 15,
                         textAlign: "center",
+                        fontSize: 16,
                       }}
                     >
                       Yapay zeka analiz dosyası bekleniyor...
@@ -1020,20 +1035,24 @@ export default function HistoryScreen() {
 
                             if (secilenSik) {
                               if (harf === aktifPratikSoru.correct_option) {
-                                arkaplanRengi =
-                                  temaModu === "dark" ? "#064E3B" : "#ECFDF5";
+                                arkaplanRengi = isGercektenKaranlik
+                                  ? "#064E3B"
+                                  : "#ECFDF5";
                                 cerceveRengi = "#10B981";
-                                yaziRengi =
-                                  temaModu === "dark" ? "#A7F3D0" : "#065F46";
+                                yaziRengi = isGercektenKaranlik
+                                  ? "#A7F3D0"
+                                  : "#065F46";
                               } else if (
                                 secilenSik === harf &&
                                 harf !== aktifPratikSoru.correct_option
                               ) {
-                                arkaplanRengi =
-                                  temaModu === "dark" ? "#7F1D1D" : "#FEF2F2";
+                                arkaplanRengi = isGercektenKaranlik
+                                  ? "#7F1D1D"
+                                  : "#FEF2F2";
                                 cerceveRengi = "#EF4444";
-                                yaziRengi =
-                                  temaModu === "dark" ? "#FECACA" : "#991B1B";
+                                yaziRengi = isGercektenKaranlik
+                                  ? "#FECACA"
+                                  : "#991B1B";
                               } else {
                                 arkaplanRengi = tema.kutuArkaplan;
                                 cerceveRengi = "transparent";
@@ -1152,12 +1171,10 @@ export default function HistoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  // 🚀 DÜZELTME: SafeAreaView Ana Kapsayıcı
   safeArea: {
     flex: 1,
     paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
   },
-  // 🚀 DÜZELTME: Soru listesini saran iç kapsayıcı (ferahlık için sağ-sol boşluklu)
   innerContainer: {
     flex: 1,
     paddingHorizontal: 24,
@@ -1171,7 +1188,7 @@ const styles = StyleSheet.create({
     marginTop: 15,
   },
   anaBaslik: {
-    fontSize: 28, // Başlık büyütüldü
+    fontSize: 28,
     fontWeight: "bold",
     letterSpacing: 0.5,
   },
@@ -1180,7 +1197,7 @@ const styles = StyleSheet.create({
   },
   kategoriButon: {
     paddingHorizontal: 20,
-    paddingVertical: 12, // Butonlar biraz dolgunlaştırıldı
+    paddingVertical: 12,
     borderRadius: 20,
     marginRight: 10,
     borderWidth: 1,
@@ -1193,8 +1210,8 @@ const styles = StyleSheet.create({
   ikon: { marginBottom: 15, opacity: 0.8 },
   bosMesajYazisi: { fontSize: 16, textAlign: "center" },
   kart: {
-    padding: 16, // Kart içi ferahlatıldı
-    borderRadius: 16, // Ovalleşti
+    padding: 16,
+    borderRadius: 16,
     marginBottom: 16,
     borderWidth: 1,
     flexDirection: "row",
@@ -1232,12 +1249,12 @@ const styles = StyleSheet.create({
   },
   modalArkaplan: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.85)", // Arka plan hafif koyulaştı
+    backgroundColor: "rgba(0,0,0,0.85)",
     justifyContent: "flex-end",
   },
   modalKutu: {
-    borderTopLeftRadius: 30, // Ovalleşti
-    borderTopRightRadius: 30, // Ovalleşti
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
     paddingHorizontal: 24,
     paddingTop: 24,
     maxHeight: "92%",
@@ -1282,7 +1299,7 @@ const styles = StyleSheet.create({
   aiEtiketYazi: {
     color: "#fff",
     fontWeight: "bold",
-    fontSize: 12,
+    fontSize: 13,
     letterSpacing: 0.5,
   },
   cozumAnaBaslik: { fontSize: 26, fontWeight: "900", marginBottom: 20 },
@@ -1336,7 +1353,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 24,
     marginBottom: 25,
-    alignItems: "center", // Ortalandı
+    alignItems: "center",
   },
   cevapMetni: { fontSize: 32, fontWeight: "900", marginTop: 5 },
   benzerSoruBolumu: {
@@ -1389,12 +1406,12 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   pratikModalArkaplan: {
-    backgroundColor: "rgba(0,0,0,0.7)", // Koyulaştı
+    backgroundColor: "rgba(0,0,0,0.7)",
     justifyContent: "flex-end",
   },
   pratikModalKutu: {
-    borderTopLeftRadius: 30, // Ovalleşti
-    borderTopRightRadius: 30, // Ovalleşti
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
     paddingHorizontal: 24,
     paddingTop: 24,
     maxHeight: "80%",
@@ -1422,8 +1439,8 @@ const styles = StyleSheet.create({
   sikKutusu: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 18, // Ferahladı
-    borderRadius: 16, // Ovalleşti
+    padding: 18,
+    borderRadius: 16,
     borderWidth: 2,
     marginBottom: 12,
   },

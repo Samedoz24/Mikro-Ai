@@ -45,6 +45,7 @@ import * as MediaLibrary from "expo-media-library";
 
 import { useTheme } from "../ThemeContext";
 import { colors } from "../theme";
+import { cozumYukle } from "../utils/cozumYukleyici";
 
 const ekranGenisligi = Dimensions.get("window").width;
 const ekranYuksekligi = Dimensions.get("window").height;
@@ -82,6 +83,7 @@ export default function HistoryScreen() {
   const [modalGorunur, setModalGorunur] = useState(false);
   const [tamEkranModu, setTamEkranModu] = useState(false);
   const [cozumYukleniyor, setCozumYukleniyor] = useState(false);
+  const [cozumHatasi, setCozumHatasi] = useState(false);
 
   const [pratikModalGorunur, setPratikModalGorunur] = useState(false);
   const [aktifPratikSoru, setAktifPratikSoru] = useState(null);
@@ -151,6 +153,7 @@ export default function HistoryScreen() {
     setModalGorunur(true);
     setTamEkranModu(false);
     setCozumYukleniyor(true);
+    setCozumHatasi(false);
     setPratikModalGorunur(false);
 
     if (soru.durum === "Çözüldü" && soru.okunduMu !== true) {
@@ -164,48 +167,17 @@ export default function HistoryScreen() {
     }
 
     try {
-      const userEmail = auth.currentUser?.email;
-      let timestamp = soru.id;
-
-      if (soru.fotoLink) {
-        const match = soru.fotoLink.match(/(\d{13})/);
-        if (match && match[1]) {
-          timestamp = match[1];
-        } else {
-          const matchYedek = soru.fotoLink.match(/(\d+)\.(jpg|jpeg|png)/i);
-          if (matchYedek && matchYedek[1]) {
-            timestamp = matchYedek[1];
-          }
-        }
-      }
-
-      let jsonVerisi = null;
-      try {
-        const jsonYolu = `cozumDetayi/${userEmail}/${timestamp}.json`;
-        const jsonRef = ref(storage, jsonYolu);
-        const jsonUrl = await getDownloadURL(jsonRef);
-        const response = await fetch(jsonUrl);
-        jsonVerisi = await response.json();
-      } catch (jsonHata) {
-        console.log("JSON bulunamadı.");
-      }
-
-      let resimVerisi = null;
-      try {
-        const resimYolu = `solution-cards/${userEmail}/${timestamp}.png`;
-        const resimRef = ref(storage, resimYolu);
-        resimVerisi = await getDownloadURL(resimRef);
-      } catch (resimHata) {
-        console.log("Çözüm resmi bulunamadı.");
-      }
+      const sonuc = await cozumYukle(soru, auth.currentUser?.email);
 
       setSeciliSoru((prev) => ({
         ...prev,
-        cozumDetayi: jsonVerisi,
-        cozumKartiLink: resimVerisi,
+        cozumDetayi: sonuc.cozumDetayi,
+        cozumKartiLink: sonuc.cozumKartiLink,
       }));
+      setCozumHatasi(!sonuc.cozumDetayi && !!sonuc.hata);
     } catch (error) {
       console.log("Veriler çekilirken genel hata oluştu:", error);
+      setCozumHatasi(true);
     } finally {
       setCozumYukleniyor(false);
     }
@@ -947,7 +919,9 @@ export default function HistoryScreen() {
                         fontSize: 16,
                       }}
                     >
-                      Yapay zeka analiz dosyası bekleniyor...
+                      {cozumHatasi
+                        ? "Çözüm şu an yüklenemedi. Lütfen bağlantını kontrol edip daha sonra tekrar dene."
+                        : "Yapay zeka analiz dosyası bekleniyor..."}
                     </Text>
                   </View>
                 )}

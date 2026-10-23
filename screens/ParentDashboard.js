@@ -24,7 +24,7 @@ import {
 import { useIsFocused } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 
-import { auth, db, storage } from "../firebaseConfig";
+import { auth, db } from "../firebaseConfig";
 import {
   doc,
   getDoc,
@@ -36,11 +36,11 @@ import {
   arrayUnion,
   arrayRemove,
 } from "firebase/firestore";
-import { ref, getDownloadURL } from "firebase/storage";
 
 import { useTheme } from "../ThemeContext";
 // 🚀 YENİ: Gerçek karanlık mod kontrolü için
 import { colors } from "../theme";
+import { cozumYukle } from "../utils/cozumYukleyici";
 
 const ekranGenisligi = Dimensions.get("window").width;
 const ekranYuksekligi = Dimensions.get("window").height;
@@ -74,6 +74,7 @@ export default function ParentDashboard() {
   const [detayModalGorunur, setDetayModalGorunur] = useState(false);
   const [tamEkranModu, setTamEkranModu] = useState(false);
   const [cozumYukleniyor, setCozumYukleniyor] = useState(false);
+  const [cozumHatasi, setCozumHatasi] = useState(false);
 
   useEffect(() => {
     const veliVerileriniGetir = async () => {
@@ -305,48 +306,20 @@ export default function ParentDashboard() {
     setDetayModalGorunur(true);
     setTamEkranModu(false);
     setCozumYukleniyor(true);
+    setCozumHatasi(false);
 
     try {
-      const ogrenciEposta = soru.kullaniciEposta;
-      let timestamp = soru.id;
-
-      if (soru.fotoLink) {
-        const match = soru.fotoLink.match(/(\d{13})/);
-        if (match && match[1]) {
-          timestamp = match[1];
-        } else {
-          const matchYedek = soru.fotoLink.match(/(\d+)\.(jpg|jpeg|png)/i);
-          if (matchYedek && matchYedek[1]) timestamp = matchYedek[1];
-        }
-      }
-
-      let jsonVerisi = null;
-      try {
-        const jsonYolu = `cozumDetayi/${ogrenciEposta}/${timestamp}.json`;
-        const jsonRef = ref(storage, jsonYolu);
-        const jsonUrl = await getDownloadURL(jsonRef);
-        const response = await fetch(jsonUrl);
-        jsonVerisi = await response.json();
-      } catch (e) {
-        console.log("JSON bulunamadı.");
-      }
-
-      let resimVerisi = null;
-      try {
-        const resimYolu = `solution-cards/${ogrenciEposta}/${timestamp}.png`;
-        const resimRef = ref(storage, resimYolu);
-        resimVerisi = await getDownloadURL(resimRef);
-      } catch (e) {
-        console.log("Çözüm resmi bulunamadı.");
-      }
+      const sonuc = await cozumYukle(soru, soru.kullaniciEposta);
 
       setSeciliSoru((prev) => ({
         ...prev,
-        cozumDetayi: jsonVerisi,
-        cozumKartiLink: resimVerisi,
+        cozumDetayi: sonuc.cozumDetayi,
+        cozumKartiLink: sonuc.cozumKartiLink,
       }));
+      setCozumHatasi(!sonuc.cozumDetayi && !!sonuc.hata);
     } catch (error) {
       console.log("Veriler çekilirken genel hata oluştu:", error);
+      setCozumHatasi(true);
     } finally {
       setCozumYukleniyor(false);
     }
@@ -1000,7 +973,9 @@ export default function ParentDashboard() {
                         lineHeight: 24,
                       }}
                     >
-                      Yapay zeka analiz dosyası bekleniyor...
+                      {cozumHatasi
+                        ? "Çözüm şu an yüklenemedi. Lütfen bağlantını kontrol edip daha sonra tekrar dene."
+                        : "Yapay zeka analiz dosyası bekleniyor..."}
                     </Text>
                   </View>
                 )}

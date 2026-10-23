@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Project",
+    "name": "Mikro",
     "slug": "Project",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -54,12 +54,6 @@
         "expo-image-picker",
         {
           "cameraPermission": "Soru fotoğrafı çekmek için kameranıza erişmemiz gerekiyor."
-        }
-      ],
-      [
-        "react-native-vision-camera",
-        {
-          "cameraPermissionText": "Fotoğraf çekmek için kamera izni gerekli"
         }
       ],
       [

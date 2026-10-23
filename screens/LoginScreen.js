@@ -25,7 +25,12 @@ import {
   signInWithCredential,
 } from "firebase/auth";
 
-import { GoogleSignin } from "@react-native-google-signin/google-signin";
+import {
+  GoogleSignin,
+  isSuccessResponse,
+  isErrorWithCode,
+  statusCodes,
+} from "@react-native-google-signin/google-signin";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import LottieView from "lottie-react-native";
@@ -92,14 +97,31 @@ export default function LoginScreen({ setKullaniciRolu }) {
     try {
       await AsyncStorage.setItem("hedefRol", seciliRol);
       await GoogleSignin.hasPlayServices();
-      const userInfo = await GoogleSignin.signIn();
-      const { idToken } = await GoogleSignin.getTokens();
+      const response = await GoogleSignin.signIn();
+
+      // v16: kullanıcı pencereyi kapatırsa hata fırlatılmaz, type: "cancelled" döner
+      if (!isSuccessResponse(response)) {
+        setGoogleYukleniyor(false);
+        return;
+      }
+
+      const idToken =
+        response.data.idToken || (await GoogleSignin.getTokens()).idToken;
+      if (!idToken) throw new Error("Google kimlik belirteci alınamadı.");
+
       const googleBileti = GoogleAuthProvider.credential(idToken);
       await signInWithCredential(auth, googleBileti);
     } catch (error) {
+      setGoogleYukleniyor(false);
+      if (
+        isErrorWithCode(error) &&
+        (error.code === statusCodes.SIGN_IN_CANCELLED ||
+          error.code === statusCodes.IN_PROGRESS)
+      ) {
+        return;
+      }
       console.log("GOOGLE GİRİŞ HATASI DETAYI:", error);
       Alert.alert("Google Giriş Hatası", String(error.message));
-      setGoogleYukleniyor(false);
     }
   };
 

@@ -40,12 +40,14 @@ export async function registerForPushNotificationsAsync() {
 // 🚀 AKILLI BİLDİRİM STRATEJİLERİ (v3)
 // ---------------------------------------------------------
 
-export async function scheduleMidnightQuotaReminder() {
+export async function scheduleMidnightQuotaReminder(premiumMu = false) {
   await Notifications.scheduleNotificationAsync({
     identifier: "quota-v3", // 👈 Yeni Kimlik
     content: {
       title: "🎁 Günlük Kotan Yenilendi!",
-      body: "Ücretsiz yapay zeka hakların sıfırlandı. Güne hemen bir soru çözerek başla!",
+      body: premiumMu
+        ? "Premium ile bugünkü 50 soru hakkın hazır. Güne hemen bir soru çözerek başla!"
+        : "Ücretsiz yapay zeka hakların sıfırlandı. Güne hemen bir soru çözerek başla!",
       sound: true,
     },
     trigger: {
@@ -115,7 +117,7 @@ export async function scheduleReEngagementReminder() {
 }
 
 // 🧠 YEPYENİ AKILLI YÖNETİCİ (Reload Korumalı)
-export async function setupSmartNotifications(rol) {
+export async function setupSmartNotifications(rol, premiumMu = false) {
   // 1. ADIM: Mevcut kurulu bildirimleri kontrol et
   const scheduled = await Notifications.getAllScheduledNotificationsAsync();
   const scheduledIds = scheduled.map((n) => n.identifier);
@@ -129,9 +131,11 @@ export async function setupSmartNotifications(rol) {
 
   // 3. ADIM: Diğerlerini SADECE YOKSA kur (Reload'da anında çalmayı engelleyen yer burası)
   if (rol === "ogrenci") {
-    if (!scheduledIds.includes("quota-v3")) {
-      await scheduleMidnightQuotaReminder();
+    // Kota mesajı premium durumuna bağlı, her girişte güncel haliyle yeniden kur
+    if (scheduledIds.includes("quota-v3")) {
+      await Notifications.cancelScheduledNotificationAsync("quota-v3");
     }
+    await scheduleMidnightQuotaReminder(premiumMu);
     if (!scheduledIds.includes("streak-v3")) {
       await scheduleStreakReminder();
     }

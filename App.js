@@ -42,6 +42,7 @@ function MainApp() {
   const [kullaniciRolu, setKullaniciRolu] = useState("ogrenci");
   const [gosterOnboarding, setGosterOnboarding] = useState(false);
   const [okunmamisSayisi, setOkunmamisSayisi] = useState(0);
+  const [premiumMu, setPremiumMu] = useState(false);
 
   const { tema } = useTheme();
 
@@ -71,6 +72,7 @@ function MainApp() {
             }
 
             setKullaniciRolu(gercekRol);
+            setPremiumMu(userDoc.data().premiumMu === true);
             await AsyncStorage.setItem("kullaniciRolu", gercekRol);
             setGosterOnboarding(false);
           } else {
@@ -86,6 +88,7 @@ function MainApp() {
             );
 
             setKullaniciRolu(yeniRol);
+            setPremiumMu(false);
             await AsyncStorage.setItem("kullaniciRolu", yeniRol);
             setGosterOnboarding(true);
           }
@@ -116,7 +119,7 @@ function MainApp() {
         if (aktif) {
           const izin = await registerForPushNotificationsAsync();
           if (izin) {
-            await setupSmartNotifications(kullaniciRolu);
+            await setupSmartNotifications(kullaniciRolu, premiumMu);
           }
         }
       } catch (error) {
@@ -125,7 +128,7 @@ function MainApp() {
     };
 
     bildirimleriKur();
-  }, [kullanici, kullaniciRolu]);
+  }, [kullanici, kullaniciRolu, premiumMu]);
 
   useEffect(() => {
     if (!kullanici || kullaniciRolu !== "ogrenci") return;

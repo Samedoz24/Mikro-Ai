@@ -78,6 +78,7 @@ export default function ProfileScreen() {
   const [isimDuzenleniyor, setIsimDuzenleniyor] = useState(false);
 
   const [bildirimAktif, setBildirimAktif] = useState(true);
+  const [premiumMu, setPremiumMu] = useState(false);
 
   const [profilFoto, setProfilFoto] = useState(null);
   const [fotoYukleniyor, setFotoYukleniyor] = useState(false);
@@ -226,6 +227,7 @@ export default function ProfileScreen() {
 
             if (data.premiumMu !== undefined) {
               setMaxKota(data.premiumMu ? 50 : 3);
+              setPremiumMu(data.premiumMu === true);
             }
 
             if (data.baglantiKodu) {
@@ -507,7 +509,7 @@ export default function ProfileScreen() {
           await scheduleReEngagementReminder();
 
           if (rol === "ogrenci") {
-            await scheduleMidnightQuotaReminder();
+            await scheduleMidnightQuotaReminder(premiumMu);
             await scheduleStreakReminder();
           } else if (rol === "veli") {
             await scheduleWeeklyReportReminder("veli");

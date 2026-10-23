@@ -3,8 +3,8 @@ import { Platform } from "react-native";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowBanner: true, // Bildirim üstten düşsün
-    shouldShowList: true, // Bildirim merkezinde listelensin
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
   }),
@@ -30,34 +30,127 @@ export async function registerForPushNotificationsAsync() {
   }
 
   if (finalStatus !== "granted") {
-    console.log("Kullanıcı bildirim izni vermedi.");
     return false;
   }
 
-  console.log("Yerel bildirim izni başarıyla alındı!");
   return true;
 }
 
-// ⏰ Her Akşam 19:00 Hatırlatıcısı
-export async function scheduleDailyReminder() {
-  await Notifications.cancelAllScheduledNotificationsAsync();
+// ---------------------------------------------------------
+// 🚀 AKILLI BİLDİRİM STRATEJİLERİ (v3)
+// ---------------------------------------------------------
 
+export async function scheduleMidnightQuotaReminder() {
   await Notifications.scheduleNotificationAsync({
+    identifier: "quota-v3", // 👈 Yeni Kimlik
     content: {
-      title: "🔥 Serin Tehlikede!",
-      body: "Bugün henüz soru çözmedin. Serini kaybetmemek için hemen bir soru tara!",
+      title: "🎁 Günlük Kotan Yenilendi!",
+      body: "Ücretsiz yapay zeka hakların sıfırlandı. Güne hemen bir soru çözerek başla!",
+      sound: true,
     },
     trigger: {
-      hour: 19,
+      type: Notifications.SchedulableTriggerInputTypes.DAILY,
+      hour: 0,
       minute: 0,
-      repeats: true,
       channelId: "default",
     },
   });
-  console.log("Günlük hatırlatıcı kuruldu.");
 }
 
-// 🤖 YENİ: Soru Çözüldüğünde Anında Gelen Bildirim
+export async function scheduleStreakReminder() {
+  await Notifications.scheduleNotificationAsync({
+    identifier: "streak-v3", // 👈 Yeni Kimlik
+    content: {
+      title: "🔥 Serin Bozulmak Üzere!",
+      body: "Bugün henüz Mikro AI'a uğramadın. Serini kaybetmemek için hemen bir soru tara!",
+      sound: true,
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.DAILY,
+      hour: 19,
+      minute: 30,
+      channelId: "default",
+    },
+  });
+}
+
+export async function scheduleWeeklyReportReminder(rol) {
+  const mesaj =
+    rol === "veli"
+      ? "📈 Öğrencinizin bu haftaki soru çözüm istatistikleri güncellendi. Veli panelinden hemen inceleyin."
+      : "📚 Bu hafta çok çalıştın! Hata defterin PDF olarak hazır, sınavdan önce tekrar etmeyi unutma.";
+
+  await Notifications.scheduleNotificationAsync({
+    identifier: "weekly-v3", // 👈 Yeni Kimlik
+    content: {
+      title: "Haftalık Raporun Hazır",
+      body: mesaj,
+      sound: true,
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+      weekday: 6, // Cuma
+      hour: 18,
+      minute: 0,
+      channelId: "default",
+    },
+  });
+}
+
+export async function scheduleReEngagementReminder() {
+  await Notifications.scheduleNotificationAsync({
+    identifier: "re-engage-v3", // 👈 Yeni Kimlik
+    content: {
+      title: "🤖 Seni Özledik!",
+      body: "Yapay zeka hocan seni bekliyor! Çözemediğin bir soru mu var? Hemen kameranı aç ve gönder.",
+      sound: true,
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      seconds: 60 * 60 * 24 * 3, // 3 Gün
+      repeats: false,
+      channelId: "default",
+    },
+  });
+}
+
+// 🧠 YEPYENİ AKILLI YÖNETİCİ (Reload Korumalı)
+export async function setupSmartNotifications(rol) {
+  // 1. ADIM: Mevcut kurulu bildirimleri kontrol et
+  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+  const scheduledIds = scheduled.map((n) => n.identifier);
+
+  // 2. ADIM: "Seni Özledik" bildirimini her girişte GÜNCELLE
+  // Bu bildirim her reload'da 3 gün sonraya ötelenir, anında çalmaz.
+  if (scheduledIds.includes("re-engage-v3")) {
+    await Notifications.cancelScheduledNotificationAsync("re-engage-v3");
+  }
+  await scheduleReEngagementReminder();
+
+  // 3. ADIM: Diğerlerini SADECE YOKSA kur (Reload'da anında çalmayı engelleyen yer burası)
+  if (rol === "ogrenci") {
+    if (!scheduledIds.includes("quota-v3")) {
+      await scheduleMidnightQuotaReminder();
+    }
+    if (!scheduledIds.includes("streak-v3")) {
+      await scheduleStreakReminder();
+    }
+  } else if (rol === "veli") {
+    if (!scheduledIds.includes("weekly-v3")) {
+      await scheduleWeeklyReportReminder("veli");
+    }
+  }
+
+  // Eski v2 versiyonlarını telefondan temizleyelim (Bir defalık temizlik)
+  await Notifications.cancelScheduledNotificationAsync("quota-v2");
+  await Notifications.cancelScheduledNotificationAsync("streak-v2");
+  await Notifications.cancelScheduledNotificationAsync("weekly-report-v2");
+  await Notifications.cancelScheduledNotificationAsync("re-engage-v2");
+
+  console.log("✅ Bildirimler akıllıca kontrol edildi ve kuruldu.");
+}
+
+// 🤖 Soru Çözüldüğünde Bildirim (Anında)
 export async function sendQuestionSolvedNotification(dersAdi) {
   const dersMetni = dersAdi ? `${dersAdi} dersine ait s` : "S";
 
@@ -67,12 +160,12 @@ export async function sendQuestionSolvedNotification(dersAdi) {
       body: `${dersMetni}orunun yapay zeka analizi ve çözüm kartı hazırlandı. Hemen incele!`,
       sound: true,
     },
-    trigger: null, // null olması bildirimin "Saniye beklemeden anında" gönderilmesini sağlar
+    trigger: null,
   });
 }
 
-// ❌ Bildirimleri Kapatma
+// ❌ Tüm Bildirimleri Kapatma
 export async function cancelAllNotifications() {
   await Notifications.cancelAllScheduledNotificationsAsync();
-  console.log("Bildirimler iptal edildi.");
+  console.log("Tüm bildirimler iptal edildi.");
 }

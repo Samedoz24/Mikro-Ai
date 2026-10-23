@@ -46,10 +46,15 @@ import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Application from "expo-application";
 import * as Notifications from "expo-notifications";
+
+// 🚀 DÜZELTME: Yeni akıllı bildirim yöneticilerimiz eklendi
 import {
   registerForPushNotificationsAsync,
-  scheduleDailyReminder,
   cancelAllNotifications,
+  scheduleMidnightQuotaReminder,
+  scheduleStreakReminder,
+  scheduleWeeklyReportReminder,
+  scheduleReEngagementReminder,
 } from "../utils/notificationManager";
 
 import { useTheme } from "../ThemeContext";
@@ -484,6 +489,7 @@ export default function ProfileScreen() {
     }
   };
 
+  // 🚀 DÜZELTME: Anahtarı (Switch) çevirdiğimizde yeni stratejileri kursun
   const bildirimAyariniDegistir = async (deger) => {
     setBildirimAktif(deger);
     await AsyncStorage.setItem("bildirimAktif", JSON.stringify(deger));
@@ -495,10 +501,21 @@ export default function ProfileScreen() {
       if (deger) {
         const izinVerildi = await registerForPushNotificationsAsync();
         if (izinVerildi) {
-          await scheduleDailyReminder();
+          // Önce her şeyi sıfırla
+          await cancelAllNotifications();
+          // Ortak olan geri kazanım bildirimini kur
+          await scheduleReEngagementReminder();
+
+          if (rol === "ogrenci") {
+            await scheduleMidnightQuotaReminder();
+            await scheduleStreakReminder();
+          } else if (rol === "veli") {
+            await scheduleWeeklyReportReminder("veli");
+          }
+
           Alert.alert(
             "Bildirimler Açıldı",
-            "Her akşam saat 19:00'da sana hatırlatma göndereceğiz."
+            "Sana özel hatırlatıcılar başarıyla kuruldu."
           );
         } else {
           setBildirimAktif(false);
@@ -608,7 +625,6 @@ export default function ProfileScreen() {
   };
 
   const htmlSablonUret = (baslik, altBaslik, icerikHtml) => {
-    // 🚀 DÜZELTME: isGercektenKaranlik kullanıldı
     const isDark = isGercektenKaranlik;
     const bg = isDark ? "#121212" : "#FFFFFF";
     const metinRenk = isDark ? "#E5E7EB" : "#1F2937";
@@ -905,7 +921,6 @@ export default function ProfileScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: tema.arkaplan }]}>
-      {/* 🚀 DÜZELTME: Sadece sayfa odaktaysa StatusBar devreye girer. Rengini de Gerçek Karanlık olup olmamasına göre belirler. */}
       {isFocused && (
         <StatusBar
           barStyle={isGercektenKaranlik ? "light-content" : "dark-content"}

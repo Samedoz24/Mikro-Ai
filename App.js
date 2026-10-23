@@ -17,13 +17,16 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 
-// 🚀 YENİ: Modern Güvenli Alan Sağlayıcısı eklendi
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ThemeProvider, useTheme } from "./ThemeContext";
-import { sendQuestionSolvedNotification } from "./utils/notificationManager";
 
-// 📄 Sayfalarımız
+import {
+  sendQuestionSolvedNotification,
+  registerForPushNotificationsAsync,
+  setupSmartNotifications,
+} from "./utils/notificationManager";
+
 import LoginScreen from "./screens/LoginScreen";
 import HomeScreen from "./screens/HomeScreen";
 import ProfileScreen from "./screens/ProfileScreen";
@@ -42,7 +45,6 @@ function MainApp() {
 
   const { tema } = useTheme();
 
-  // 🚪 Akıllı Kapı Bekçisi (Gatekeeper)
   useEffect(() => {
     const abonelik = onAuthStateChanged(auth, async (aktifKullanici) => {
       if (aktifKullanici) {
@@ -103,7 +105,28 @@ function MainApp() {
     return () => abonelik();
   }, []);
 
-  // 🤖 Arka Planda Soru Çözümü ve Bildirim Bekçisi
+  useEffect(() => {
+    const bildirimleriKur = async () => {
+      if (!kullanici) return;
+
+      try {
+        const bildirimAyar = await AsyncStorage.getItem("bildirimAktif");
+        const aktif = bildirimAyar !== null ? JSON.parse(bildirimAyar) : true;
+
+        if (aktif) {
+          const izin = await registerForPushNotificationsAsync();
+          if (izin) {
+            await setupSmartNotifications(kullaniciRolu);
+          }
+        }
+      } catch (error) {
+        console.log("Bildirim kurulum hatası:", error);
+      }
+    };
+
+    bildirimleriKur();
+  }, [kullanici, kullaniciRolu]);
+
   useEffect(() => {
     if (!kullanici || kullaniciRolu !== "ogrenci") return;
 
@@ -159,90 +182,89 @@ function MainApp() {
     return <OnboardingScreen onTamamla={() => setGosterOnboarding(false)} />;
   }
 
+  // 🚀 DÜZELTME: NavigationContainer buradan silindi, en dıştaki (ölümsüz) App bileşenine taşındı.
   return (
-    <NavigationContainer>
-      <Tab.Navigator
-        screenOptions={({ route }) => ({
-          tabBarIcon: ({ focused, color, size }) => {
-            let iconName;
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        tabBarIcon: ({ focused, color, size }) => {
+          let iconName;
 
-            if (route.name === "Ana Sayfa") {
-              iconName = focused ? "camera" : "camera-outline";
-            } else if (route.name === "Hata Defteri") {
-              iconName = focused ? "book" : "book-outline";
-            } else if (route.name === "Profil") {
-              iconName = focused ? "person" : "person-outline";
-            } else if (route.name === "Veli Paneli") {
-              iconName = focused
-                ? "shield-checkmark"
-                : "shield-checkmark-outline";
-            }
+          if (route.name === "Ana Sayfa") {
+            iconName = focused ? "camera" : "camera-outline";
+          } else if (route.name === "Hata Defteri") {
+            iconName = focused ? "book" : "book-outline";
+          } else if (route.name === "Profil") {
+            iconName = focused ? "person" : "person-outline";
+          } else if (route.name === "Veli Paneli") {
+            iconName = focused
+              ? "shield-checkmark"
+              : "shield-checkmark-outline";
+          }
 
-            return <Ionicons name={iconName} size={size} color={color} />;
-          },
-          // 🚀 MUAZZAM UX GÜNCELLEMESİ: Üstteki kaba başlık şeridi tamamen yok edildi!
-          headerShown: false,
-
-          tabBarActiveTintColor: tema.anaButon,
-          tabBarInactiveTintColor: tema.ikincilMetin,
-          tabBarStyle: {
-            backgroundColor: tema.kutuArkaplan,
-            borderTopColor: tema.kutuCerceve,
-          },
-        })}
-      >
-        {kullaniciRolu === "ogrenci" ? (
-          <>
-            <Tab.Screen
-              name="Ana Sayfa"
-              component={HomeScreen}
-              options={{ title: "Kamera" }}
-            />
-            <Tab.Screen
-              name="Hata Defteri"
-              component={HistoryScreen}
-              options={{
-                title: "Geçmiş Sorular",
-                tabBarBadge: okunmamisSayisi > 0 ? okunmamisSayisi : null,
-                tabBarBadgeStyle: {
-                  backgroundColor: "#EF4444",
-                  color: "#FFFFFF",
-                  fontSize: 12,
-                  fontWeight: "bold",
-                },
-              }}
-            />
-            <Tab.Screen
-              name="Profil"
-              component={ProfileScreen}
-              options={{ title: "Hesabım" }}
-            />
-          </>
-        ) : (
-          <>
-            <Tab.Screen
-              name="Veli Paneli"
-              component={ParentDashboard}
-              options={{ title: "Yönetim Paneli" }}
-            />
-            <Tab.Screen
-              name="Profil"
-              component={ProfileScreen}
-              options={{ title: "Hesabım" }}
-            />
-          </>
-        )}
-      </Tab.Navigator>
-    </NavigationContainer>
+          return <Ionicons name={iconName} size={size} color={color} />;
+        },
+        headerShown: false,
+        tabBarActiveTintColor: tema.anaButon,
+        tabBarInactiveTintColor: tema.ikincilMetin,
+        tabBarStyle: {
+          backgroundColor: tema.kutuArkaplan,
+          borderTopColor: tema.kutuCerceve,
+        },
+      })}
+    >
+      {kullaniciRolu === "ogrenci" ? (
+        <>
+          <Tab.Screen
+            name="Ana Sayfa"
+            component={HomeScreen}
+            options={{ title: "Kamera" }}
+          />
+          <Tab.Screen
+            name="Hata Defteri"
+            component={HistoryScreen}
+            options={{
+              title: "Geçmiş Sorular",
+              tabBarBadge: okunmamisSayisi > 0 ? okunmamisSayisi : null,
+              tabBarBadgeStyle: {
+                backgroundColor: "#EF4444",
+                color: "#FFFFFF",
+                fontSize: 12,
+                fontWeight: "bold",
+              },
+            }}
+          />
+          <Tab.Screen
+            name="Profil"
+            component={ProfileScreen}
+            options={{ title: "Hesabım" }}
+          />
+        </>
+      ) : (
+        <>
+          <Tab.Screen
+            name="Veli Paneli"
+            component={ParentDashboard}
+            options={{ title: "Yönetim Paneli" }}
+          />
+          <Tab.Screen
+            name="Profil"
+            component={ProfileScreen}
+            options={{ title: "Hesabım" }}
+          />
+        </>
+      )}
+    </Tab.Navigator>
   );
 }
 
+// 🚀 MİMARİ DÜZELTME: NavigationContainer artık uygulamanın en tepesinde ve hiçbir zaman silinmeyecek.
 export default function App() {
   return (
-    // 🚀 YENİ: Modern Güvenli Alan Sağlayıcısı
     <SafeAreaProvider>
       <ThemeProvider>
-        <MainApp />
+        <NavigationContainer>
+          <MainApp />
+        </NavigationContainer>
       </ThemeProvider>
     </SafeAreaProvider>
   );

@@ -32,6 +32,8 @@ import LottieView from "lottie-react-native";
 import { colors } from "../theme";
 import { Ionicons } from "@expo/vector-icons";
 
+// 🚀 DÜZELTME: useIsFocused tamamen silindi! (Hatanın kaynağı burasıydı)
+
 GoogleSignin.configure({
   webClientId:
     "758732204910-2juevkcahro9998k6u9tllfqo49sot1a.apps.googleusercontent.com",
@@ -51,7 +53,6 @@ export default function LoginScreen({ setKullaniciRolu }) {
   const sistemTemasi = useColorScheme();
   const tema = sistemTemasi === "dark" ? colors.dark : colors.light;
 
-  // 🚀 DÜZELTME: useIsFocused kaldırıldı, sadece gerçek karanlık mod kontrolü kaldı.
   const isGercektenKaranlik = tema.arkaplan === colors.dark.arkaplan;
 
   const dinamikAnaRenk = seciliRol === "veli" ? "#4F46E5" : tema.anaButon;
@@ -317,7 +318,6 @@ export default function LoginScreen({ setKullaniciRolu }) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: tema.arkaplan }}>
-      {/* 🚀 DÜZELTME: Doğrudan karanlık/açık mod kontrolü yapıyoruz */}
       <StatusBar
         barStyle={isGercektenKaranlik ? "light-content" : "dark-content"}
         backgroundColor={tema.arkaplan}

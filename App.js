@@ -33,6 +33,8 @@ import ProfileScreen from "./screens/ProfileScreen";
 import HistoryScreen from "./screens/HistoryScreen";
 import ParentDashboard from "./screens/ParentDashboard";
 import OnboardingScreen from "./screens/OnboardingScreen";
+import YasOnayScreen from "./screens/YasOnayScreen";
+import { YAS_ONAYI_SURUMU } from "./utils/yasalMetinler";
 
 const Tab = createBottomTabNavigator();
 
@@ -41,6 +43,7 @@ function MainApp() {
   const [yukleniyor, setYukleniyor] = useState(true);
   const [kullaniciRolu, setKullaniciRolu] = useState("ogrenci");
   const [gosterOnboarding, setGosterOnboarding] = useState(false);
+  const [onayGerekli, setOnayGerekli] = useState(false);
   const [okunmamisSayisi, setOkunmamisSayisi] = useState(0);
   const [premiumMu, setPremiumMu] = useState(false);
 
@@ -71,6 +74,14 @@ function MainApp() {
               return;
             }
 
+            const yasOnayi = userDoc.data().yasOnayi;
+            setOnayGerekli(
+              !(
+                yasOnayi?.onaylandi === true &&
+                (yasOnayi?.surum ?? 0) >= YAS_ONAYI_SURUMU
+              )
+            );
+
             setKullaniciRolu(gercekRol);
             setPremiumMu(userDoc.data().premiumMu === true);
             await AsyncStorage.setItem("kullaniciRolu", gercekRol);
@@ -87,6 +98,7 @@ function MainApp() {
               { merge: true }
             );
 
+            setOnayGerekli(true);
             setKullaniciRolu(yeniRol);
             setPremiumMu(false);
             await AsyncStorage.setItem("kullaniciRolu", yeniRol);
@@ -110,7 +122,8 @@ function MainApp() {
 
   useEffect(() => {
     const bildirimleriKur = async () => {
-      if (!kullanici) return;
+      // Onay verilmeden bildirim izni istenmez
+      if (!kullanici || onayGerekli) return;
 
       try {
         const bildirimAyar = await AsyncStorage.getItem("bildirimAktif");
@@ -128,7 +141,7 @@ function MainApp() {
     };
 
     bildirimleriKur();
-  }, [kullanici, kullaniciRolu, premiumMu]);
+  }, [kullanici, kullaniciRolu, premiumMu, onayGerekli]);
 
   useEffect(() => {
     if (!kullanici || kullaniciRolu !== "ogrenci") return;
@@ -179,6 +192,16 @@ function MainApp() {
 
   if (!kullanici) {
     return <LoginScreen setKullaniciRolu={setKullaniciRolu} />;
+  }
+
+  if (onayGerekli) {
+    return (
+      <YasOnayScreen
+        kullanici={kullanici}
+        rol={kullaniciRolu}
+        onOnaylandi={() => setOnayGerekli(false)}
+      />
+    );
   }
 
   if (gosterOnboarding) {

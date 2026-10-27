@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -25,12 +25,11 @@ import { useIsFocused } from "@react-navigation/native";
 
 // Firebase Kütüphaneleri
 import { auth, db, storage } from "../firebaseConfig";
-import { signOut, deleteUser } from "firebase/auth";
+import { signOut } from "firebase/auth";
 import {
   doc,
   setDoc,
   updateDoc,
-  deleteDoc,
   deleteField,
   onSnapshot,
   collection,
@@ -57,8 +56,28 @@ import {
   scheduleReEngagementReminder,
 } from "../utils/notificationManager";
 
+import {
+  htmlSablonUret as yasalHtmlSablonu,
+  KULLANIM_KOSULLARI_ICERIK,
+} from "../utils/yasalMetinler";
+import {
+  hesabiTamamenSil,
+  girisYonteminiBul,
+  SILME_IPTAL,
+} from "../utils/hesapSilici";
+
 import { useTheme } from "../ThemeContext";
 import { colors } from "../theme";
+
+// 13 yaş şartı nedeniyle liste 8. sınıftan başlar
+const SINIFLAR = [
+  "8. Sınıf",
+  "9. Sınıf",
+  "10. Sınıf",
+  "11. Sınıf",
+  "12. Sınıf",
+  "Mezun",
+];
 
 export default function ProfileScreen() {
   const user = auth.currentUser;
@@ -99,6 +118,9 @@ export default function ProfileScreen() {
   const [hesapSilModalGorunur, setHesapSilModalGorunur] = useState(false);
   const [silOnayMetni, setSilOnayMetni] = useState("");
   const [hesapSiliniyor, setHesapSiliniyor] = useState(false);
+  const [silSifre, setSilSifre] = useState("");
+  // Silme sırasında belge dinleyicisinin kullanıcı belgesini yeniden oluşturmasını engeller
+  const silmeSurecte = useRef(false);
 
   const rastgeleKodUret = () => {
     const karakterler = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -198,7 +220,7 @@ export default function ProfileScreen() {
       setRol(kayitliRol || "ogrenci");
 
       const kayitliSinif = await AsyncStorage.getItem("seciliSinif");
-      if (kayitliSinif) setSeciliSinif(kayitliSinif);
+      if (SINIFLAR.includes(kayitliSinif)) setSeciliSinif(kayitliSinif);
 
       const kayitliAdSoyad = await AsyncStorage.getItem("adSoyad");
       if (kayitliAdSoyad) setAdSoyad(kayitliAdSoyad);
@@ -220,7 +242,7 @@ export default function ProfileScreen() {
           if (kullaniciSnap.exists()) {
             const data = kullaniciSnap.data();
 
-            if (data.sinif) setSeciliSinif(data.sinif);
+            if (SINIFLAR.includes(data.sinif)) setSeciliSinif(data.sinif);
             if (data.adSoyad) setAdSoyad(data.adSoyad);
             if (data.bildirimAktif !== undefined)
               setBildirimAktif(data.bildirimAktif);
@@ -259,6 +281,7 @@ export default function ProfileScreen() {
               await AsyncStorage.setItem("profilFoto", data.profilFoto);
             }
           } else {
+            if (silmeSurecte.current) return;
             const yeniKod = rastgeleKodUret();
             setBaglantiKodu(yeniKod);
 
@@ -588,160 +611,52 @@ export default function ProfileScreen() {
       Alert.alert("Hata", "Lütfen kutucuğa büyük harflerle SİL yazın.");
       return;
     }
+    if (!user) return;
+
+    if (girisYonteminiBul(user) === "password" && !silSifre) {
+      Alert.alert(
+        "Şifre Gerekli",
+        "Güvenliğiniz için hesap şifrenizi girmeniz gerekiyor."
+      );
+      return;
+    }
 
     setHesapSiliniyor(true);
+    silmeSurecte.current = true;
     try {
-      if (user) {
-        await cancelAllNotifications();
-        await deleteDoc(doc(db, "kullanicilar", user.uid));
-        await AsyncStorage.multiRemove([
-          "adSoyad",
-          "seciliSinif",
-          "kullaniciRolu",
-          "bildirimAktif",
-          "profilFoto",
-          "seriGunu",
-        ]);
-        await deleteUser(user);
-      }
+      await hesabiTamamenSil(user, silSifre);
+      await cancelAllNotifications();
     } catch (error) {
+      silmeSurecte.current = false;
       setHesapSiliniyor(false);
-      setHesapSilModalGorunur(false);
-      if (error.code === "auth/requires-recent-login") {
-        Alert.alert(
-          "Güvenlik Doğrulaması",
-          "Güvenliğiniz için hesabınızı silmeden önce yeniden giriş yapmanız gerekiyor. Lütfen çıkış yapıp tekrar giriş yapın.",
-          [
-            { text: "İptal", style: "cancel" },
-            {
-              text: "Çıkış Yap",
-              onPress: cikisYap,
-              style: "destructive",
-            },
-          ]
-        );
-      } else {
-        Alert.alert("Hata", "Hesap silinirken hata oluştu.");
+
+      if (error?.code === SILME_IPTAL) return;
+
+      const kod = error?.code || "";
+      let mesaj =
+        "Hesap silme tamamlanamadı. İnternet bağlantınızı kontrol edip tekrar deneyin. İşlem tekrarlandığında kaldığı yerden devam eder.";
+
+      if (
+        kod === "auth/wrong-password" ||
+        kod === "auth/invalid-credential" ||
+        kod === "auth/invalid-login-credentials"
+      ) {
+        mesaj = "Şifre yanlış. Lütfen tekrar deneyin.";
+      } else if (kod === "auth/user-mismatch") {
+        mesaj = "Farklı bir Google hesabı seçtiniz. Hesabınızla aynı hesabı seçin.";
+      } else if (kod === "auth/too-many-requests") {
+        mesaj = "Çok fazla deneme yapıldı. Lütfen biraz bekleyip tekrar deneyin.";
+      } else if (kod === "auth/network-request-failed") {
+        mesaj = "İnternet bağlantısı yok. Bağlantınızı kontrol edip tekrar deneyin.";
       }
+
+      console.log("Hesap silme hatası:", kod, error?.message);
+      Alert.alert("Hesap Silinemedi", mesaj);
     }
   };
 
-  const htmlSablonUret = (baslik, altBaslik, icerikHtml) => {
-    const isDark = isGercektenKaranlik;
-    const bg = isDark ? "#121212" : "#FFFFFF";
-    const metinRenk = isDark ? "#E5E7EB" : "#1F2937";
-    const ikincilMetinRenk = isDark ? "#9CA3AF" : "#4B5563";
-    const kutuBg = isDark ? "#1F2937" : "#F8FAFC";
-    const cerceveRenk = isDark ? "#374151" : "#E2E8F0";
-    const anaRenk = isDark ? "#818CF8" : "#4F46E5";
-
-    return `
-      <!DOCTYPE html>
-      <html lang="tr">
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-        <style>
-          * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-          body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: ${bg};
-            color: ${metinRenk};
-            padding: 24px;
-            margin: 0;
-            line-height: 1.6;
-          }
-          .header-group { margin-bottom: 30px; }
-          h1 {
-            font-size: 28px;
-            font-weight: 800;
-            color: ${metinRenk};
-            margin: 0 0 8px 0;
-            letter-spacing: -0.8px;
-          }
-          .sub-title {
-            font-size: 16px;
-            color: ${anaRenk};
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 4px;
-          }
-          h2 {
-            font-size: 19px;
-            font-weight: 700;
-            color: ${metinRenk};
-            margin-top: 32px;
-            margin-bottom: 12px;
-            display: flex;
-            align-items: center;
-          }
-          h2::before {
-            content: "";
-            width: 4px;
-            height: 20px;
-            background-color: ${anaRenk};
-            margin-right: 12px;
-            border-radius: 2px;
-          }
-          p, li {
-            font-size: 15px;
-            color: ${ikincilMetinRenk};
-            margin-bottom: 16px;
-          }
-          ul {
-            padding: 0;
-            list-style: none;
-            margin-bottom: 24px;
-          }
-          li {
-            position: relative;
-            padding-left: 28px;
-            margin-bottom: 14px;
-          }
-          li::before {
-            content: "→";
-            position: absolute;
-            left: 0;
-            color: ${anaRenk};
-            font-weight: bold;
-          }
-          .card {
-            background-color: ${kutuBg};
-            border: 1px solid ${cerceveRenk};
-            border-radius: 20px;
-            padding: 20px;
-            margin-bottom: 28px;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
-          }
-          .highlight {
-            color: ${metinRenk};
-            font-weight: 700;
-            background-color: ${anaRenk}20;
-            padding: 2px 6px;
-            border-radius: 6px;
-          }
-          .footer-note {
-            margin-top: 50px;
-            padding-top: 20px;
-            border-top: 1px solid ${cerceveRenk};
-            font-size: 13px;
-            text-align: center;
-            font-style: italic;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="header-group">
-          <div class="sub-title">${altBaslik}</div>
-          <h1>${baslik}</h1>
-        </div>
-        ${icerikHtml}
-        <div class="footer-note">Mikro AI Eğitim Teknolojileri</div>
-      </body>
-      </html>
-    `;
-  };
+  const htmlSablonUret = (baslik, altBaslik, icerikHtml) =>
+    yasalHtmlSablonu(isGercektenKaranlik, baslik, altBaslik, icerikHtml);
 
   const acNasilKullanilir = () => {
     const icerik = `
@@ -783,47 +698,12 @@ export default function ProfileScreen() {
   };
 
   const acKullanimKosullari = () => {
-    const icerik = `
-      <div class="card">
-        <p>Mikro AI platformuna hoş geldiniz. Bu belge, uygulamamızı kullanırken uyulması gereken kuralları ve veri güvenliği esaslarını içerir.</p>
-      </div>
-
-      <h2>🔒 Gizlilik ve Veri Güvenliği</h2>
-      <p>Yüklediğiniz tüm fotoğraflar ve verileriniz uçtan uca şifreli sunucularda barındırılır. Verileriniz üçüncü taraflarla reklam veya pazarlama amacıyla paylaşılmaz.</p>
-
-      <h2>⚡ Hizmet Limitleri</h2>
-      <ul>
-        <li>Standart kullanım günlük <span class="highlight">3 soru</span> ile sınırlıdır.</li>
-        <li>Premium üyeler için sınır <span class="highlight">50 soru/gün</span> olarak belirlenmiştir.</li>
-        <li>Bu limitler sunucu stabilitesini korumak adına uygulanmaktadır.</li>
-      </ul>
-
-      <h2>📋 Sorumluluk Reddini Bildiririz</h2>
-      <p>Yapay zeka çözümleri yüksek doğruluk oranına sahip olsa da, bu bir eğitim destek aracıdır. Sınav başarılarınızdaki nihai sorumluluk kullanıcıya aittir.</p>
-
-      <h2>💎 Abonelik Şartları</h2>
-      <p>Abonelikler ve ödeme işlemleri doğrudan App Store veya Play Store üzerinden yönetilir. İptal ve iade süreçleri ilgili mağaza politikalarına tabidir.</p>
-    `;
     setWebViewBaslik("Kullanım Koşulları");
-    setWebViewHtml(htmlSablonUret("Yasal Şartlar", "Hukuki Metin", icerik));
+    setWebViewHtml(
+      htmlSablonUret("Yasal Şartlar", "Hukuki Metin", KULLANIM_KOSULLARI_ICERIK)
+    );
     setWebViewModalGorunur(true);
   };
-
-  const siniflar = [
-    "1. Sınıf",
-    "2. Sınıf",
-    "3. Sınıf",
-    "4. Sınıf",
-    "5. Sınıf",
-    "6. Sınıf",
-    "7. Sınıf",
-    "8. Sınıf",
-    "9. Sınıf",
-    "10. Sınıf",
-    "11. Sınıf",
-    "12. Sınıf",
-    "Mezun",
-  ];
 
   const getAvatarHarf = () => {
     if (adSoyad && adSoyad.trim().length > 0) {
@@ -1526,7 +1406,7 @@ export default function ProfileScreen() {
                 style={{ maxHeight: 350 }}
                 showsVerticalScrollIndicator={false}
               >
-                {siniflar.map((sinif, index) => (
+                {SINIFLAR.map((sinif, index) => (
                   <TouchableOpacity
                     key={index}
                     style={[
@@ -1825,12 +1705,47 @@ export default function ProfileScreen() {
                   lineHeight: 22,
                 }}
               >
-                Tüm çözülen sorularınız, hata defteriniz ve istatistikleriniz
-                kalıcı olarak silinecektir. Bu işlem{" "}
+                Hesabınız; gönderdiğiniz soruların fotoğrafları, çözümler,
+                profil bilgileriniz ve istatistikleriniz ile birlikte kalıcı
+                olarak silinecektir. Bu işlem{" "}
                 <Text style={{ fontWeight: "bold", color: tema.metin }}>
                   geri alınamaz.
                 </Text>
               </Text>
+
+              <Text
+                style={{
+                  color: tema.ikincilMetin,
+                  textAlign: "center",
+                  marginBottom: 16,
+                  lineHeight: 20,
+                  fontSize: 13,
+                }}
+              >
+                {girisYonteminiBul(user) === "google"
+                  ? "Güvenliğiniz için Google ile yeniden giriş yapmanız istenecek."
+                  : "Güvenliğiniz için hesap şifrenizi girmeniz gerekiyor."}
+              </Text>
+
+              {girisYonteminiBul(user) === "password" && (
+                <TextInput
+                  style={[
+                    styles.silSifreInput,
+                    {
+                      backgroundColor: tema.arkaplan,
+                      color: tema.metin,
+                      borderColor: tema.kutuCerceve,
+                    },
+                  ]}
+                  placeholder="Şifreniz"
+                  placeholderTextColor={tema.ikincilMetin}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  value={silSifre}
+                  onChangeText={setSilSifre}
+                />
+              )}
 
               <Text
                 style={{
@@ -1867,6 +1782,7 @@ export default function ProfileScreen() {
                   onPress={() => {
                     setHesapSilModalGorunur(false);
                     setSilOnayMetni("");
+                    setSilSifre("");
                   }}
                   style={styles.modalIptalButon}
                 >
@@ -1883,7 +1799,11 @@ export default function ProfileScreen() {
 
                 <TouchableOpacity
                   onPress={guvenliHesabiSil}
-                  disabled={silOnayMetni !== "SİL" || hesapSiliniyor}
+                  disabled={
+                    silOnayMetni !== "SİL" ||
+                    hesapSiliniyor ||
+                    (girisYonteminiBul(user) === "password" && !silSifre)
+                  }
                   style={[
                     styles.modalOnayButon,
                     {
@@ -2127,6 +2047,13 @@ const styles = StyleSheet.create({
     textAlign: "center",
     letterSpacing: 3,
     marginBottom: 10,
+  },
+  silSifreInput: {
+    borderWidth: 1.5,
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 16,
+    marginBottom: 12,
   },
   modalButonSatir: {
     flexDirection: "row",

@@ -84,3 +84,13 @@ export const cozumYukle = async (soru, eposta) => {
     hata: json.hata || resim.hata || null,
   };
 };
+
+// Hesap silinirken ya da gerektiğinde tüm çözüm önbelleğini temizler.
+export const cozumOnbelleginiTemizle = async () => {
+  bellek.clear();
+  try {
+    const anahtarlar = await AsyncStorage.getAllKeys();
+    const silinecek = anahtarlar.filter((a) => a.startsWith("cozum:"));
+    if (silinecek.length > 0) await AsyncStorage.multiRemove(silinecek);
+  } catch (e) {}
+};

@@ -833,8 +833,8 @@ export default function ProfileScreen() {
             styles.header,
             {
               backgroundColor: tema.anaButon,
-              paddingTop: insets.top + 20,
-              paddingBottom: 35,
+              paddingTop: insets.top + 12,
+              paddingBottom: 24,
             },
           ]}
         >
@@ -924,7 +924,7 @@ export default function ProfileScreen() {
                 alignItems: "center",
                 width: "100%",
                 paddingHorizontal: 40,
-                marginTop: 15,
+                marginTop: 10,
               }}
             >
               <View style={styles.seviyeVeXpKapsayici}>
@@ -1939,21 +1939,21 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
     alignItems: "center",
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
+    borderBottomLeftRadius: 34,
+    borderBottomRightRadius: 34,
   },
   avatarContainer: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: "rgba(255,255,255,0.25)",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 15,
+    marginBottom: 12,
     position: "relative",
   },
-  avatarImage: { width: 90, height: 90, borderRadius: 45 },
-  avatarText: { fontSize: 38, color: "#fff", fontWeight: "bold" },
+  avatarImage: { width: 80, height: 80, borderRadius: 40 },
+  avatarText: { fontSize: 34, color: "#fff", fontWeight: "bold" },
   kameraIkonKutu: {
     position: "absolute",
     bottom: 0,
@@ -1968,10 +1968,10 @@ const styles = StyleSheet.create({
   },
 
   isimDuzenlemeKutu: {
-    minHeight: 40,
+    minHeight: 36,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 5,
+    marginBottom: 2,
   },
   isimInputKapsayici: {
     flexDirection: "row",
@@ -1996,7 +1996,7 @@ const styles = StyleSheet.create({
   },
 
   userName: {
-    fontSize: 22,
+    fontSize: 20,
     color: "#fff",
     fontWeight: "bold",
     letterSpacing: 0.5,
@@ -2004,7 +2004,7 @@ const styles = StyleSheet.create({
   userEmail: {
     fontSize: 14,
     color: "rgba(255,255,255,0.85)",
-    marginBottom: 15,
+    marginBottom: 10,
   },
 
   seviyeVeXpKapsayici: {
@@ -2034,7 +2034,7 @@ const styles = StyleSheet.create({
     height: 6,
     backgroundColor: "rgba(255,255,255,0.2)",
     borderRadius: 3,
-    marginTop: 15,
+    marginTop: 10,
     overflow: "hidden",
   },
   xpBarDolu: {
@@ -2045,7 +2045,7 @@ const styles = StyleSheet.create({
   xpKalanYazi: {
     color: "rgba(255,255,255,0.8)",
     fontSize: 12,
-    marginTop: 8,
+    marginTop: 6,
     fontWeight: "500",
   },
 

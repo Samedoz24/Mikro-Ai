@@ -39,6 +39,7 @@ import { useTheme } from "../ThemeContext";
 // 🚀 YENİ: Gerçek karanlık mod kontrolü için colors eklendi
 import { colors } from "../theme";
 import { usePremium } from "../PremiumContext";
+import { kotaYenilenmeHatirlatmasiKur } from "../utils/notificationManager";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -220,6 +221,7 @@ export default function HomeScreen() {
 
       if (mevcutKota <= 0) {
         setYukleniyor(false);
+        await kotaYenilenmeHatirlatmasiKur(isPremium);
         if (isPremium) {
           Alert.alert(
             "Günlük Limit Doldu",
@@ -275,6 +277,11 @@ export default function HomeScreen() {
         },
         { merge: true }
       );
+
+      // Son hak kullanıldıysa ertesi sabah "hakların yenilendi" bildirimi kurulur
+      if (mevcutKota - 1 <= 0) {
+        await kotaYenilenmeHatirlatmasiKur(isPremium);
+      }
 
       Alert.alert(
         "Başarılı",

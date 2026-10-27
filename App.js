@@ -146,7 +146,7 @@ function MainApp() {
         if (aktif) {
           const izin = await registerForPushNotificationsAsync();
           if (izin) {
-            await setupSmartNotifications(kullaniciRolu, premiumMu);
+            await setupSmartNotifications(kullaniciRolu);
           }
         }
       } catch (error) {
@@ -155,7 +155,7 @@ function MainApp() {
     };
 
     bildirimleriKur();
-  }, [kullanici, kullaniciRolu, premiumMu, onayGerekli]);
+  }, [kullanici, kullaniciRolu, onayGerekli]);
 
   useEffect(() => {
     if (!kullanici || kullaniciRolu !== "ogrenci") return;

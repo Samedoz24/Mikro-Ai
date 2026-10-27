@@ -50,10 +50,7 @@ import * as Notifications from "expo-notifications";
 import {
   registerForPushNotificationsAsync,
   cancelAllNotifications,
-  scheduleMidnightQuotaReminder,
-  scheduleStreakReminder,
-  scheduleWeeklyReportReminder,
-  scheduleReEngagementReminder,
+  setupSmartNotifications,
 } from "../utils/notificationManager";
 
 import {
@@ -528,17 +525,9 @@ export default function ProfileScreen() {
       if (deger) {
         const izinVerildi = await registerForPushNotificationsAsync();
         if (izinVerildi) {
-          // Önce her şeyi sıfırla
+          // Önce her şeyi sıfırla, sonra role göre güncel bildirimleri kur
           await cancelAllNotifications();
-          // Ortak olan geri kazanım bildirimini kur
-          await scheduleReEngagementReminder();
-
-          if (rol === "ogrenci") {
-            await scheduleMidnightQuotaReminder(premiumMu);
-            await scheduleStreakReminder();
-          } else if (rol === "veli") {
-            await scheduleWeeklyReportReminder("veli");
-          }
+          await setupSmartNotifications(rol);
 
           Alert.alert(
             "Bildirimler Açıldı",

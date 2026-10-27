@@ -1013,7 +1013,7 @@ export default function ProfileScreen() {
                   <Text
                     style={[styles.streakAltYazi, { color: tema.ikincilMetin }]}
                   >
-                    Her gün soru çözerek serini koru!
+                    Her gün uğrayarak serini koru!
                   </Text>
                 </View>
               </View>

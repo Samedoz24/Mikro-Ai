@@ -11,6 +11,7 @@ import {
   Modal,
   Dimensions,
   StatusBar,
+  Linking,
 } from "react-native";
 
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -40,6 +41,7 @@ import { useTheme } from "../ThemeContext";
 import { colors } from "../theme";
 import { usePremium } from "../PremiumContext";
 import { kotaYenilenmeHatirlatmasiKur } from "../utils/notificationManager";
+import { takvimGunFarki } from "../utils/tarih";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -87,8 +89,8 @@ export default function HomeScreen() {
             setGuncelSeriSayisi(1);
             setSeriModalGorunur(true);
           } else {
-            const farkMilisaniye = bugunDate.getTime() - sonGiris.getTime();
-            const farkGun = Math.floor(farkMilisaniye / (1000 * 3600 * 24));
+            // Takvim günü farkı: yaz saati/saat dilimi değişimleri günü 23-25 saat yapabilir
+            const farkGun = takvimGunFarki(sonGiris, bugunDate);
 
             if (farkGun === 1) {
               const yeniSeri = mevcutSeri + 1;
@@ -132,7 +134,19 @@ export default function HomeScreen() {
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert("İzin Gerekli", "Kamera izni vermelisin.");
+        if (permission.canAskAgain === false) {
+          // İzin kalıcı reddedilmiş: sistem artık sormaz, kullanıcıyı Ayarlar'a yönlendir
+          Alert.alert(
+            "Kamera İzni Gerekli",
+            "Soru fotoğrafı çekebilmek için kamera iznine ihtiyacımız var. Ayarlar'dan izin verebilirsin.",
+            [
+              { text: "Vazgeç", style: "cancel" },
+              { text: "Ayarlar'ı Aç", onPress: () => Linking.openSettings() },
+            ]
+          );
+        } else {
+          Alert.alert("İzin Gerekli", "Kamera izni vermelisin.");
+        }
         return;
       }
 
@@ -147,22 +161,30 @@ export default function HomeScreen() {
       }
     } catch (error) {
       console.log("Kamera hatası:", error);
+      Alert.alert(
+        "Kamera Açılamadı",
+        "Kamera şu an açılamıyor. Lütfen tekrar dene."
+      );
     }
   };
 
   const fotografiIptalEt = () => setImage(null);
 
+  // Gerçekten ihtiyaç duyduğumuz sunucuya (Firebase Storage) ulaşılabiliyor mu?
+  // Herhangi bir HTTP yanıtı "ulaşılabilir" demektir; üçüncü taraf bir siteye istek atılmaz.
   const internetVarMi = async () => {
+    const kontrol = new AbortController();
+    const zamanAsimi = setTimeout(() => kontrol.abort(), 5000);
     try {
-      await Promise.race([
-        fetch("https://www.google.com", { method: "HEAD" }),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Timeout")), 3000)
-        ),
-      ]);
+      await fetch("https://firebasestorage.googleapis.com/", {
+        method: "HEAD",
+        signal: kontrol.signal,
+      });
       return true;
     } catch (error) {
       return false;
+    } finally {
+      clearTimeout(zamanAsimi);
     }
   };
 
@@ -268,15 +290,21 @@ export default function HomeScreen() {
         durum: "Bekliyor",
       });
 
-      await setDoc(
-        cihazRef,
-        {
-          kalanSoru: mevcutKota - 1,
-          tarih: bugunYerel,
-          toplamHak: maxKota,
-        },
-        { merge: true }
-      );
+      // Soru zaten gönderildi; kota güncellemesi başarısız olsa bile kullanıcıya "hata" gösterip
+      // aynı soruyu tekrar göndermesine (çift kayıt) yol açmayız.
+      try {
+        await setDoc(
+          cihazRef,
+          {
+            kalanSoru: mevcutKota - 1,
+            tarih: bugunYerel,
+            toplamHak: maxKota,
+          },
+          { merge: true }
+        );
+      } catch (kotaHatasi) {
+        console.log("Kota güncellenemedi:", kotaHatasi?.code);
+      }
 
       // Son hak kullanıldıysa ertesi sabah "hakların yenilendi" bildirimi kurulur
       if (mevcutKota - 1 <= 0) {

@@ -80,25 +80,32 @@ export default function ParentDashboard() {
     const veliVerileriniGetir = async () => {
       if (!auth.currentUser) return;
 
-      const veliRef = doc(db, "kullanicilar", auth.currentUser.uid);
-      const veliSnap = await getDoc(veliRef);
+      try {
+        const veliRef = doc(db, "kullanicilar", auth.currentUser.uid);
+        const veliSnap = await getDoc(veliRef);
 
-      if (veliSnap.exists()) {
-        const data = veliSnap.data();
-        if (data.bagliOgrenciler) {
-          setBagliOgrenciler(data.bagliOgrenciler);
-          if (data.bagliOgrenciler.length > 0) {
-            setAktifOgrenci(data.bagliOgrenciler[0]);
+        if (veliSnap.exists()) {
+          const data = veliSnap.data();
+          if (data.bagliOgrenciler) {
+            setBagliOgrenciler(data.bagliOgrenciler);
+            if (data.bagliOgrenciler.length > 0) {
+              setAktifOgrenci(data.bagliOgrenciler[0]);
+            }
           }
+          if (data.whatsappNo) setWhatsappNo(data.whatsappNo);
+          if (data.raporAktif !== undefined) setRaporAktif(data.raporAktif);
         }
-        if (data.whatsappNo) setWhatsappNo(data.whatsappNo);
-        if (data.raporAktif !== undefined) setRaporAktif(data.raporAktif);
+      } catch (hata) {
+        console.log("Veli verileri alınamadı:", hata?.code);
       }
     };
     veliVerileriniGetir();
   }, []);
 
   useEffect(() => {
+    // Öğrenci hızlı değiştirilirse eski isteğin geç gelen cevabı yenisinin üstüne yazmasın
+    let iptal = false;
+
     const verileriCek = async () => {
       if (bagliOgrenciler.length === 0) {
         setSonSorular([]);
@@ -111,52 +118,61 @@ export default function ParentDashboard() {
 
       setSorularYukleniyor(true);
       try {
-        let geciciFotolar = { ...ogrenciFotolar };
+        // Bağlı öğrencilerin profil belgeleri paralel alınır
+        const ogrSnaplar = await Promise.all(
+          bagliOgrenciler.map((ogr) =>
+            getDoc(doc(db, "kullanicilar", ogr.id)).catch(() => null)
+          )
+        );
+
+        const yeniFotolar = {};
+        let aktifEposta = null;
+        bagliOgrenciler.forEach((ogr, i) => {
+          const snap = ogrSnaplar[i];
+          if (snap && snap.exists() && snap.data().eposta) {
+            const data = snap.data();
+            if (data.profilFoto) yeniFotolar[ogr.id] = data.profilFoto;
+            if (aktifOgrenci && ogr.id === aktifOgrenci.id) {
+              aktifEposta = data.eposta;
+            }
+          }
+        });
+
         let tumSorular = [];
         let toplamSoruSayaci = 0;
         let cozulmusSayaci = 0;
         let dersSayaclari = {};
 
-        for (const ogr of bagliOgrenciler) {
-          const ogrRef = doc(db, "kullanicilar", ogr.id);
-          const ogrSnap = await getDoc(ogrRef);
+        if (aktifEposta) {
+          const qSnap = await getDocs(
+            query(
+              collection(db, "sorular"),
+              where("kullaniciEposta", "==", aktifEposta)
+            )
+          );
 
-          if (ogrSnap.exists() && ogrSnap.data().eposta) {
-            const data = ogrSnap.data();
+          qSnap.forEach((docSnap) => {
+            const soruData = docSnap.data();
 
-            if (data.profilFoto) {
-              geciciFotolar[ogr.id] = data.profilFoto;
+            tumSorular.push({
+              id: docSnap.id,
+              ogrenciIsim: aktifOgrenci.isim,
+              ...soruData,
+            });
+
+            toplamSoruSayaci++;
+            if (soruData.durum === "Çözüldü") {
+              cozulmusSayaci++;
             }
 
-            if (aktifOgrenci && ogr.id === aktifOgrenci.id) {
-              const q = query(
-                collection(db, "sorular"),
-                where("kullaniciEposta", "==", data.eposta)
-              );
-              const qSnap = await getDocs(q);
-
-              qSnap.forEach((docSnap) => {
-                const soruData = docSnap.data();
-
-                tumSorular.push({
-                  id: docSnap.id,
-                  ogrenciIsim: aktifOgrenci.isim,
-                  ...soruData,
-                });
-
-                toplamSoruSayaci++;
-                if (soruData.durum === "Çözüldü") {
-                  cozulmusSayaci++;
-                }
-
-                const dersAdi = soruData.subject || soruData.ders || "Diğer";
-                dersSayaclari[dersAdi] = (dersSayaclari[dersAdi] || 0) + 1;
-              });
-            }
-          }
+            const dersAdi = soruData.subject || soruData.ders || "Diğer";
+            dersSayaclari[dersAdi] = (dersSayaclari[dersAdi] || 0) + 1;
+          });
         }
 
-        setOgrenciFotolar(geciciFotolar);
+        if (iptal) return;
+
+        setOgrenciFotolar((onceki) => ({ ...onceki, ...yeniFotolar }));
 
         tumSorular.sort((a, b) => new Date(b.tarih) - new Date(a.tarih));
         setSonSorular(tumSorular.slice(0, 10));
@@ -178,16 +194,22 @@ export default function ParentDashboard() {
           setDersIstatistikleri([]);
         }
       } catch (error) {
-        console.log("Veri çekme hatası:", error);
+        console.log("Veri çekme hatası:", error?.code);
       }
-      setSorularYukleniyor(false);
+      if (!iptal) setSorularYukleniyor(false);
     };
 
     verileriCek();
+
+    return () => {
+      iptal = true;
+    };
   }, [aktifOgrenci, bagliOgrenciler]);
 
   const ogrenciyiBulVeBagla = async () => {
-    if (ogrenciKoduInput.length !== 6) {
+    // Kod büyük harf/rakamdır; kullanıcı küçük harf yazsa ya da boşluk eklese de eşleşsin
+    const kod = ogrenciKoduInput.trim().toUpperCase();
+    if (kod.length !== 6) {
       Alert.alert("Hata", "Lütfen 6 haneli bağlantı kodunu eksiksiz girin.");
       return;
     }
@@ -196,7 +218,7 @@ export default function ParentDashboard() {
     try {
       const q = query(
         collection(db, "kullanicilar"),
-        where("baglantiKodu", "==", ogrenciKoduInput)
+        where("baglantiKodu", "==", kod)
       );
       const querySnapshot = await getDocs(q);
 
@@ -212,7 +234,8 @@ export default function ParentDashboard() {
         querySnapshot.forEach((docSnap) => {
           ogrenciId = docSnap.id;
           ogrenciIsim =
-            docSnap.data().adSoyad || docSnap.data().eposta.split("@")[0];
+            docSnap.data().adSoyad ||
+            (docSnap.data().eposta || "Öğrenci").split("@")[0];
         });
 
         const zatenVar = bagliOgrenciler.some((ogr) => ogr.id === ogrenciId);
@@ -245,7 +268,11 @@ export default function ParentDashboard() {
         );
       }
     } catch (error) {
-      Alert.alert("Bağlantı Hatası", "Bir sorun oluştu: " + error.message);
+      console.log("Öğrenci bağlama hatası:", error?.code);
+      Alert.alert(
+        "Bağlantı Hatası",
+        "Öğrenci bağlanamadı. İnternet bağlantını kontrol edip tekrar dene."
+      );
     }
     setYukleniyor(false);
   };
@@ -286,18 +313,35 @@ export default function ParentDashboard() {
   };
 
   const whatsappNumarasiKaydet = async (yeniNumara) => {
-    setWhatsappNo(yeniNumara);
-    if (auth.currentUser) {
+    const numara = (yeniNumara || "").trim();
+    setWhatsappNo(numara);
+    if (!auth.currentUser) return;
+    try {
       const veliRef = doc(db, "kullanicilar", auth.currentUser.uid);
-      await setDoc(veliRef, { whatsappNo: yeniNumara }, { merge: true });
+      await setDoc(veliRef, { whatsappNo: numara }, { merge: true });
+    } catch (hata) {
+      console.log("Telefon kaydedilemedi:", hata?.code);
+      Alert.alert(
+        "Kaydedilemedi",
+        "Telefon numarası kaydedilemedi. İnternet bağlantını kontrol edip tekrar dene."
+      );
     }
   };
 
   const raporTercihiKaydet = async (deger) => {
+    const onceki = raporAktif;
     setRaporAktif(deger);
-    if (auth.currentUser) {
+    if (!auth.currentUser) return;
+    try {
       const veliRef = doc(db, "kullanicilar", auth.currentUser.uid);
       await setDoc(veliRef, { raporAktif: deger }, { merge: true });
+    } catch (hata) {
+      console.log("Rapor tercihi kaydedilemedi:", hata?.code);
+      setRaporAktif(onceki);
+      Alert.alert(
+        "Kaydedilemedi",
+        "Tercihin kaydedilemedi. İnternet bağlantını kontrol edip tekrar dene."
+      );
     }
   };
 

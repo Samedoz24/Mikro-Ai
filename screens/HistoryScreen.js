@@ -37,7 +37,7 @@ import {
   doc,
   updateDoc,
 } from "firebase/firestore";
-import { ref, deleteObject, getDownloadURL } from "firebase/storage";
+import { ref, deleteObject } from "firebase/storage";
 import { Ionicons } from "@expo/vector-icons";
 
 import * as FileSystem from "expo-file-system/legacy";
@@ -46,10 +46,34 @@ import * as MediaLibrary from "expo-media-library";
 import { useTheme } from "../ThemeContext";
 import { colors } from "../theme";
 import { usePremium } from "../PremiumContext";
-import { cozumYukle } from "../utils/cozumYukleyici";
+import { cozumYukle, cozumOnbellekSil } from "../utils/cozumYukleyici";
+import { htmlKacis, htmlMetin } from "../utils/metin";
 
 const ekranGenisligi = Dimensions.get("window").width;
 const ekranYuksekligi = Dimensions.get("window").height;
+
+// PDF için bir sorunun çözüm metni (önbellekten ya da sunucudan)
+const pdfCozumMetni = async (soru, eposta) => {
+  if (soru.durum !== "Çözüldü") {
+    return "⏳ Bu soru henüz yapay zeka tarafından çözülmedi veya beklemede.";
+  }
+  const { cozumDetayi, hata } = await cozumYukle(soru, eposta);
+  if (!cozumDetayi) {
+    return hata
+      ? "⚠️ Çözüm şu an yüklenemedi."
+      : "⚠️ Yapay zeka analiz dosyası sunucuda bulunamadı (Test veya silinmiş veri).";
+  }
+  return (
+    cozumDetayi.cardAnswer ||
+    cozumDetayi.correct_answer ||
+    cozumDetayi.solution ||
+    cozumDetayi.answer ||
+    cozumDetayi.sonuc ||
+    cozumDetayi.result ||
+    cozumDetayi.explanation ||
+    "Çözüm dosyası bulundu fakat sonuç formatı farklı (Eski format)."
+  );
+};
 
 export default function HistoryScreen() {
   const { tema, temaModu } = useTheme();
@@ -221,6 +245,7 @@ export default function HistoryScreen() {
         await deleteObject(ref(storage, resimYolu));
       } catch (e) {}
 
+      await cozumOnbellekSil(seciliSoru, userEmail);
       await deleteDoc(doc(db, "sorular", seciliSoru.id));
       setModalGorunur(false);
     } catch (error) {
@@ -244,26 +269,34 @@ export default function HistoryScreen() {
       Alert.alert("Hata", "İndirilecek bir çözüm kartı bulunamadı.");
       return;
     }
+    let gecici = null;
     try {
       setIndirmeBasladi(true);
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== "granted") {
         Alert.alert("İzin Gerekli", "Galeri erişim izni vermeniz gerekiyor.");
-        setIndirmeBasladi(false);
         return;
       }
-      const dosyaAdi = `CozumKarti_${Date.now()}.png`;
-      const dosyaYolu = FileSystem.documentDirectory + dosyaAdi;
-      const { uri } = await FileSystem.downloadAsync(
+      // Geçici dosya önbellek klasörüne iner ve iş bitince silinir (kalıcı alan şişmesin)
+      gecici = FileSystem.cacheDirectory + `CozumKarti_${Date.now()}.png`;
+      const sonuc = await FileSystem.downloadAsync(
         seciliSoru.cozumKartiLink,
-        dosyaYolu
+        gecici
       );
-      await MediaLibrary.saveToLibraryAsync(uri);
+      if (sonuc.status !== 200) {
+        throw new Error(`İndirme başarısız (HTTP ${sonuc.status})`);
+      }
+      await MediaLibrary.saveToLibraryAsync(sonuc.uri);
       Alert.alert("Başarılı!", "Çözüm kartı galerinize kaydedildi. 🖼️");
     } catch (error) {
-      console.log("İndirme Hatası Detayı:", error);
+      console.log("İndirme Hatası Detayı:", error?.message);
       Alert.alert("Hata", "Fotoğraf indirilirken bir sorun oluştu.");
     } finally {
+      if (gecici) {
+        try {
+          await FileSystem.deleteAsync(gecici, { idempotent: true });
+        } catch (e) {}
+      }
       setIndirmeBasladi(false);
     }
   };
@@ -303,70 +336,46 @@ export default function HistoryScreen() {
       }
 
       const userEmail = auth.currentUser?.email;
-      let sorularHtml = "";
 
-      for (let i = 0; i < indirilecekSorular.length; i++) {
-        const soru = indirilecekSorular[i];
+      // Çözümleri küçük gruplar hâlinde paralel getir (önbellekten gelenler ağa gitmez)
+      const cozumMetinleri = new Array(indirilecekSorular.length).fill("");
+      const GRUP = 4;
+      for (let bas = 0; bas < indirilecekSorular.length; bas += GRUP) {
+        await Promise.all(
+          indirilecekSorular.slice(bas, bas + GRUP).map(async (soru, j) => {
+            cozumMetinleri[bas + j] = await pdfCozumMetni(soru, userEmail);
+          })
+        );
+      }
+
+      // Metinler HTML'e gömülmeden önce kaçırılır ("x < 5" gibi ifadeler PDF'i bozmasın)
+      let sorularHtml = "";
+      indirilecekSorular.forEach((soru, i) => {
         const dersAdi = soru.subject || soru.ders || "Ders Belirtilmemiş";
         const tarih = new Date(soru.tarih).toLocaleDateString("tr-TR");
-        const durum = soru.durum || "Bilinmiyor";
-
-        let cozumMetni = "";
-
-        if (durum !== "Çözüldü") {
-          cozumMetni =
-            "⏳ Bu soru henüz yapay zeka tarafından çözülmedi veya beklemede.";
-        } else {
-          let timestamp = soru.id;
-          if (soru.fotoLink) {
-            const match = soru.fotoLink.match(/(\d{13})/);
-            if (match && match[1]) {
-              timestamp = match[1];
-            } else {
-              const matchYedek = soru.fotoLink.match(/(\d+)\.(jpg|jpeg|png)/i);
-              if (matchYedek && matchYedek[1]) timestamp = matchYedek[1];
-            }
-          }
-
-          try {
-            const jsonYolu = `cozumDetayi/${userEmail}/${timestamp}.json`;
-            const jsonUrl = await getDownloadURL(ref(storage, jsonYolu));
-            const response = await fetch(jsonUrl);
-            const jsonVerisi = await response.json();
-
-            cozumMetni =
-              jsonVerisi.cardAnswer ||
-              jsonVerisi.correct_answer ||
-              jsonVerisi.solution ||
-              jsonVerisi.answer ||
-              jsonVerisi.sonuc ||
-              jsonVerisi.result ||
-              jsonVerisi.explanation ||
-              "Çözüm dosyası bulundu fakat sonuç formatı farklı (Eski format).";
-          } catch (e) {
-            cozumMetni =
-              "⚠️ Yapay zeka analiz dosyası sunucuda bulunamadı (Test veya silinmiş veri).";
-          }
-        }
 
         const resimHtml = soru.fotoLink
-          ? `<img src="${soru.fotoLink}" style="max-width: 100%; max-height: 300px; object-fit: contain; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ddd;" />`
+          ? `<img src="${htmlKacis(
+              soru.fotoLink
+            )}" style="max-width: 100%; max-height: 300px; object-fit: contain; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ddd;" />`
           : `<div style="padding: 20px; background: #eee; text-align: center; border-radius: 8px; margin-bottom: 15px; color: #888;">Fotoğraf Yok</div>`;
 
         sorularHtml += `
         <div class="soru-kutusu">
           <div class="soru-baslik">
-            <span>Soru ${i + 1} - ${dersAdi}</span>
-            <span>${tarih}</span>
+            <span>Soru ${i + 1} - ${htmlKacis(dersAdi)}</span>
+            <span>${htmlKacis(tarih)}</span>
           </div>
           ${resimHtml}
           <div class="cozum-kutusu">
             <strong>Yapay Zeka Çözümü:</strong><br/>
-            <p style="margin-top:8px; line-height:1.6; font-size:15px;">${cozumMetni}</p>
+            <p style="margin-top:8px; line-height:1.6; font-size:15px;">${htmlMetin(
+              cozumMetinleri[i]
+            )}</p>
           </div>
         </div>
       `;
-      }
+      });
 
       const htmlIcerik = `
       <!DOCTYPE html>
@@ -387,7 +396,7 @@ export default function HistoryScreen() {
       </head>
       <body>
         <h1>Akıllı Hata Defterim</h1>
-        <div class="kategori-bilgi">Seçilen Kategori: <strong>${seciliKategori}</strong> | Toplam Soru: <strong>${indirilecekSorular.length}</strong></div>
+        <div class="kategori-bilgi">Seçilen Kategori: <strong>${htmlKacis(seciliKategori)}</strong> | Toplam Soru: <strong>${indirilecekSorular.length}</strong></div>
         ${sorularHtml}
         <div class="footer">Bu belge Akıllı Hata Defterim uygulaması tarafından otomatik oluşturulmuştur.</div>
       </body>

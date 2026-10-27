@@ -36,6 +36,7 @@ import OnboardingScreen from "./screens/OnboardingScreen";
 import YasOnayScreen from "./screens/YasOnayScreen";
 import { YAS_ONAYI_SURUMU } from "./utils/yasalMetinler";
 import { PremiumProvider } from "./PremiumContext";
+import ErrorBoundary from "./ErrorBoundary";
 
 const Tab = createBottomTabNavigator();
 
@@ -45,6 +46,8 @@ function MainApp() {
   const [kullaniciRolu, setKullaniciRolu] = useState("ogrenci");
   const [gosterOnboarding, setGosterOnboarding] = useState(false);
   const [onayGerekli, setOnayGerekli] = useState(false);
+  // Rol uyuşmazlığıyla giriş reddedilince giriş ekranının yükleniyor durumunu sıfırlar
+  const [girisReddi, setGirisReddi] = useState(0);
   const [okunmamisSayisi, setOkunmamisSayisi] = useState(0);
   const [premiumMu, setPremiumMu] = useState(false);
 
@@ -71,6 +74,7 @@ function MainApp() {
               );
               await AsyncStorage.removeItem("hedefRol");
               setKullanici(null);
+              setGirisReddi((n) => n + 1);
               setYukleniyor(false);
               return;
             }
@@ -205,7 +209,12 @@ function MainApp() {
   }
 
   if (!kullanici) {
-    return <LoginScreen setKullaniciRolu={setKullaniciRolu} />;
+    return (
+      <LoginScreen
+        setKullaniciRolu={setKullaniciRolu}
+        girisReddi={girisReddi}
+      />
+    );
   }
 
   if (onayGerekli) {
@@ -304,9 +313,11 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <NavigationContainer>
-          <MainApp />
-        </NavigationContainer>
+        <ErrorBoundary>
+          <NavigationContainer>
+            <MainApp />
+          </NavigationContainer>
+        </ErrorBoundary>
       </ThemeProvider>
     </SafeAreaProvider>
   );

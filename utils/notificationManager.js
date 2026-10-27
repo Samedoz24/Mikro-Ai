@@ -148,7 +148,7 @@ async function seriHatirlatmasiniKur(simdi) {
     seri >= 2
       ? {
           title: "🔥 Serin Bozulmak Üzere!",
-          body: "Günlük serini kaybetmemek için bugün bir soru çözmen yeterli.",
+          body: "Günlük serini kaybetmemek için bugün Mikro AI'ya uğraman yeterli.",
         }
       : {
           title: "📚 Bugün Bir Soru Çözelim mi?",

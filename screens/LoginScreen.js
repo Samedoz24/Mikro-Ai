@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   StyleSheet,
   Text,
@@ -6,11 +6,9 @@ import {
   TextInput,
   TouchableOpacity,
   Alert,
-  useColorScheme,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Image,
   ActivityIndicator,
   StatusBar,
 } from "react-native";
@@ -23,6 +21,7 @@ import {
   signInWithEmailAndPassword,
   GoogleAuthProvider,
   signInWithCredential,
+  sendPasswordResetEmail,
 } from "firebase/auth";
 
 import {
@@ -34,8 +33,16 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import LottieView from "lottie-react-native";
+import Svg, { Path } from "react-native-svg";
 import { colors } from "../theme";
+import { useTheme } from "../ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
+import {
+  girisHatasiMesaji,
+  kayitHatasiMesaji,
+  sifreSifirlamaHatasiMesaji,
+  googleGirisHatasiMesaji,
+} from "../utils/authHatalari";
 
 // 🚀 DÜZELTME: useIsFocused tamamen silindi! (Hatanın kaynağı burasıydı)
 
@@ -46,7 +53,35 @@ GoogleSignin.configure({
     "758732204910-1nqkd7vk72ch45urq8prkb3gk6rc3fsm.apps.googleusercontent.com",
 });
 
-export default function LoginScreen({ setKullaniciRolu }) {
+// Google'ın resmi çok renkli "G" logosu; uygulamaya gömülü (dış bir sunucudan indirilmez)
+const GoogleLogo = ({ size = 22 }) => (
+  <Svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    accessibilityElementsHidden
+    importantForAccessibility="no-hide-descendants"
+  >
+    <Path
+      fill="#4285F4"
+      d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"
+    />
+    <Path
+      fill="#34A853"
+      d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z"
+    />
+    <Path
+      fill="#FBBC05"
+      d="M5.27 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.98-3.09z"
+    />
+    <Path
+      fill="#EA4335"
+      d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09C6.22 6.86 8.87 4.75 12 4.75z"
+    />
+  </Svg>
+);
+
+export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [gosterilenSayfa, setGosterilenSayfa] = useState("giris");
@@ -54,42 +89,86 @@ export default function LoginScreen({ setKullaniciRolu }) {
 
   const [yukleniyor, setYukleniyor] = useState(false);
   const [googleYukleniyor, setGoogleYukleniyor] = useState(false);
+  const [sifreGoster, setSifreGoster] = useState(false);
+  const sifreRef = useRef(null);
 
-  const sistemTemasi = useColorScheme();
-  const tema = sistemTemasi === "dark" ? colors.dark : colors.light;
+  // Kullanıcının uygulamadaki tema tercihi (Açık/Koyu/Sistem) giriş ekranında da geçerli olur
+  const { tema } = useTheme();
+
+  // Giriş başarılı olsa bile rol uyuşmazlığı yüzünden reddedildiyse form kilitli kalmasın
+  useEffect(() => {
+    setYukleniyor(false);
+    setGoogleYukleniyor(false);
+  }, [girisReddi]);
 
   const isGercektenKaranlik = tema.arkaplan === colors.dark.arkaplan;
 
   const dinamikAnaRenk = seciliRol === "veli" ? "#4F46E5" : tema.anaButon;
 
   const handleKayitOl = async () => {
-    if (!email || !password) {
+    const eposta = email.trim();
+    if (!eposta || !password) {
       Alert.alert("Uyarı", "Lütfen e-posta ve şifre alanlarını doldurun.");
+      return;
+    }
+    if (password.length < 6) {
+      Alert.alert("Uyarı", "Şifre en az 6 karakter olmalı.");
       return;
     }
     setYukleniyor(true);
     try {
       await AsyncStorage.setItem("hedefRol", seciliRol);
-      await createUserWithEmailAndPassword(auth, email, password);
+      await createUserWithEmailAndPassword(auth, eposta, password);
     } catch (e) {
-      Alert.alert("Hata", e.message);
+      console.log("Kayıt hatası:", e?.code);
+      Alert.alert("Kayıt Yapılamadı", kayitHatasiMesaji(e));
       setYukleniyor(false);
     }
   };
 
   const handleGirisYap = async () => {
-    if (!email || !password) {
+    const eposta = email.trim();
+    if (!eposta || !password) {
       Alert.alert("Uyarı", "Lütfen e-posta ve şifre alanlarını doldurun.");
       return;
     }
     setYukleniyor(true);
     try {
       await AsyncStorage.setItem("hedefRol", seciliRol);
-      await signInWithEmailAndPassword(auth, email, password);
+      await signInWithEmailAndPassword(auth, eposta, password);
     } catch (e) {
-      Alert.alert("Hata", "Yanlış e-posta veya şifre girdiniz.");
+      console.log("Giriş hatası:", e?.code);
+      Alert.alert("Giriş Yapılamadı", girisHatasiMesaji(e));
       setYukleniyor(false);
     }
+  };
+
+  const handleSifremiUnuttum = async () => {
+    const eposta = email.trim();
+    if (!eposta) {
+      Alert.alert(
+        "E-posta Gerekli",
+        "Şifre sıfırlama bağlantısını gönderebilmemiz için önce e-posta adresini yaz."
+      );
+      return;
+    }
+    setYukleniyor(true);
+    try {
+      await sendPasswordResetEmail(auth, eposta);
+    } catch (e) {
+      // Hesabın var olup olmadığı açığa çıkmasın diye "kullanıcı yok" da başarı gibi gösterilir
+      if (e?.code !== "auth/user-not-found") {
+        console.log("Şifre sıfırlama hatası:", e?.code);
+        Alert.alert("Gönderilemedi", sifreSifirlamaHatasiMesaji(e));
+        setYukleniyor(false);
+        return;
+      }
+    }
+    setYukleniyor(false);
+    Alert.alert(
+      "Bağlantı Gönderildi",
+      "Bu e-posta ile kayıtlı bir hesap varsa şifre sıfırlama bağlantısı gönderildi. Gelen kutunu ve spam klasörünü kontrol et."
+    );
   };
 
   const handleGoogleGiris = async () => {
@@ -120,10 +199,18 @@ export default function LoginScreen({ setKullaniciRolu }) {
       ) {
         return;
       }
-      console.log("GOOGLE GİRİŞ HATASI DETAYI:", error);
-      Alert.alert("Google Giriş Hatası", String(error.message));
+      console.log("GOOGLE GİRİŞ HATASI DETAYI:", error?.code, error?.message);
+      Alert.alert(
+        "Google Giriş Hatası",
+        isErrorWithCode(error) &&
+          error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE
+          ? "Google Play Hizmetleri bulunamadı ya da güncel değil."
+          : googleGirisHatasiMesaji(error)
+      );
     }
   };
+
+  const anaIslem = gosterilenSayfa === "giris" ? handleGirisYap : handleKayitOl;
 
   const karsilamaMetni =
     seciliRol === "ogrenci"
@@ -234,6 +321,24 @@ export default function LoginScreen({ setKullaniciRolu }) {
       height: 22,
       marginRight: 12,
     },
+    sifreGosterButon: {
+      width: 40,
+      height: 40,
+      marginRight: -10,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    sifremiUnuttum: {
+      alignSelf: "flex-end",
+      marginTop: -6,
+      marginBottom: 6,
+      paddingVertical: 8,
+    },
+    sifremiUnuttumYazi: {
+      color: dinamikAnaRenk,
+      fontSize: 14,
+      fontWeight: "600",
+    },
     tabContainer: {
       flexDirection: "row",
       width: "100%",
@@ -293,7 +398,7 @@ export default function LoginScreen({ setKullaniciRolu }) {
     },
   };
 
-  const RolSecici = () => (
+  const rolSecici = () => (
     <View style={dinamikStil.tabContainer}>
       <TouchableOpacity
         style={[
@@ -368,7 +473,7 @@ export default function LoginScreen({ setKullaniciRolu }) {
           <Text style={dinamikStil.baslik}>{karsilamaMetni}</Text>
           <Text style={dinamikStil.altBaslik}>{altMetin}</Text>
 
-          <RolSecici />
+          {rolSecici()}
 
           <View style={dinamikStil.inputKutu}>
             <Ionicons
@@ -385,6 +490,11 @@ export default function LoginScreen({ setKullaniciRolu }) {
               onChangeText={setEmail}
               keyboardType="email-address"
               autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="email"
+              textContentType="emailAddress"
+              returnKeyType="next"
+              onSubmitEditing={() => sifreRef.current?.focus()}
               editable={!(yukleniyor || googleYukleniyor)}
             />
           </View>
@@ -397,21 +507,53 @@ export default function LoginScreen({ setKullaniciRolu }) {
               style={dinamikStil.inputIkon}
             />
             <TextInput
+              ref={sifreRef}
               style={dinamikStil.input}
               placeholderTextColor={tema.ikincilMetin}
               placeholder="Şifreniz"
               value={password}
               onChangeText={setPassword}
-              secureTextEntry={true}
+              secureTextEntry={!sifreGoster}
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete={
+                gosterilenSayfa === "giris" ? "current-password" : "new-password"
+              }
+              textContentType={
+                gosterilenSayfa === "giris" ? "password" : "newPassword"
+              }
+              returnKeyType="go"
+              onSubmitEditing={anaIslem}
               editable={!(yukleniyor || googleYukleniyor)}
             />
+            <TouchableOpacity
+              onPress={() => setSifreGoster((g) => !g)}
+              style={dinamikStil.sifreGosterButon}
+              accessibilityRole="button"
+              accessibilityLabel={sifreGoster ? "Şifreyi gizle" : "Şifreyi göster"}
+            >
+              <Ionicons
+                name={sifreGoster ? "eye-off-outline" : "eye-outline"}
+                size={22}
+                color={tema.ikincilMetin}
+              />
+            </TouchableOpacity>
           </View>
+
+          {gosterilenSayfa === "giris" && (
+            <TouchableOpacity
+              onPress={handleSifremiUnuttum}
+              disabled={yukleniyor || googleYukleniyor}
+              style={dinamikStil.sifremiUnuttum}
+              accessibilityRole="button"
+            >
+              <Text style={dinamikStil.sifremiUnuttumYazi}>Şifremi unuttum</Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             style={[dinamikStil.butonAna, yukleniyor && { opacity: 0.7 }]}
-            onPress={
-              gosterilenSayfa === "giris" ? handleGirisYap : handleKayitOl
-            }
+            onPress={anaIslem}
             disabled={yukleniyor || googleYukleniyor}
           >
             {yukleniyor ? (
@@ -441,12 +583,9 @@ export default function LoginScreen({ setKullaniciRolu }) {
               <ActivityIndicator color={tema.metin} size="small" />
             ) : (
               <>
-                <Image
-                  source={{
-                    uri: "https://cdn-icons-png.flaticon.com/512/2991/2991148.png",
-                  }}
-                  style={dinamikStil.googleLogo}
-                />
+                <View style={dinamikStil.googleLogo}>
+                  <GoogleLogo size={22} />
+                </View>
                 <Text style={dinamikStil.butonGoogleYazisi}>
                   {gosterilenSayfa === "giris"
                     ? "Google ile Giriş Yap"

@@ -99,3 +99,16 @@ export const cozumOnbelleginiTemizle = async () => {
     if (silinecek.length > 0) await AsyncStorage.multiRemove(silinecek);
   } catch (e) {}
 };
+
+// Silinen bir sorunun çözümü cihazda kalmasın diye önbellekten kaldırılır.
+export const cozumOnbellekSil = async (soru, eposta) => {
+  const zaman = zamanDamgasiBul(soru);
+  const anahtarlar = [
+    `cozum:json:${eposta}:${zaman}`,
+    `cozum:resim:${eposta}:${zaman}`,
+  ];
+  anahtarlar.forEach((anahtar) => bellek.delete(anahtar));
+  try {
+    await AsyncStorage.multiRemove(anahtarlar);
+  } catch (e) {}
+};

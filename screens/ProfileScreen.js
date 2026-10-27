@@ -67,6 +67,7 @@ import {
 } from "../utils/hesapSilici";
 
 import { useTheme } from "../ThemeContext";
+import { usePremium } from "../PremiumContext";
 import { colors } from "../theme";
 
 // 13 yaş şartı nedeniyle liste 8. sınıftan başlar
@@ -82,6 +83,7 @@ const SINIFLAR = [
 export default function ProfileScreen() {
   const user = auth.currentUser;
   const insets = useSafeAreaInsets();
+  const { premiumMu: premiumAktif, premiumAc } = usePremium();
   const isFocused = useIsFocused();
 
   const { tema, temaModu, temaDegistir } = useTheme();
@@ -581,6 +583,17 @@ export default function ProfileScreen() {
           },
         },
       ]
+    );
+  };
+
+  // Aboneliği mağazanın kendi ayar sayfasından yönetir/iptal ederiz
+  const abonelikYonet = () => {
+    const url =
+      Platform.OS === "ios"
+        ? "https://apps.apple.com/account/subscriptions"
+        : "https://play.google.com/store/account/subscriptions";
+    Linking.openURL(url).catch(() =>
+      Alert.alert("Hata", "Abonelik ayarları açılamadı.")
     );
   };
 
@@ -1153,6 +1166,90 @@ export default function ProfileScreen() {
                   />
                 </View>
               </View>
+
+              {rol !== "veli" && (
+                <View
+                  style={[
+                    styles.kutu,
+                    {
+                      backgroundColor: tema.kutuArkaplan,
+                      borderColor: tema.kutuCerceve,
+                    },
+                  ]}
+                >
+                  <View style={styles.kutuUstBaslik}>
+                    <Text style={[styles.kutuBaslik, { color: tema.metin }]}>
+                      Abonelik
+                    </Text>
+                    <View
+                      style={[
+                        styles.abonelikRozet,
+                        {
+                          backgroundColor: premiumAktif
+                            ? "rgba(245, 197, 24, 0.16)"
+                            : tema.kutuCerceve,
+                        },
+                      ]}
+                    >
+                      {premiumAktif && (
+                        <Ionicons
+                          name="star"
+                          size={12}
+                          color={tema.premiumAltinMetin}
+                          style={{ marginRight: 4 }}
+                        />
+                      )}
+                      <Text
+                        style={[
+                          styles.abonelikRozetYazi,
+                          {
+                            color: premiumAktif
+                              ? tema.premiumAltinMetin
+                              : tema.ikincilMetin,
+                          },
+                        ]}
+                      >
+                        {premiumAktif ? "Premium" : "Ücretsiz"}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Text
+                    style={{
+                      color: tema.ikincilMetin,
+                      fontSize: 13,
+                      lineHeight: 19,
+                      marginBottom: 14,
+                    }}
+                  >
+                    {premiumAktif
+                      ? "Günde 50 soru ve PDF indirme aktif."
+                      : "Günde 3 soru. Premium ile günde 50 soru ve PDF indirme."}
+                  </Text>
+
+                  <TouchableOpacity
+                    onPress={
+                      premiumAktif ? abonelikYonet : () => premiumAc("profil")
+                    }
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                    style={[
+                      styles.abonelikButon,
+                      { backgroundColor: tema.premiumAltin },
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        color: "#111111",
+                        fontWeight: "700",
+                        fontSize: 15,
+                      }}
+                    >
+                      {premiumAktif ? "Aboneliği Yönet" : "Premium'a Geç"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
 
               <TouchableOpacity
                 onPress={() => setSinifModalGorunur(true)}
@@ -2047,6 +2144,20 @@ const styles = StyleSheet.create({
     textAlign: "center",
     letterSpacing: 3,
     marginBottom: 10,
+  },
+  abonelikRozet: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  abonelikRozetYazi: { fontSize: 12, fontWeight: "700" },
+  abonelikButon: {
+    height: 46,
+    borderRadius: 100,
+    alignItems: "center",
+    justifyContent: "center",
   },
   silSifreInput: {
     borderWidth: 1.5,

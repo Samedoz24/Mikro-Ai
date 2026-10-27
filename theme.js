@@ -15,6 +15,9 @@ export const colors = {
     kutuArkaplan: "#FAFAFA", // Çok Hafif Gri Kutu
     kutuCerceve: "#DBDBDB", // İnce Çerçeve
     hataKirmizi: "#ED4956", // Instagram Hata Kırmızısı
+
+    premiumAltin: "#F5C518", // Premium vurgusu (düğme, çerçeve)
+    premiumAltinMetin: "#8A6500", // Açık zeminde okunur altın metin
   },
 
   // 🌙 İNSTAGRAM KOYU MOD (OLED)
@@ -30,5 +33,8 @@ export const colors = {
     kutuArkaplan: "#121212", // Yükseltilmiş Siyah Kutu
     kutuCerceve: "#262626", // Belirgin Koyu Çerçeve
     hataKirmizi: "#ED4956",
+
+    premiumAltin: "#F5C518",
+    premiumAltinMetin: "#F5C518",
   },
 };

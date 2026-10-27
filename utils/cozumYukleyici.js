@@ -4,6 +4,8 @@ import { storage } from "../firebaseConfig";
 
 // Bulunan çözümler önbelleğe alınır; böylece aynı soruya her tıklamada Storage'dan tekrar indirilmez.
 // Bulunamayan dosyalar önbelleğe ALINMAZ (çözüm sonradan üretilebilir).
+// Soru "Çözüldü" durumuna geçmeden de önbelleğe yazılmaz: n8n dosyaları durumdan önce yazar,
+// yarım ya da sonradan güncellenen bir dosya kalıcı olarak saklanmasın diye.
 const bellek = new Map();
 
 const zamanDamgasiBul = (soru) => {
@@ -37,7 +39,7 @@ const onbellegeYaz = async (anahtar, deger) => {
 };
 
 // Dosya yoksa null, başka bir hata olursa { hata } döner.
-const getir = async (anahtar, yol, jsonMu) => {
+const getir = async (anahtar, yol, jsonMu, onbellegeYazilsin) => {
   const kayitli = await onbellekten(anahtar);
   if (kayitli !== null) return { deger: kayitli };
 
@@ -49,7 +51,7 @@ const getir = async (anahtar, yol, jsonMu) => {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       deger = await response.json();
     }
-    await onbellegeYaz(anahtar, deger);
+    if (onbellegeYazilsin) await onbellegeYaz(anahtar, deger);
     return { deger };
   } catch (e) {
     if (e?.code === "storage/object-not-found") return { deger: null };
@@ -65,16 +67,19 @@ const getir = async (anahtar, yol, jsonMu) => {
  */
 export const cozumYukle = async (soru, eposta) => {
   const zaman = zamanDamgasiBul(soru);
+  const onbellegeYazilsin = soru.durum === "Çözüldü";
   const [json, resim] = await Promise.all([
     getir(
       `cozum:json:${eposta}:${zaman}`,
       `cozumDetayi/${eposta}/${zaman}.json`,
-      true
+      true,
+      onbellegeYazilsin
     ),
     getir(
       `cozum:resim:${eposta}:${zaman}`,
       `solution-cards/${eposta}/${zaman}.png`,
-      false
+      false,
+      onbellegeYazilsin
     ),
   ]);
 

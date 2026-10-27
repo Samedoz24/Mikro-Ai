@@ -45,6 +45,7 @@ import * as MediaLibrary from "expo-media-library";
 
 import { useTheme } from "../ThemeContext";
 import { colors } from "../theme";
+import { usePremium } from "../PremiumContext";
 import { cozumYukle } from "../utils/cozumYukleyici";
 
 const ekranGenisligi = Dimensions.get("window").width;
@@ -53,6 +54,7 @@ const ekranYuksekligi = Dimensions.get("window").height;
 export default function HistoryScreen() {
   const { tema, temaModu } = useTheme();
   const insets = useSafeAreaInsets();
+  const { premiumMu, premiumAc } = usePremium();
 
   // 🚀 EKLENDİ: Sayfa odakta mı kontrolü
   const isFocused = useIsFocused();
@@ -283,6 +285,12 @@ export default function HistoryScreen() {
   };
 
   const pdfOlarakIndir = async () => {
+    // PDF indirme premium'a özeldir (düğme de kilitli görünür; burası ikinci kontrol)
+    if (!premiumMu) {
+      premiumAc("pdf");
+      return;
+    }
+
     try {
       setIndirmeBasladi(true);
 
@@ -572,12 +580,20 @@ export default function HistoryScreen() {
           ]}
           onPress={pdfOlarakIndir}
           disabled={indirmeBasladi}
+          accessibilityRole="button"
+          accessibilityLabel={
+            premiumMu ? "PDF olarak indir" : "PDF indirme, Premium'a özel"
+          }
         >
           {indirmeBasladi ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
             <>
-              <Ionicons name="document-text" size={24} color="#fff" />
+              <Ionicons
+                name={premiumMu ? "document-text" : "lock-closed"}
+                size={24}
+                color="#fff"
+              />
               <Text style={styles.fabYazi}>PDF</Text>
             </>
           )}

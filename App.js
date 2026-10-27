@@ -35,6 +35,7 @@ import ParentDashboard from "./screens/ParentDashboard";
 import OnboardingScreen from "./screens/OnboardingScreen";
 import YasOnayScreen from "./screens/YasOnayScreen";
 import { YAS_ONAYI_SURUMU } from "./utils/yasalMetinler";
+import { PremiumProvider } from "./PremiumContext";
 
 const Tab = createBottomTabNavigator();
 
@@ -119,6 +120,19 @@ function MainApp() {
 
     return () => abonelik();
   }, []);
+
+  // Premium durumu canlı izlenir: satın alma sonrası sunucu güncelleyince arayüz yenilenir
+  useEffect(() => {
+    if (!kullanici || onayGerekli) return;
+
+    const abonelik = onSnapshot(
+      doc(db, "kullanicilar", kullanici.uid),
+      (snap) => setPremiumMu(snap.data()?.premiumMu === true),
+      (hata) => console.log("Premium dinleme hatası:", hata?.code)
+    );
+
+    return () => abonelik();
+  }, [kullanici, onayGerekli]);
 
   useEffect(() => {
     const bildirimleriKur = async () => {
@@ -210,76 +224,78 @@ function MainApp() {
 
   // 🚀 DÜZELTME: NavigationContainer buradan silindi, en dıştaki (ölümsüz) App bileşenine taşındı.
   return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName;
+    <PremiumProvider premiumMu={premiumMu} rol={kullaniciRolu}>
+      <Tab.Navigator
+        screenOptions={({ route }) => ({
+          tabBarIcon: ({ focused, color, size }) => {
+            let iconName;
 
-          if (route.name === "Ana Sayfa") {
-            iconName = focused ? "camera" : "camera-outline";
-          } else if (route.name === "Hata Defteri") {
-            iconName = focused ? "book" : "book-outline";
-          } else if (route.name === "Profil") {
-            iconName = focused ? "person" : "person-outline";
-          } else if (route.name === "Veli Paneli") {
-            iconName = focused
-              ? "shield-checkmark"
-              : "shield-checkmark-outline";
-          }
+            if (route.name === "Ana Sayfa") {
+              iconName = focused ? "camera" : "camera-outline";
+            } else if (route.name === "Hata Defteri") {
+              iconName = focused ? "book" : "book-outline";
+            } else if (route.name === "Profil") {
+              iconName = focused ? "person" : "person-outline";
+            } else if (route.name === "Veli Paneli") {
+              iconName = focused
+                ? "shield-checkmark"
+                : "shield-checkmark-outline";
+            }
 
-          return <Ionicons name={iconName} size={size} color={color} />;
-        },
-        headerShown: false,
-        tabBarActiveTintColor: tema.anaButon,
-        tabBarInactiveTintColor: tema.ikincilMetin,
-        tabBarStyle: {
-          backgroundColor: tema.kutuArkaplan,
-          borderTopColor: tema.kutuCerceve,
-        },
-      })}
-    >
-      {kullaniciRolu === "ogrenci" ? (
-        <>
-          <Tab.Screen
-            name="Ana Sayfa"
-            component={HomeScreen}
-            options={{ title: "Kamera" }}
-          />
-          <Tab.Screen
-            name="Hata Defteri"
-            component={HistoryScreen}
-            options={{
-              title: "Geçmiş Sorular",
-              tabBarBadge: okunmamisSayisi > 0 ? okunmamisSayisi : null,
-              tabBarBadgeStyle: {
-                backgroundColor: "#EF4444",
-                color: "#FFFFFF",
-                fontSize: 12,
-                fontWeight: "bold",
-              },
-            }}
-          />
-          <Tab.Screen
-            name="Profil"
-            component={ProfileScreen}
-            options={{ title: "Hesabım" }}
-          />
-        </>
-      ) : (
-        <>
-          <Tab.Screen
-            name="Veli Paneli"
-            component={ParentDashboard}
-            options={{ title: "Yönetim Paneli" }}
-          />
-          <Tab.Screen
-            name="Profil"
-            component={ProfileScreen}
-            options={{ title: "Hesabım" }}
-          />
-        </>
-      )}
-    </Tab.Navigator>
+            return <Ionicons name={iconName} size={size} color={color} />;
+          },
+          headerShown: false,
+          tabBarActiveTintColor: tema.anaButon,
+          tabBarInactiveTintColor: tema.ikincilMetin,
+          tabBarStyle: {
+            backgroundColor: tema.kutuArkaplan,
+            borderTopColor: tema.kutuCerceve,
+          },
+        })}
+      >
+        {kullaniciRolu === "ogrenci" ? (
+          <>
+            <Tab.Screen
+              name="Ana Sayfa"
+              component={HomeScreen}
+              options={{ title: "Kamera" }}
+            />
+            <Tab.Screen
+              name="Hata Defteri"
+              component={HistoryScreen}
+              options={{
+                title: "Geçmiş Sorular",
+                tabBarBadge: okunmamisSayisi > 0 ? okunmamisSayisi : null,
+                tabBarBadgeStyle: {
+                  backgroundColor: "#EF4444",
+                  color: "#FFFFFF",
+                  fontSize: 12,
+                  fontWeight: "bold",
+                },
+              }}
+            />
+            <Tab.Screen
+              name="Profil"
+              component={ProfileScreen}
+              options={{ title: "Hesabım" }}
+            />
+          </>
+        ) : (
+          <>
+            <Tab.Screen
+              name="Veli Paneli"
+              component={ParentDashboard}
+              options={{ title: "Yönetim Paneli" }}
+            />
+            <Tab.Screen
+              name="Profil"
+              component={ProfileScreen}
+              options={{ title: "Hesabım" }}
+            />
+          </>
+        )}
+      </Tab.Navigator>
+    </PremiumProvider>
   );
 }
 

@@ -7,6 +7,11 @@ export const YAS_ONAYI_SURUMU = 1;
 // Mikro AI'yı kullanabilmek için asgari yaş
 export const ASGARI_YAS = 13;
 
+// Web sitesi yayına girince doldurulacak. Doluysa satın alma ekranında bağlantı olarak gösterilir.
+// (Apple, abonelik ekranında bu iki bağlantıyı ister.)
+export const KULLANIM_KOSULLARI_URL = null;
+export const GIZLILIK_POLITIKASI_URL = null;
+
 export const htmlSablonUret = (isDark, baslik, altBaslik, icerikHtml) => {
   const bg = isDark ? "#121212" : "#FFFFFF";
   const metinRenk = isDark ? "#E5E7EB" : "#1F2937";

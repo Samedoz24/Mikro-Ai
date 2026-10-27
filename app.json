@@ -31,7 +31,6 @@
     "android": {
       "package": "com.samedoz.mikroai",
       "googleServicesFile": "./google-services.json",
-      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -40,9 +39,7 @@
       },
       "permissions": [
         "CAMERA",
-        "INTERNET",
-        "WRITE_EXTERNAL_STORAGE",
-        "READ_EXTERNAL_STORAGE"
+        "INTERNET"
       ]
     },
     "web": {
@@ -53,14 +50,16 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "Soru fotoğrafı çekmek için kameranıza erişmemiz gerekiyor."
+          "cameraPermission": "Soru fotoğrafı çekmek için kameranıza erişmemiz gerekiyor.",
+          "microphonePermission": false
         }
       ],
       [
         "expo-media-library",
         {
           "photosPermission": "Çözüm kartlarını galeriye kaydetmek için izninize ihtiyacımız var.",
-          "savePhotosPermission": "Çözüm kartını galeriye kaydetmek için izin verin."
+          "savePhotosPermission": "Çözüm kartını galeriye kaydetmek için izin verin.",
+          "granularPermissions": ["photo"]
         }
       ],
       "expo-sharing",

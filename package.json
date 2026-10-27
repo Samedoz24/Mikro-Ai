@@ -23,6 +23,7 @@
     "expo-print": "55.0.10-canary-20260327-0789fbc",
     "expo-sharing": "55.0.15-canary-20260327-0789fbc",
     "expo-status-bar": "55.0.5-canary-20260327-0789fbc",
+    "expo-system-ui": "55.0.12-canary-20260327-0789fbc",
     "firebase": "^12.11.0",
     "lottie-react-native": "~7.3.4",
     "react": "19.2.0",

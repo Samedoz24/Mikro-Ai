@@ -26,6 +26,7 @@ import { useIsFocused } from "@react-navigation/native";
 // Firebase Kütüphaneleri
 import { auth, db, storage } from "../firebaseConfig";
 import { signOut } from "firebase/auth";
+import { baglantiKoduGaranti } from "../utils/baglanti";
 import {
   doc,
   setDoc,
@@ -66,6 +67,7 @@ import {
 import { useTheme } from "../ThemeContext";
 import { usePremium } from "../PremiumContext";
 import { yerelTarih } from "../utils/tarih";
+import { dersBul } from "../utils/ders";
 import { kotaDurumu, maksimumKota } from "../utils/kota";
 import { colors } from "../theme";
 
@@ -123,14 +125,8 @@ export default function ProfileScreen() {
   // Silme sırasında belge dinleyicisinin kullanıcı belgesini yeniden oluşturmasını engeller
   const silmeSurecte = useRef(false);
 
-  const rastgeleKodUret = () => {
-    const karakterler = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    let kod = "";
-    for (let i = 0; i < 6; i++) {
-      kod += karakterler.charAt(Math.floor(Math.random() * karakterler.length));
-    }
-    return kod;
-  };
+  // Bağlantı kodunun baglantiKodlari kaydı bu oturumda bir kez doğrulanır
+  const kodKontrolEdildi = useRef(false);
 
   // Premium durumu (canlı) değişince kota dinleyicisi yeniden kurulur; böylece "kalan/toplam"
   // göstergesi her zaman güncel premium durumuna göre hesaplanır.
@@ -215,6 +211,7 @@ export default function ProfileScreen() {
       if (bildirimAyar !== null) setBildirimAktif(JSON.parse(bildirimAyar));
 
       const kullaniciRef = doc(db, "kullanicilar", user.uid);
+      kodKontrolEdildi.current = false;
 
       abonelik = onSnapshot(
         kullaniciRef,
@@ -234,13 +231,22 @@ export default function ProfileScreen() {
 
             if (data.baglantiKodu) {
               setBaglantiKodu(data.baglantiKodu);
-            } else {
-              const yeniKod = rastgeleKodUret();
-              setBaglantiKodu(yeniKod);
+            }
+            if (!kodKontrolEdildi.current) {
+              kodKontrolEdildi.current = true;
               try {
-                await updateDoc(kullaniciRef, { baglantiKodu: yeniKod });
+                // Kodun baglantiKodlari kaydı yoksa oluşturulur (eski hesaplar için taşıma)
+                const kod = await baglantiKoduGaranti(
+                  user.uid,
+                  data.baglantiKodu
+                );
+                if (kod !== data.baglantiKodu) {
+                  setBaglantiKodu(kod);
+                  await updateDoc(kullaniciRef, { baglantiKodu: kod });
+                }
               } catch (e) {
-                console.log("Kod ekleme hatası", e);
+                kodKontrolEdildi.current = false;
+                console.log("Kod ekleme hatası", e?.code || e?.message);
               }
             }
 
@@ -262,10 +268,12 @@ export default function ProfileScreen() {
             }
           } else {
             if (silmeSurecte.current) return;
-            const yeniKod = rastgeleKodUret();
-            setBaglantiKodu(yeniKod);
 
             try {
+              const yeniKod = await baglantiKoduGaranti(user.uid, null);
+              setBaglantiKodu(yeniKod);
+              if (silmeSurecte.current) return;
+              kodKontrolEdildi.current = true;
               await setDoc(kullaniciRef, {
                 eposta: user.email,
                 rol: kayitliRol || "ogrenci",
@@ -310,7 +318,7 @@ export default function ProfileScreen() {
         snapshot.forEach((doc) => {
           total++;
           const data = doc.data();
-          const ders = data.subject || data.ders || "Diğer";
+          const ders = dersBul(data);
           dersSayaclari[ders] = (dersSayaclari[ders] || 0) + 1;
         });
 

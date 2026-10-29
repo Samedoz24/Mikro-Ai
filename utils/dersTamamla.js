@@ -1,7 +1,7 @@
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import { cozumYukle } from "./cozumYukleyici";
-import { dersTahminEt } from "./ders";
+import { dersTahminEt, dersBilgisiVar, dersAdiniDuzelt } from "./ders";
 
 // Çözülmüş ama belgesinde ders alanı olmayan sorulara (yeni n8n akışı ders yazmıyor) ders ekler:
 //  1) çözüm dosyasında "subject" varsa onu kullanır,
@@ -15,7 +15,7 @@ const EN_FAZLA_DENEME = 3;
 let kuyruk = Promise.resolve();
 
 const tamamla = async (soru, eposta) => {
-  if (soru.durum !== "Çözüldü" || soru.ders || soru.subject) return null;
+  if (soru.durum !== "Çözüldü" || dersBilgisiVar(soru)) return null;
 
   const onceki = denemeSayisi.get(soru.id) || 0;
   if (onceki >= EN_FAZLA_DENEME) return null;
@@ -25,8 +25,9 @@ const tamamla = async (soru, eposta) => {
     const { cozumDetayi } = await cozumYukle(soru, eposta);
     if (!cozumDetayi) return null; // çözüm dosyası henüz yok, sonraki güncellemede tekrar denenir
 
-    const dosyadakiDers =
-      typeof cozumDetayi.subject === "string" ? cozumDetayi.subject.trim() : "";
+    const dosyadakiDers = dersAdiniDuzelt(
+      cozumDetayi.subject || cozumDetayi.lesson
+    );
     const ders =
       dosyadakiDers ||
       dersTahminEt({ topic: cozumDetayi.topic, question: cozumDetayi.question });

@@ -14,6 +14,8 @@ import {
   query,
   where,
   getDocs,
+  getDoc,
+  deleteDoc,
   writeBatch,
   doc,
 } from "firebase/firestore";
@@ -109,6 +111,18 @@ const belgeleriSil = async (belgeler) => {
   }
 };
 
+// Öğrencinin bağlantı kodu kaydı (baglantiKodlari/{KOD}). Güvenlik kuralları olmayan bir belgenin
+// silinmesini reddettiği için önce var olup olmadığına bakılır; yalnızca kendi kaydı silinir.
+const baglantiKodunuSil = async (uid) => {
+  const kullanici = await getDoc(doc(db, "kullanicilar", uid));
+  const kod = kullanici.exists() ? kullanici.data().baglantiKodu : null;
+  if (!kod) return;
+
+  const kayit = doc(db, "baglantiKodlari", kod);
+  const snap = await getDoc(kayit);
+  if (snap.exists() && snap.data().uid === uid) await deleteDoc(kayit);
+};
+
 // Kullanıcıya ait tüm sunucu verisini siler. Tekrar çalıştırılabilir (idempotent):
 // yarıda kalırsa, hesap silinmediği için kullanıcı işlemi yeniden deneyebilir.
 export const kullaniciVerileriniSil = async (user) => {
@@ -147,8 +161,9 @@ export const kullaniciVerileriniSil = async (user) => {
   }
   await nesneSil(ref(storage, `profil_fotograflari/${uid}.jpg`));
 
-  // 3) Soru belgeleri, en son kullanıcı belgesi
+  // 3) Soru belgeleri, bağlantı kodu kaydı, en son kullanıcı belgesi
   await belgeleriSil(soruBelgeleri);
+  await baglantiKodunuSil(uid);
   const grup = writeBatch(db);
   grup.delete(doc(db, "kullanicilar", uid));
   await grup.commit();

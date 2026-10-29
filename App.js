@@ -37,6 +37,7 @@ import YasOnayScreen from "./screens/YasOnayScreen";
 import { YAS_ONAYI_SURUMU } from "./utils/yasalMetinler";
 import { PremiumProvider } from "./PremiumContext";
 import { dersiTamamla } from "./utils/dersTamamla";
+import { dersBul, dersBilgisiVar } from "./utils/ders";
 import ErrorBoundary from "./ErrorBoundary";
 
 const Tab = createBottomTabNavigator();
@@ -191,7 +192,7 @@ function MainApp() {
             !bildirilenSorular.current.has(change.doc.id)
           ) {
             bildirilenSorular.current.add(change.doc.id);
-            const dersAdi = veri.subject || veri.ders || "";
+            const dersAdi = dersBilgisiVar(veri) ? dersBul(veri) : "";
             sendQuestionSolvedNotification(dersAdi);
           }
         }
@@ -201,7 +202,7 @@ function MainApp() {
       // eski sorular için sahte "çözüm hazır" bildirimi çıkmasın diye önce işaretlenir.
       snapshot.docs.forEach((belge) => {
         const veri = belge.data();
-        if (veri.durum === "Çözüldü" && !veri.ders && !veri.subject) {
+        if (veri.durum === "Çözüldü" && !dersBilgisiVar(veri)) {
           bildirilenSorular.current.add(belge.id);
           dersiTamamla({ id: belge.id, ...veri }, kullanici.email);
         }

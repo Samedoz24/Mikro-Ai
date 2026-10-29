@@ -11,16 +11,6 @@ export const DERSLER = [
   "Diğer",
 ];
 
-// Bir sorunun dersi. Belgede ders yoksa soru kaybolmasın diye "Diğer" sayılır.
-export const dersBul = (soru) => {
-  const deger = String(soru?.ders || soru?.subject || "").trim();
-  return deger || "Diğer";
-};
-
-// ---------------------------------------------------------------------------
-// Konu başlığından / soru metninden ders tahmini (yapay zekâ ders bilgisi vermediğinde)
-// ---------------------------------------------------------------------------
-
 // Küçük harfe çevirir, Türkçe harfleri ve aksanları sadeleştirir, noktalamayı boşluğa çevirir
 const norm = (metin) =>
   String(metin ?? "")
@@ -30,6 +20,39 @@ const norm = (metin) =>
     .replace(/[̀-ͯ]/g, "")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
+
+// n8n ya da kullanıcı farklı yazsa da ("matematik", "TÜRKÇE", "Geometri") bilinen derse çevirir
+const DERS_ESLESMELERI = {
+  matematik: "Matematik",
+  geometri: "Matematik",
+  fizik: "Fizik",
+  kimya: "Kimya",
+  biyoloji: "Biyoloji",
+  turkce: "Türkçe",
+  "turk dili ve edebiyati": "Türkçe",
+  edebiyat: "Türkçe",
+  tarih: "Tarih",
+  cografya: "Coğrafya",
+  diger: "Diğer",
+};
+
+export const dersAdiniDuzelt = (deger) => {
+  const metin = String(deger ?? "").trim();
+  if (!metin) return "";
+  return DERS_ESLESMELERI[norm(metin)] || metin;
+};
+
+// Belgede ders bilgisi var mı? (n8n "ders", "subject" ya da "lesson" yazabilir)
+export const dersBilgisiVar = (soru) =>
+  Boolean(String(soru?.ders || soru?.subject || soru?.lesson || "").trim());
+
+// Bir sorunun dersi. Belgede ders yoksa soru kaybolmasın diye "Diğer" sayılır.
+export const dersBul = (soru) =>
+  dersAdiniDuzelt(soru?.ders || soru?.subject || soru?.lesson) || "Diğer";
+
+// ---------------------------------------------------------------------------
+// Konu başlığından / soru metninden ders tahmini (yapay zekâ ders bilgisi vermediğinde)
+// ---------------------------------------------------------------------------
 
 // Anahtar sözcükler (norm biçiminde). 3 harf ve altı sözcükler tam eşleşir, diğerleri
 // sözcük başı eşleşir ("denklem" -> denklemler, denklemin).

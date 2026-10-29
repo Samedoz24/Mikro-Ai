@@ -1,0 +1,118 @@
+rules_version = '2';
+
+// Mikro - Firestore güvenlik kuralları
+//
+// Not: n8n akışı Admin/servis hesabıyla çalıştığı için kurallara takılmaz
+// (sorular belgesine çözüm bilgisi yazması, premium alanını elle değiştirmek vb.).
+// Aşağıdaki kurallar yalnızca uygulamadaki istemci erişimini sınırlar.
+//
+// Koleksiyonlar:
+//   kullanicilar/{uid}        profil; sahibi okur/yazar, bağlı veli okur. premiumMu istemciden yazılamaz.
+//   sorular/{id}              sorular; sahibi okur/siler, bağlı veli okur. Yeni soru "Bekliyor" durumunda açılır.
+//   baglantiKodlari/{KOD}     öğrenci bağlantı kodu -> uid. Kodu bilen tek tek okuyabilir, listelenemez.
+//   cihazHaklari/{cihazId}    günlük soru kotası (cihaz bazlı).
+//   diğer her şey (örn. questions)  istemciye kapalı.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function girisli() {
+      return request.auth != null;
+    }
+
+    function ben(uid) {
+      return girisli() && request.auth.uid == uid;
+    }
+
+    // Veli belgesinde bagliOgrenciIdleri listesi olan ve bu öğrenciyi içeren kullanıcı
+    function veliMi(ogrenciUid) {
+      return girisli() &&
+        ogrenciUid in get(/databases/$(database)/documents/kullanicilar/$(request.auth.uid)).data.get('bagliOgrenciIdleri', []);
+    }
+
+    // Soru belgesinin sahibi: uid ya da e-posta eşleşmesi
+    function soruSahibi(soru) {
+      return girisli() &&
+        (soru.kullaniciUid == request.auth.uid ||
+         soru.kullaniciEposta == request.auth.token.email);
+    }
+
+    function degisenAnahtarlar() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    // ---------------------------------------------------------------- kullanicilar
+    match /kullanicilar/{uid} {
+      allow get: if ben(uid) || veliMi(uid);
+      allow list: if false;
+
+      allow create: if ben(uid)
+        && !('premiumMu' in request.resource.data);
+
+      allow update: if ben(uid)
+        && !degisenAnahtarlar().hasAny(['premiumMu']);
+
+      allow delete: if ben(uid);
+    }
+
+    // ---------------------------------------------------------------- sorular
+    match /sorular/{soruId} {
+      allow read: if soruSahibi(resource.data) || veliMi(resource.data.kullaniciUid);
+
+      allow create: if girisli()
+        && request.resource.data.kullaniciUid == request.auth.uid
+        && request.resource.data.kullaniciEposta == request.auth.token.email
+        && request.resource.data.durum == 'Bekliyor'
+        && request.resource.data.fotoLink is string
+        && request.resource.data.keys().hasOnly(
+             ['kullaniciUid', 'kullaniciEposta', 'fotoLink', 'tarih', 'durum']);
+
+      // Sahibi yalnızca okundu damgası ve ders alanını değiştirebilir
+      allow update: if soruSahibi(resource.data)
+        && degisenAnahtarlar().hasOnly(['okunduMu', 'ders', 'dersKaynak'])
+        && (!degisenAnahtarlar().hasAny(['okunduMu']) || request.resource.data.okunduMu is bool)
+        && (!degisenAnahtarlar().hasAny(['ders'])
+            || (request.resource.data.ders is string && request.resource.data.ders.size() <= 30))
+        && (!degisenAnahtarlar().hasAny(['dersKaynak'])
+            || request.resource.data.dersKaynak in ['kullanici', 'cozum', 'tahmin']);
+
+      allow delete: if soruSahibi(resource.data);
+    }
+
+    // ---------------------------------------------------------------- baglantiKodlari
+    match /baglantiKodlari/{kod} {
+      allow get: if girisli();
+      allow list: if false;
+
+      allow create: if girisli()
+        && kod.matches('^[A-Z0-9]{6}$')
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['uid', 'olusturma']);
+
+      allow update: if girisli()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['uid', 'olusturma']);
+
+      allow delete: if girisli() && resource.data.uid == request.auth.uid;
+    }
+
+    // ---------------------------------------------------------------- cihazHaklari
+    match /cihazHaklari/{cihazId} {
+      allow get: if girisli();
+      allow list: if false;
+
+      allow create, update: if girisli()
+        && request.resource.data.kalanSoru is int
+        && request.resource.data.kalanSoru >= 0
+        && request.resource.data.kalanSoru <= 50
+        && request.resource.data.toplamHak is int
+        && request.resource.data.toplamHak >= 1
+        && request.resource.data.toplamHak <= 50
+        && request.resource.data.tarih is string
+        && request.resource.data.tarih.size() == 10;
+
+      allow delete: if false;
+    }
+  }
+}

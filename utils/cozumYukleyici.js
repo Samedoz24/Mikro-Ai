@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ref, getDownloadURL } from "firebase/storage";
 import { storage } from "../firebaseConfig";
+import { dersAdiniDuzelt } from "./ders";
 
 // Bulunan çözümler önbelleğe alınır; böylece aynı soruya her tıklamada Storage'dan tekrar indirilmez.
 // Bulunamayan dosyalar önbelleğe ALINMAZ (çözüm sonradan üretilebilir).
@@ -72,6 +73,7 @@ const metneCevir = (deger) => {
 const METIN_ALANLARI = [
   "cardTitle",
   "subject",
+  "lesson",
   "topic",
   "question",
   "cardExpression",
@@ -85,8 +87,101 @@ const METIN_ALANLARI = [
   "explanation",
 ];
 
+const metinDizisi = (deger) =>
+  (Array.isArray(deger) ? deger : deger ? [deger] : [])
+    .map(metneCevir)
+    .filter((parca) => parca.trim() !== "");
+
+// Pratik (benzer) soru seviyeleri; n8n "kolay/orta/zor" ya da "easy/medium/hard" yazabilir
+const SEVIYELER = {
+  kolay: "kolay",
+  easy: "kolay",
+  orta: "orta",
+  medium: "orta",
+  zor: "zor",
+  hard: "zor",
+};
+const SEVIYE_SIRASI = ["kolay", "orta", "zor"];
+
+// Bir benzer soruyu tek biçime getirir:
+//  { seviye, soru, adimlar[], cevap, secenekler | null, dogruSecenek | null }
+// Yeni biçim şıksızdır (soru + adımlar + cevap), eski biçim A/B/C/D şıklıdır.
+const pratikHazirla = (kaynak, varsayilanSeviye) => {
+  if (!kaynak || typeof kaynak !== "object") return null;
+
+  const soru = metneCevir(kaynak.question ?? kaynak.soru).trim();
+  if (!soru) return null;
+
+  const seviye =
+    SEVIYELER[
+      String(kaynak.level ?? kaynak.seviye ?? kaynak.zorluk ?? "")
+        .trim()
+        .toLocaleLowerCase("tr-TR")
+    ] || varsayilanSeviye;
+  if (!seviye) return null;
+
+  const secenekHam = kaynak.options ?? kaynak.secenekler;
+  let secenekler = null;
+  if (Array.isArray(secenekHam) && secenekHam.length > 0) {
+    secenekler = Object.fromEntries(
+      secenekHam.map((m, i) => [String.fromCharCode(65 + i), metneCevir(m)])
+    );
+  } else if (
+    secenekHam &&
+    typeof secenekHam === "object" &&
+    Object.keys(secenekHam).length > 0
+  ) {
+    secenekler = Object.fromEntries(
+      Object.entries(secenekHam).map(([harf, m]) => [harf, metneCevir(m)])
+    );
+  }
+
+  const dogruSecenek = secenekler
+    ? metneCevir(kaynak.correct_option ?? kaynak.dogruSecenek).trim()
+    : "";
+
+  return {
+    seviye,
+    soru,
+    adimlar: metinDizisi(kaynak.steps ?? kaynak.adimlar ?? kaynak.cardSteps),
+    cevap: metneCevir(
+      kaynak.answer ?? kaynak.cevap ?? kaynak.correct_answer
+    ).trim(),
+    secenekler,
+    dogruSecenek: dogruSecenek || null,
+  };
+};
+
+// Yeni biçim (similarQuestions / benzerSorular dizisi) ve eski biçim (easy/medium/hard_question)
+// tek, seviyeye göre sıralı listeye çevrilir. Aynı seviyeden yalnızca ilki alınır.
+const pratikSorulariTopla = (cozum) => {
+  const liste = [];
+  [cozum.similarQuestions, cozum.benzerSorular].forEach((dizi) => {
+    if (!Array.isArray(dizi)) return;
+    dizi.forEach((kaynak) => {
+      const pratik = pratikHazirla(kaynak, null);
+      if (pratik && !liste.some((p) => p.seviye === pratik.seviye)) {
+        liste.push(pratik);
+      }
+    });
+  });
+  [
+    ["kolay", "easy_question"],
+    ["orta", "medium_question"],
+    ["zor", "hard_question"],
+  ].forEach(([seviye, anahtar]) => {
+    if (liste.some((p) => p.seviye === seviye)) return;
+    const pratik = pratikHazirla(cozum[anahtar], seviye);
+    if (pratik) liste.push(pratik);
+  });
+  return liste.sort(
+    (a, b) => SEVIYE_SIRASI.indexOf(a.seviye) - SEVIYE_SIRASI.indexOf(b.seviye)
+  );
+};
+
 // Eski ve yeni n8n biçimlerini ekranın beklediği tek biçime getirir:
-// metin alanları gerçekten metin, adımlar metin dizisi olur.
+// metin alanları gerçekten metin, adımlar metin dizisi, ders ("lesson" dahil) tek alanda,
+// benzer sorular tek listede (pratikSorular) olur.
 export const cozumuDuzenle = (cozum) => {
   if (!cozum || typeof cozum !== "object") return cozum;
   const duzen = { ...cozum };
@@ -94,11 +189,12 @@ export const cozumuDuzenle = (cozum) => {
     if (alan in duzen) duzen[alan] = metneCevir(duzen[alan]);
   });
   const adimlar = cozum.cardSteps || cozum.steps;
-  if (adimlar !== undefined) {
-    duzen.cardSteps = (Array.isArray(adimlar) ? adimlar : [adimlar])
-      .map(metneCevir)
-      .filter((adim) => adim.trim() !== "");
-  }
+  if (adimlar !== undefined) duzen.cardSteps = metinDizisi(adimlar);
+
+  const ders = dersAdiniDuzelt(duzen.subject || duzen.lesson);
+  if (ders) duzen.subject = ders;
+
+  duzen.pratikSorular = pratikSorulariTopla(cozum);
   return duzen;
 };
 
@@ -178,8 +274,21 @@ export const cozumYukle = async (soru, eposta) => {
     kartLinki = soru.cozumKartiLink;
   }
 
+  // Benzer sorular dosyada yoksa ama soru belgesinde yazılıysa onlar kullanılır
+  let cozumDosyasi = json.deger;
+  if (cozumDosyasi && typeof cozumDosyasi === "object") {
+    ["similarQuestions", "benzerSorular"].forEach((alan) => {
+      const belgedeki = soru[alan];
+      const dosyadaVar =
+        Array.isArray(cozumDosyasi[alan]) && cozumDosyasi[alan].length > 0;
+      if (!dosyadaVar && Array.isArray(belgedeki) && belgedeki.length > 0) {
+        cozumDosyasi = { ...cozumDosyasi, [alan]: belgedeki };
+      }
+    });
+  }
+
   return {
-    cozumDetayi: cozumuDuzenle(json.deger),
+    cozumDetayi: cozumuDuzenle(cozumDosyasi),
     cozumKartiLink: kartLinki,
     hata: json.hata || resim.hata || null,
   };

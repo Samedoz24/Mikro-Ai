@@ -78,6 +78,12 @@ const pdfCozumVerisi = async (soru, eposta) => {
   return { cozum: cozumDetayi, mesaj: "" };
 };
 
+const PRATIK_SEVIYELERI = {
+  kolay: { ad: "Kolay", renk: "#4CAF50" },
+  orta: { ad: "Orta", renk: "#FF9800" },
+  zor: { ad: "Zor", renk: "#F44336" },
+};
+
 export default function HistoryScreen() {
   const { tema, temaModu } = useTheme();
   const insets = useSafeAreaInsets();
@@ -109,6 +115,7 @@ export default function HistoryScreen() {
   const [aktifPratikSoru, setAktifPratikSoru] = useState(null);
   const [seciliPratikSeviye, setSeciliPratikSeviye] = useState("");
   const [secilenSik, setSecilenSik] = useState(null);
+  const [pratikCozumGorunur, setPratikCozumGorunur] = useState(false);
   const [dersSecimiAcik, setDersSecimiAcik] = useState(false);
 
   useEffect(() => {
@@ -299,19 +306,15 @@ export default function HistoryScreen() {
     }
   };
 
-  const pratikEkraniAc = (seviyeAdi, soruData) => {
-    if (!soruData) return;
-    if (typeof soruData === "string" || !soruData.options) {
-      Alert.alert(
-        "Bilgi",
-        "Bu sorunun pratik testi eski formatta oluşturulmuş. Lütfen yeni çözdürdüğünüz sorularda deneyin."
-      );
+  const pratikEkraniAc = (pratik) => {
+    if (!pratik?.soru) {
+      Alert.alert("Bilgi", "Bu pratik soru okunamadı.");
       return;
     }
-
-    setSeciliPratikSeviye(seviyeAdi);
-    setAktifPratikSoru(soruData);
+    setSeciliPratikSeviye(PRATIK_SEVIYELERI[pratik.seviye]?.ad || "");
+    setAktifPratikSoru(pratik);
     setSecilenSik(null);
+    setPratikCozumGorunur(false);
     setPratikModalGorunur(true);
   };
 
@@ -878,9 +881,7 @@ export default function HistoryScreen() {
                       </View>
                     )}
 
-                    {(seciliSoru.cozumDetayi.easy_question ||
-                      seciliSoru.cozumDetayi.medium_question ||
-                      seciliSoru.cozumDetayi.hard_question) && (
+                    {(seciliSoru.cozumDetayi.pratikSorular || []).length > 0 && (
                       <View style={styles.benzerSoruBolumu}>
                         <Text
                           style={[
@@ -892,68 +893,30 @@ export default function HistoryScreen() {
                         </Text>
 
                         <View style={styles.seviyeButonKonteyner}>
-                          {seciliSoru.cozumDetayi.easy_question && (
-                            <TouchableOpacity
-                              style={[
-                                styles.seviyeButon,
-                                { borderColor: "#4CAF50" },
-                              ]}
-                              onPress={() =>
-                                pratikEkraniAc(
-                                  "Kolay",
-                                  seciliSoru.cozumDetayi.easy_question
-                                )
-                              }
-                            >
-                              <Text
-                                style={{ color: "#4CAF50", fontWeight: "bold" }}
+                          {seciliSoru.cozumDetayi.pratikSorular.map((pratik) => {
+                            const seviye = PRATIK_SEVIYELERI[pratik.seviye];
+                            return (
+                              <TouchableOpacity
+                                key={pratik.seviye}
+                                style={[
+                                  styles.seviyeButon,
+                                  { borderColor: seviye.renk },
+                                ]}
+                                onPress={() => pratikEkraniAc(pratik)}
+                                accessibilityRole="button"
+                                accessibilityLabel={`${seviye.ad} seviye benzer soru`}
                               >
-                                Kolay
-                              </Text>
-                            </TouchableOpacity>
-                          )}
-
-                          {seciliSoru.cozumDetayi.medium_question && (
-                            <TouchableOpacity
-                              style={[
-                                styles.seviyeButon,
-                                { borderColor: "#FF9800" },
-                              ]}
-                              onPress={() =>
-                                pratikEkraniAc(
-                                  "Orta",
-                                  seciliSoru.cozumDetayi.medium_question
-                                )
-                              }
-                            >
-                              <Text
-                                style={{ color: "#FF9800", fontWeight: "bold" }}
-                              >
-                                Orta
-                              </Text>
-                            </TouchableOpacity>
-                          )}
-
-                          {seciliSoru.cozumDetayi.hard_question && (
-                            <TouchableOpacity
-                              style={[
-                                styles.seviyeButon,
-                                { borderColor: "#F44336" },
-                              ]}
-                              onPress={() =>
-                                pratikEkraniAc(
-                                  "Zor",
-                                  seciliSoru.cozumDetayi.hard_question
-                                )
-                              }
-                            >
-                              <Text
-                                style={{ color: "#F44336", fontWeight: "bold" }}
-                              >
-                                Zor
-                              </Text>
-                            </TouchableOpacity>
-                          )}
+                                <Text
+                                  style={{
+                                    color: seviye.renk,
+                                    fontWeight: "bold",
+                                  }}
+                                >
+                                  {seviye.ad}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
                         </View>
                       </View>
                     )}
@@ -1106,7 +1069,7 @@ export default function HistoryScreen() {
                 >
                   <View style={styles.pratikUstKontroller}>
                     <Text style={[styles.pratikBaslik, { color: tema.metin }]}>
-                      {seciliPratikSeviye} Seviye Test
+                      {seciliPratikSeviye} Seviye {aktifPratikSoru?.secenekler ? "Test" : "Soru"}
                     </Text>
                     <TouchableOpacity
                       onPress={() => setPratikModalGorunur(false)}
@@ -1124,18 +1087,18 @@ export default function HistoryScreen() {
                       <Text
                         style={[styles.pratikSoruMetni, { color: tema.metin }]}
                       >
-                        {aktifPratikSoru.question}
+                        {aktifPratikSoru.soru}
                       </Text>
 
-                      {aktifPratikSoru.options &&
-                        Object.entries(aktifPratikSoru.options).map(
+                      {aktifPratikSoru.secenekler &&
+                        Object.entries(aktifPratikSoru.secenekler).map(
                           ([harf, secenek]) => {
                             let arkaplanRengi = tema.arkaplan;
                             let cerceveRengi = tema.kutuCerceve;
                             let yaziRengi = tema.metin;
 
                             if (secilenSik) {
-                              if (harf === aktifPratikSoru.correct_option) {
+                              if (harf === aktifPratikSoru.dogruSecenek) {
                                 arkaplanRengi = isGercektenKaranlik
                                   ? "#064E3B"
                                   : "#ECFDF5";
@@ -1145,7 +1108,7 @@ export default function HistoryScreen() {
                                   : "#065F46";
                               } else if (
                                 secilenSik === harf &&
-                                harf !== aktifPratikSoru.correct_option
+                                harf !== aktifPratikSoru.dogruSecenek
                               ) {
                                 arkaplanRengi = isGercektenKaranlik
                                   ? "#7F1D1D"
@@ -1209,7 +1172,7 @@ export default function HistoryScreen() {
                                 </Text>
 
                                 {secilenSik &&
-                                  harf === aktifPratikSoru.correct_option && (
+                                  harf === aktifPratikSoru.dogruSecenek && (
                                     <Ionicons
                                       name="checkmark-circle"
                                       size={24}
@@ -1217,7 +1180,7 @@ export default function HistoryScreen() {
                                     />
                                   )}
                                 {secilenSik === harf &&
-                                  harf !== aktifPratikSoru.correct_option && (
+                                  harf !== aktifPratikSoru.dogruSecenek && (
                                     <Ionicons
                                       name="close-circle"
                                       size={24}
@@ -1236,7 +1199,7 @@ export default function HistoryScreen() {
                             padding: 15,
                             borderRadius: 12,
                             backgroundColor:
-                              secilenSik === aktifPratikSoru.correct_option
+                              secilenSik === aktifPratikSoru.dogruSecenek
                                 ? "#10B98120"
                                 : "#EF444420",
                           }}
@@ -1247,17 +1210,108 @@ export default function HistoryScreen() {
                               fontWeight: "bold",
                               fontSize: 16,
                               color:
-                                secilenSik === aktifPratikSoru.correct_option
+                                secilenSik === aktifPratikSoru.dogruSecenek
                                   ? "#10B981"
                                   : "#EF4444",
                             }}
                           >
-                            {secilenSik === aktifPratikSoru.correct_option
+                            {secilenSik === aktifPratikSoru.dogruSecenek
                               ? "🎉 Tebrikler, Doğru Cevap!"
                               : "Kötü Şans, Yanlış Cevap."}
                           </Text>
                         </View>
                       )}
+                      {!aktifPratikSoru.secenekler && !pratikCozumGorunur && (
+                        <TouchableOpacity
+                          onPress={() => setPratikCozumGorunur(true)}
+                          activeOpacity={0.85}
+                          accessibilityRole="button"
+                          style={{
+                            marginTop: 24,
+                            height: 52,
+                            borderRadius: 14,
+                            alignItems: "center",
+                            justifyContent: "center",
+                            backgroundColor: tema.anaButon,
+                          }}
+                        >
+                          <Text
+                            style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}
+                          >
+                            Çözümü Göster
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {!aktifPratikSoru.secenekler && pratikCozumGorunur && (
+                        <View style={{ marginTop: 20 }}>
+                          {(aktifPratikSoru.adimlar || []).map((adim, index) => (
+                            <View
+                              key={index}
+                              style={[
+                                styles.adimKutusu,
+                                {
+                                  backgroundColor: isGercektenKaranlik
+                                    ? "#1E293B"
+                                    : "#EFF6FF",
+                                  borderLeftColor: tema.anaButon,
+                                },
+                              ]}
+                            >
+                              <Text
+                                style={[styles.adimBaslik, { color: tema.anaButon }]}
+                              >
+                                ADIM {index + 1}
+                              </Text>
+                              <Text
+                                style={[styles.adimIcerik, { color: tema.metin }]}
+                              >
+                                {adim}
+                              </Text>
+                            </View>
+                          ))}
+
+                          {aktifPratikSoru.cevap ? (
+                            <View
+                              style={[
+                                styles.cevapKutusu,
+                                {
+                                  backgroundColor: isGercektenKaranlik
+                                    ? "#064E3B"
+                                    : "#ECFDF5",
+                                  borderColor: "#10B981",
+                                },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.kucukBaslik,
+                                  {
+                                    color: isGercektenKaranlik
+                                      ? "#34D399"
+                                      : "#059669",
+                                  },
+                                ]}
+                              >
+                                CEVAP
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.cevapMetni,
+                                  {
+                                    color: isGercektenKaranlik
+                                      ? "#A7F3D0"
+                                      : "#065F46",
+                                  },
+                                ]}
+                              >
+                                {aktifPratikSoru.cevap}
+                              </Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      )}
+
                       <View style={{ height: 30 }} />
                     </ScrollView>
                   )}

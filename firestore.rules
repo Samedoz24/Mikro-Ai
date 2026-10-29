@@ -11,7 +11,15 @@ rules_version = '2';
 //   sorular/{id}              sorular; sahibi okur/siler, bağlı veli okur. Yeni soru "Bekliyor" durumunda açılır.
 //   baglantiKodlari/{KOD}     öğrenci bağlantı kodu -> uid. Kodu bilen tek tek okuyabilir, listelenemez.
 //   cihazHaklari/{cihazId}    günlük soru kotası (cihaz bazlı).
+//   kurumlar/{kurumId}        dershane. Yalnızca sunucu (Admin SDK / Cloud Functions) yazar.
+//     /ozet/{uid}             öğrenci başına istatistik özeti; müdür ve öğretmen okur.
+//     /uyeler/{uid}           öğrenci üyeliği ve onay kaydı; müdür ve öğrencinin kendisi okur.
+//     /yoneticiler/{eposta}   müdür/öğretmen davetleri; yalnızca müdür okur.
 //   diğer her şey (örn. questions)  istemciye kapalı.
+//
+// Kurum yetkisi sunucunun yazdığı kimlik claim'lerinden gelir (request.auth.token):
+//   kurumId  -> yöneticinin kurumu, kurumRol -> 'mudur' ya da 'ogretmen'.
+// İstemci kurumId, kurumRol, premiumMu alanlarını ve 'yonetici' rolünü yazamaz.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -37,27 +45,57 @@ service cloud.firestore {
          soru.kullaniciEposta == request.auth.token.email);
     }
 
+    // Sunucunun verdiği kurum claim'leri
+    function mudurMu(kurumId) {
+      return girisli()
+        && request.auth.token.get('kurumRol', '') == 'mudur'
+        && request.auth.token.get('kurumId', '') == kurumId;
+    }
+
+    function kurumYoneticisiMi(kurumId) {
+      return girisli()
+        && request.auth.token.get('kurumRol', '') in ['mudur', 'ogretmen']
+        && request.auth.token.get('kurumId', '') == kurumId;
+    }
+
+    // Öğrencinin sunucu tarafından atanmış kurumu bu müdürün kurumuysa true
+    function kurumMuduruOgrenciyi(ogrenciUid) {
+      let kurum = get(/databases/$(database)/documents/kullanicilar/$(ogrenciUid)).data.get('kurumId', '');
+      return kurum != '' && mudurMu(kurum);
+    }
+
+    // Kullanıcı yalnızca kendi seçebileceği rolleri yazabilir
+    function istemciRolleri() {
+      return ['ogrenci', 'veli'];
+    }
+
     function degisenAnahtarlar() {
       return request.resource.data.diff(resource.data).affectedKeys();
     }
 
     // ---------------------------------------------------------------- kullanicilar
     match /kullanicilar/{uid} {
-      allow get: if ben(uid) || veliMi(uid);
+      allow get: if ben(uid) || veliMi(uid) || (girisli() && kurumMuduruOgrenciyi(uid));
       allow list: if false;
 
       allow create: if ben(uid)
-        && !('premiumMu' in request.resource.data);
+        && !request.resource.data.keys().hasAny(['premiumMu', 'kurumId', 'kurumRol'])
+        && request.resource.data.get('rol', 'ogrenci') in istemciRolleri();
 
       allow update: if ben(uid)
-        && !degisenAnahtarlar().hasAny(['premiumMu']);
+        && !degisenAnahtarlar().hasAny(['premiumMu', 'kurumId', 'kurumRol'])
+        && (!degisenAnahtarlar().hasAny(['rol'])
+            || (request.resource.data.rol in istemciRolleri()
+                && resource.data.get('rol', 'ogrenci') in istemciRolleri()));
 
       allow delete: if ben(uid);
     }
 
     // ---------------------------------------------------------------- sorular
     match /sorular/{soruId} {
-      allow read: if soruSahibi(resource.data) || veliMi(resource.data.kullaniciUid);
+      allow read: if soruSahibi(resource.data)
+        || veliMi(resource.data.kullaniciUid)
+        || (girisli() && 'kullaniciUid' in resource.data && kurumMuduruOgrenciyi(resource.data.kullaniciUid));
 
       allow create: if girisli()
         && request.resource.data.kullaniciUid == request.auth.uid
@@ -77,6 +115,29 @@ service cloud.firestore {
             || request.resource.data.dersKaynak in ['kullanici', 'cozum', 'tahmin']);
 
       allow delete: if soruSahibi(resource.data);
+    }
+
+    // ---------------------------------------------------------------- kurumlar
+    // Tüm yazmalar sunucuya aittir (varsayılan: istemci yazamaz).
+    match /kurumlar/{kurumId} {
+      allow get: if kurumYoneticisiMi(kurumId);
+      allow list: if false;
+
+      match /ozet/{uid} {
+        allow read: if kurumYoneticisiMi(kurumId);
+        allow write: if false;
+      }
+
+      match /uyeler/{uid} {
+        allow get: if ben(uid) || mudurMu(kurumId);
+        allow list: if mudurMu(kurumId);
+        allow write: if false;
+      }
+
+      match /yoneticiler/{eposta} {
+        allow read: if mudurMu(kurumId);
+        allow write: if false;
+      }
     }
 
     // ---------------------------------------------------------------- baglantiKodlari

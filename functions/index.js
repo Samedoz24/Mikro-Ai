@@ -1,7 +1,9 @@
 const { initializeApp } = require("firebase-admin/app");
 const { onCall } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const kurum = require("./kurum");
+const ozet = require("./ozet");
 
 initializeApp();
 
@@ -29,5 +31,26 @@ exports.lisansKontrol = onSchedule(
   async () => {
     const kapatilan = await kurum.lisansKontrol();
     console.log("Kapatılan kurumlar:", kapatilan.join(", ") || "yok");
+  }
+);
+
+// Bir soru eklenir, güncellenir ya da silinirse sahibinin kurum özeti yenilenir
+exports.soruOzetiniGuncelle = onDocumentWritten(
+  { document: "sorular/{soruId}", region: "europe-west1", maxInstances: 5 },
+  async (event) => {
+    const uid = event.data?.after?.data()?.kullaniciUid || event.data?.before?.data()?.kullaniciUid;
+    if (uid) await ozet.ozetYenile(uid);
+  }
+);
+
+// Öğrenci adını değiştirirse kurum özetindeki isim de güncellenir
+exports.isimOzetiniGuncelle = onDocumentWritten(
+  { document: "kullanicilar/{uid}", region: "europe-west1", maxInstances: 5 },
+  async (event) => {
+    const once = event.data?.before?.data();
+    const sonra = event.data?.after?.data();
+    if (!sonra?.kurumId || sonra.rol === "yonetici") return;
+    if (once?.adSoyad === sonra.adSoyad && once?.kurumId === sonra.kurumId) return;
+    await ozet.ozetYenile(event.params.uid);
   }
 );

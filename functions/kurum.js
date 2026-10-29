@@ -12,6 +12,7 @@
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
 const { getAuth } = require("firebase-admin/auth");
 const { HttpsError } = require("firebase-functions/v2/https");
+const { ozetYenile } = require("./ozet");
 
 const db = () => getFirestore();
 
@@ -134,6 +135,8 @@ const kurumaKatil = async (uid, veri) => {
   });
 
   await db().doc(`kurumDenemeleri/${uid}`).delete().catch(() => {});
+  // Katılmadan önce sorulan sorular da özete yansısın; başarısız olursa soru tetikleyicisi telafi eder
+  if (!sonuc.zatenUye) await ozetYenile(uid).catch((hata) => console.error("ozet-yenile", hata));
   return sonuc;
 };
 

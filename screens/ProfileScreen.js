@@ -65,6 +65,8 @@ import {
 
 import { useTheme } from "../ThemeContext";
 import { usePremium } from "../PremiumContext";
+import { yerelTarih } from "../utils/tarih";
+import { kotaDurumu, maksimumKota } from "../utils/kota";
 import { colors } from "../theme";
 
 // 13 yaş şartı nedeniyle liste 8. sınıftan başlar
@@ -130,20 +132,23 @@ export default function ProfileScreen() {
     return kod;
   };
 
+  // Premium durumu (canlı) değişince kota dinleyicisi yeniden kurulur; böylece "kalan/toplam"
+  // göstergesi her zaman güncel premium durumuna göre hesaplanır.
   useEffect(() => {
     let cihazAbonelik = () => {};
+    let iptal = false;
 
     const cihazKotasiDinle = async () => {
       if (!user) return;
 
       try {
-        const kullaniciRef = doc(db, "kullanicilar", user.uid);
-        const kullaniciSnap = await getDoc(kullaniciRef);
+        // Premium durumu doğrudan sunucudan okunur (bağlam henüz yüklenmemiş olabilir)
+        const kullaniciSnap = await getDoc(doc(db, "kullanicilar", user.uid));
         const isPremium = kullaniciSnap.exists()
           ? kullaniciSnap.data().premiumMu === true
           : false;
 
-        const guncelMaxKota = isPremium ? 50 : 3;
+        const guncelMaxKota = maksimumKota(isPremium);
         setMaxKota(guncelMaxKota);
 
         const cihazId =
@@ -151,63 +156,39 @@ export default function ProfileScreen() {
             ? Application.getAndroidId()
             : await Application.getIosIdForVendorAsync();
 
-        const bugun = new Date().toISOString().split("T")[0];
+        const bugun = yerelTarih();
         const cihazRef = doc(db, "cihazHaklari", cihazId);
 
-        cihazAbonelik = onSnapshot(cihazRef, async (cihazSnap) => {
-          if (cihazSnap.exists()) {
-            const data = cihazSnap.data();
-            if (data.tarih === bugun) {
-              let dbKalan =
-                data.kalanSoru !== undefined ? data.kalanSoru : guncelMaxKota;
-              let dbToplam = data.toplamHak || 3;
+        const abonelik = onSnapshot(cihazRef, async (cihazSnap) => {
+          const durum = kotaDurumu(
+            cihazSnap.exists() ? cihazSnap.data() : null,
+            bugun,
+            guncelMaxKota
+          );
+          setKalanSoru(durum.kalan);
 
-              if (dbToplam !== guncelMaxKota) {
-                const harcananSoru = dbToplam - dbKalan;
-                dbKalan = Math.max(0, guncelMaxKota - harcananSoru);
-                await setDoc(
-                  cihazRef,
-                  {
-                    kalanSoru: dbKalan,
-                    toplamHak: guncelMaxKota,
-                  },
-                  { merge: true }
-                );
-              }
-              setKalanSoru(dbKalan);
-            } else {
-              setKalanSoru(guncelMaxKota);
-              await setDoc(
-                cihazRef,
-                {
-                  kalanSoru: guncelMaxKota,
-                  tarih: bugun,
-                  toplamHak: guncelMaxKota,
-                },
-                { merge: true }
-              );
+          if (durum.guncelleme) {
+            try {
+              await setDoc(cihazRef, durum.guncelleme, { merge: true });
+            } catch (hata) {
+              console.log("Kota güncellenemedi:", hata?.code);
             }
-          } else {
-            setKalanSoru(guncelMaxKota);
-            await setDoc(
-              cihazRef,
-              {
-                kalanSoru: guncelMaxKota,
-                tarih: bugun,
-                toplamHak: guncelMaxKota,
-              },
-              { merge: true }
-            );
           }
         });
+
+        if (iptal) abonelik();
+        else cihazAbonelik = abonelik;
       } catch (error) {
-        console.log("Cihaz kotası dinleme hatası:", error);
+        console.log("Cihaz kotası dinleme hatası:", error?.code);
       }
     };
 
     cihazKotasiDinle();
-    return () => cihazAbonelik();
-  }, [user]);
+    return () => {
+      iptal = true;
+      cihazAbonelik();
+    };
+  }, [user, premiumAktif]);
 
   useEffect(() => {
     let abonelik = () => {};

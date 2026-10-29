@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { View, ActivityIndicator, Alert } from "react-native";
 import { auth, db } from "./firebaseConfig";
 import { onAuthStateChanged, signOut } from "firebase/auth";
@@ -36,6 +36,7 @@ import OnboardingScreen from "./screens/OnboardingScreen";
 import YasOnayScreen from "./screens/YasOnayScreen";
 import { YAS_ONAYI_SURUMU } from "./utils/yasalMetinler";
 import { PremiumProvider } from "./PremiumContext";
+import { dersiTamamla } from "./utils/dersTamamla";
 import ErrorBoundary from "./ErrorBoundary";
 
 const Tab = createBottomTabNavigator();
@@ -49,6 +50,8 @@ function MainApp() {
   // Rol uyuşmazlığıyla giriş reddedilince giriş ekranının yükleniyor durumunu sıfırlar
   const [girisReddi, setGirisReddi] = useState(0);
   const [okunmamisSayisi, setOkunmamisSayisi] = useState(0);
+  // n8n bir soruyu birden çok kez güncelleyebilir; her soru için yalnızca bir kez bildirim gönderilir
+  const bildirilenSorular = useRef(new Set());
   const [premiumMu, setPremiumMu] = useState(false);
 
   const { tema } = useTheme();
@@ -182,10 +185,25 @@ function MainApp() {
       snapshot.docChanges().forEach((change) => {
         if (change.type === "modified") {
           const veri = change.doc.data();
-          if (veri.durum === "Çözüldü" && veri.okunduMu !== true) {
+          if (
+            veri.durum === "Çözüldü" &&
+            veri.okunduMu !== true &&
+            !bildirilenSorular.current.has(change.doc.id)
+          ) {
+            bildirilenSorular.current.add(change.doc.id);
             const dersAdi = veri.subject || veri.ders || "";
             sendQuestionSolvedNotification(dersAdi);
           }
+        }
+      });
+
+      // Dersi olmayan çözülmüş sorulara ders ekle. Bu güncelleme belgeyi "değişti" gösterir;
+      // eski sorular için sahte "çözüm hazır" bildirimi çıkmasın diye önce işaretlenir.
+      snapshot.docs.forEach((belge) => {
+        const veri = belge.data();
+        if (veri.durum === "Çözüldü" && !veri.ders && !veri.subject) {
+          bildirilenSorular.current.add(belge.id);
+          dersiTamamla({ id: belge.id, ...veri }, kullanici.email);
         }
       });
     });

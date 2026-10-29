@@ -897,27 +897,61 @@ export default function ParentDashboard() {
                       {seciliSoru.cozumDetayi.cardTitle || "Soru Çözümü"}
                     </Text>
 
-                    <View
-                      style={[
-                        styles.bilgiEtiketi,
-                        {
-                          backgroundColor: isGercektenKaranlik
-                            ? "#1A1A1A"
-                            : "#F9FAFB",
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={{
-                          color: tema.metin,
-                          fontWeight: "600",
-                          fontSize: 15,
-                        }}
+                    {(seciliSoru.cozumDetayi.subject ||
+                      seciliSoru.cozumDetayi.topic) && (
+                      <View
+                        style={[
+                          styles.bilgiEtiketi,
+                          {
+                            backgroundColor: isGercektenKaranlik
+                              ? "#1A1A1A"
+                              : "#F9FAFB",
+                          },
+                        ]}
                       >
-                        📚 {seciliSoru.cozumDetayi.subject} ›{" "}
-                        {seciliSoru.cozumDetayi.topic}
-                      </Text>
-                    </View>
+                        <Text
+                          style={{
+                            color: tema.metin,
+                            fontWeight: "600",
+                            fontSize: 15,
+                          }}
+                        >
+                          📚{" "}
+                          {[
+                            seciliSoru.cozumDetayi.subject,
+                            seciliSoru.cozumDetayi.topic,
+                          ]
+                            .filter(Boolean)
+                            .join(" › ")}
+                        </Text>
+                      </View>
+                    )}
+
+                    {seciliSoru.cozumDetayi.question ? (
+                      <View
+                        style={[
+                          styles.adimKutusu,
+                          {
+                            backgroundColor: isGercektenKaranlik
+                              ? "#1A1A1A"
+                              : "#F9FAFB",
+                            borderLeftColor: tema.ikincilMetin,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.kucukBaslik,
+                            { color: tema.ikincilMetin },
+                          ]}
+                        >
+                          📝 SORU
+                        </Text>
+                        <Text style={[styles.adimIcerik, { color: tema.metin }]}>
+                          {seciliSoru.cozumDetayi.question}
+                        </Text>
+                      </View>
+                    ) : null}
 
                     {(
                       seciliSoru.cozumDetayi.cardSteps ||
@@ -1019,8 +1053,30 @@ export default function ParentDashboard() {
                     >
                       {cozumHatasi
                         ? "Çözüm şu an yüklenemedi. Lütfen bağlantını kontrol edip daha sonra tekrar dene."
+                        : seciliSoru?.durum === "Çözüldü"
+                        ? "Bu sorunun çözüm detayı şu an hazır değil. Birkaç dakika sonra tekrar dene."
                         : "Yapay zeka analiz dosyası bekleniyor..."}
                     </Text>
+                    {(cozumHatasi || seciliSoru?.durum === "Çözüldü") && (
+                      <TouchableOpacity
+                        onPress={() => soruDetayAc(seciliSoru)}
+                        activeOpacity={0.85}
+                        accessibilityRole="button"
+                        style={{
+                          marginTop: 18,
+                          paddingVertical: 12,
+                          paddingHorizontal: 28,
+                          borderRadius: 100,
+                          backgroundColor: tema.anaButon,
+                        }}
+                      >
+                        <Text
+                          style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}
+                        >
+                          Tekrar Dene
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 )}
                 <View style={{ height: 40 }} />

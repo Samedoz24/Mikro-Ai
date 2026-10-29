@@ -138,6 +138,9 @@ export const kullaniciVerileriniSil = async (user) => {
 
   // 2) Depolama: soru fotoğrafları, çözüm dosyaları (n8n), profil fotoğrafı
   await klasoruSil(`kullanicilar/${uid}`);
+  // Yeni n8n akışı çözüm dosyalarını UID klasörüne, eski akış e-posta klasörüne yazar
+  await klasoruSil(`cozumDetayi/${uid}`);
+  await klasoruSil(`solution-cards/${uid}`);
   if (eposta) {
     await klasoruSil(`cozumDetayi/${eposta}`);
     await klasoruSil(`solution-cards/${eposta}`);

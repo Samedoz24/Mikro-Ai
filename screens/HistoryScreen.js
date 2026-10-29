@@ -13,6 +13,7 @@ import {
   Alert,
   StatusBar,
   Platform,
+  Pressable,
 } from "react-native";
 
 import {
@@ -46,33 +47,35 @@ import * as MediaLibrary from "expo-media-library";
 import { useTheme } from "../ThemeContext";
 import { colors } from "../theme";
 import { usePremium } from "../PremiumContext";
-import { cozumYukle, cozumOnbellekSil } from "../utils/cozumYukleyici";
-import { htmlKacis, htmlMetin } from "../utils/metin";
+import {
+  cozumYukle,
+  cozumOnbellekSil,
+  cozumYollari,
+} from "../utils/cozumYukleyici";
+import { soruBlokHtml, belgeHtml } from "../utils/pdfIcerik";
+import { DERSLER, dersBul } from "../utils/ders";
 
 const ekranGenisligi = Dimensions.get("window").width;
 const ekranYuksekligi = Dimensions.get("window").height;
 
-// PDF için bir sorunun çözüm metni (önbellekten ya da sunucudan)
-const pdfCozumMetni = async (soru, eposta) => {
+// PDF için bir sorunun çözümü (önbellekten ya da sunucudan). Çözüm yoksa nedeni `mesaj` olarak döner.
+const pdfCozumVerisi = async (soru, eposta) => {
   if (soru.durum !== "Çözüldü") {
-    return "⏳ Bu soru henüz yapay zeka tarafından çözülmedi veya beklemede.";
+    return {
+      cozum: null,
+      mesaj: "⏳ Bu soru henüz yapay zeka tarafından çözülmedi veya beklemede.",
+    };
   }
   const { cozumDetayi, hata } = await cozumYukle(soru, eposta);
   if (!cozumDetayi) {
-    return hata
-      ? "⚠️ Çözüm şu an yüklenemedi."
-      : "⚠️ Yapay zeka analiz dosyası sunucuda bulunamadı (Test veya silinmiş veri).";
+    return {
+      cozum: null,
+      mesaj: hata
+        ? "⚠️ Çözüm şu an yüklenemedi."
+        : "⚠️ Yapay zeka analiz dosyası sunucuda bulunamadı (Test veya silinmiş veri).",
+    };
   }
-  return (
-    cozumDetayi.cardAnswer ||
-    cozumDetayi.correct_answer ||
-    cozumDetayi.solution ||
-    cozumDetayi.answer ||
-    cozumDetayi.sonuc ||
-    cozumDetayi.result ||
-    cozumDetayi.explanation ||
-    "Çözüm dosyası bulundu fakat sonuç formatı farklı (Eski format)."
-  );
+  return { cozum: cozumDetayi, mesaj: "" };
 };
 
 export default function HistoryScreen() {
@@ -90,16 +93,7 @@ export default function HistoryScreen() {
 
   const [seciliKategori, setSeciliKategori] = useState("Tümü");
 
-  const temelKategoriler = [
-    "Matematik",
-    "Fizik",
-    "Kimya",
-    "Biyoloji",
-    "Türkçe",
-    "Tarih",
-    "Coğrafya",
-    "Diğer",
-  ];
+  const temelKategoriler = DERSLER;
   const [dinamikKategoriler, setDinamikKategoriler] = useState([
     "Tümü",
     ...temelKategoriler,
@@ -115,6 +109,7 @@ export default function HistoryScreen() {
   const [aktifPratikSoru, setAktifPratikSoru] = useState(null);
   const [seciliPratikSeviye, setSeciliPratikSeviye] = useState("");
   const [secilenSik, setSecilenSik] = useState(null);
+  const [dersSecimiAcik, setDersSecimiAcik] = useState(false);
 
   useEffect(() => {
     const q = query(
@@ -147,9 +142,9 @@ export default function HistoryScreen() {
   useEffect(() => {
     if (sorular.length > 0) {
       const enSonSoru = sorular[0];
-      const enSonDers = enSonSoru.subject || enSonSoru.ders;
+      const enSonDers = dersBul(enSonSoru);
 
-      if (enSonDers && enSonDers !== "Tümü") {
+      if (enSonDers && enSonDers !== "Tümü" && enSonDers !== "Diğer") {
         const yeniSiralama = ["Tümü", enSonDers];
 
         temelKategoriler.forEach((kategori) => {
@@ -169,10 +164,7 @@ export default function HistoryScreen() {
   const filtrelenmisSorular =
     seciliKategori === "Tümü"
       ? sorular
-      : sorular.filter(
-          (soru) =>
-            soru.ders === seciliKategori || soru.subject === seciliKategori
-        );
+      : sorular.filter((soru) => dersBul(soru) === seciliKategori);
 
   const soruDetayAc = async (soru) => {
     setSeciliSoru(soru);
@@ -181,6 +173,7 @@ export default function HistoryScreen() {
     setCozumYukleniyor(true);
     setCozumHatasi(false);
     setPratikModalGorunur(false);
+    setDersSecimiAcik(false);
 
     if (soru.durum === "Çözüldü" && soru.okunduMu !== true) {
       try {
@@ -194,7 +187,6 @@ export default function HistoryScreen() {
 
     try {
       const sonuc = await cozumYukle(soru, auth.currentUser?.email);
-
       setSeciliSoru((prev) => ({
         ...prev,
         cozumDetayi: sonuc.cozumDetayi,
@@ -212,21 +204,6 @@ export default function HistoryScreen() {
   const soruyuSil = async () => {
     if (!seciliSoru) return;
     try {
-      let timestamp = seciliSoru.id;
-      if (seciliSoru.fotoLink) {
-        const match = seciliSoru.fotoLink.match(/(\d{13})/);
-        if (match && match[1]) {
-          timestamp = match[1];
-        } else {
-          const matchYedek = seciliSoru.fotoLink.match(
-            /(\d+)\.(jpg|jpeg|png)/i
-          );
-          if (matchYedek && matchYedek[1]) {
-            timestamp = matchYedek[1];
-          }
-        }
-      }
-
       const userEmail = auth.currentUser?.email;
 
       if (seciliSoru.fotoLink) {
@@ -235,21 +212,42 @@ export default function HistoryScreen() {
         } catch (e) {}
       }
 
-      try {
-        const jsonYolu = `cozumDetayi/${userEmail}/${timestamp}.json`;
-        await deleteObject(ref(storage, jsonYolu));
-      } catch (e) {}
-
-      try {
-        const resimYolu = `solution-cards/${userEmail}/${timestamp}.png`;
-        await deleteObject(ref(storage, resimYolu));
-      } catch (e) {}
+      // Çözüm JSON'u ve kartı: n8n'in yazdığı yol, UID yolu ve eski e-posta yolu
+      const yollar = cozumYollari(seciliSoru, userEmail);
+      for (const yol of [...yollar.json, ...yollar.resim]) {
+        try {
+          await deleteObject(ref(storage, yol));
+        } catch (e) {
+          if (e?.code !== "storage/object-not-found") {
+            console.log("Çözüm dosyası silinemedi:", yol, e?.code);
+          }
+        }
+      }
 
       await cozumOnbellekSil(seciliSoru, userEmail);
       await deleteDoc(doc(db, "sorular", seciliSoru.id));
       setModalGorunur(false);
     } catch (error) {
       Alert.alert("Hata", "Soru silinirken bir sorun oluştu.");
+    }
+  };
+
+  // Kullanıcının seçtiği ders her zaman önceliklidir; otomatik tahmin ya da n8n bunu ezmez.
+  const dersiKaydet = async (ders) => {
+    setDersSecimiAcik(false);
+    if (!seciliSoru || dersBul(seciliSoru) === ders) return;
+    try {
+      await updateDoc(doc(db, "sorular", seciliSoru.id), {
+        ders,
+        dersKaynak: "kullanici",
+      });
+      setSeciliSoru((onceki) => ({ ...onceki, ders }));
+    } catch (hata) {
+      console.log("Ders kaydedilemedi:", hata?.code);
+      Alert.alert(
+        "Kaydedilemedi",
+        "Ders değiştirilemedi. İnternet bağlantını kontrol edip tekrar dene."
+      );
     }
   };
 
@@ -338,70 +336,34 @@ export default function HistoryScreen() {
       const userEmail = auth.currentUser?.email;
 
       // Çözümleri küçük gruplar hâlinde paralel getir (önbellekten gelenler ağa gitmez)
-      const cozumMetinleri = new Array(indirilecekSorular.length).fill("");
+      const cozumler = new Array(indirilecekSorular.length).fill(null);
       const GRUP = 4;
       for (let bas = 0; bas < indirilecekSorular.length; bas += GRUP) {
         await Promise.all(
           indirilecekSorular.slice(bas, bas + GRUP).map(async (soru, j) => {
-            cozumMetinleri[bas + j] = await pdfCozumMetni(soru, userEmail);
+            cozumler[bas + j] = await pdfCozumVerisi(soru, userEmail);
           })
         );
       }
 
-      // Metinler HTML'e gömülmeden önce kaçırılır ("x < 5" gibi ifadeler PDF'i bozmasın)
-      let sorularHtml = "";
-      indirilecekSorular.forEach((soru, i) => {
-        const dersAdi = soru.subject || soru.ders || "Ders Belirtilmemiş";
-        const tarih = new Date(soru.tarih).toLocaleDateString("tr-TR");
+      const sorularHtml = indirilecekSorular
+        .map((soru, i) =>
+          soruBlokHtml({
+            sira: i + 1,
+            dersAdi: dersBul(soru),
+            tarih: new Date(soru.tarih).toLocaleDateString("tr-TR"),
+            fotoLink: soru.fotoLink,
+            cozum: cozumler[i].cozum,
+            mesaj: cozumler[i].mesaj,
+          })
+        )
+        .join("\n");
 
-        const resimHtml = soru.fotoLink
-          ? `<img src="${htmlKacis(
-              soru.fotoLink
-            )}" style="max-width: 100%; max-height: 300px; object-fit: contain; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ddd;" />`
-          : `<div style="padding: 20px; background: #eee; text-align: center; border-radius: 8px; margin-bottom: 15px; color: #888;">Fotoğraf Yok</div>`;
-
-        sorularHtml += `
-        <div class="soru-kutusu">
-          <div class="soru-baslik">
-            <span>Soru ${i + 1} - ${htmlKacis(dersAdi)}</span>
-            <span>${htmlKacis(tarih)}</span>
-          </div>
-          ${resimHtml}
-          <div class="cozum-kutusu">
-            <strong>Yapay Zeka Çözümü:</strong><br/>
-            <p style="margin-top:8px; line-height:1.6; font-size:15px;">${htmlMetin(
-              cozumMetinleri[i]
-            )}</p>
-          </div>
-        </div>
-      `;
+      const htmlIcerik = belgeHtml({
+        kategori: seciliKategori,
+        toplam: indirilecekSorular.length,
+        govde: sorularHtml,
       });
-
-      const htmlIcerik = `
-      <!DOCTYPE html>
-      <html lang="tr">
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Hata Defterim</title>
-        <style>
-          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 40px; color: #333; }
-          h1 { text-align: center; color: #2C3E50; border-bottom: 2px solid #3498DB; padding-bottom: 10px; font-size: 28px; margin-bottom: 5px; }
-          .kategori-bilgi { text-align: center; font-size: 14px; color: #7F8C8D; margin-bottom: 35px; }
-          .soru-kutusu { border: 1px solid #BDC3C7; border-radius: 8px; padding: 20px; margin-bottom: 25px; page-break-inside: avoid; }
-          .soru-baslik { display: flex; justify-content: space-between; font-weight: bold; font-size: 16px; color: #2980B9; border-bottom: 1px solid #ECF0F1; padding-bottom: 10px; margin-bottom: 15px; }
-          .cozum-kutusu { background-color: #F4F6F7; border-left: 4px solid #1ABC9C; padding: 15px; border-radius: 4px; font-size: 15px; }
-          .footer { text-align: center; margin-top: 50px; font-size: 12px; color: #95A5A6; border-top: 1px solid #ECF0F1; padding-top: 15px; }
-        </style>
-      </head>
-      <body>
-        <h1>Akıllı Hata Defterim</h1>
-        <div class="kategori-bilgi">Seçilen Kategori: <strong>${htmlKacis(seciliKategori)}</strong> | Toplam Soru: <strong>${indirilecekSorular.length}</strong></div>
-        ${sorularHtml}
-        <div class="footer">Bu belge Akıllı Hata Defterim uygulaması tarafından otomatik oluşturulmuştur.</div>
-      </body>
-      </html>
-    `;
 
       const { uri } = await Print.printToFileAsync({
         html: htmlIcerik,
@@ -540,13 +502,11 @@ export default function HistoryScreen() {
                       style={styles.kucukFoto}
                     />
                     <View style={styles.kartBilgi}>
-                      {(item.subject || item.ders) && (
-                        <Text
-                          style={[styles.kartDersAd, { color: tema.metin }]}
-                        >
-                          {item.subject || item.ders}
-                        </Text>
-                      )}
+                      <Text
+                        style={[styles.kartDersAd, { color: tema.metin }]}
+                      >
+                        {dersBul(item)}
+                      </Text>
                       <Text
                         style={[styles.kartTarih, { color: tema.ikincilMetin }]}
                       >
@@ -681,6 +641,36 @@ export default function HistoryScreen() {
                   </TouchableOpacity>
                 )}
 
+                <View style={styles.dersSatiri}>
+                  <Text style={[styles.dersEtiket, { color: tema.ikincilMetin }]}>
+                    Ders
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setDersSecimiAcik(true)}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Ders: ${dersBul(seciliSoru)}. Değiştirmek için dokun`}
+                    style={[
+                      styles.dersChip,
+                      {
+                        borderColor: tema.kutuCerceve,
+                        backgroundColor: isGercektenKaranlik
+                          ? "#1A1A1A"
+                          : "#F9FAFB",
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.dersChipYazi, { color: tema.metin }]}>
+                      {dersBul(seciliSoru)}
+                    </Text>
+                    <Ionicons
+                      name="chevron-down"
+                      size={16}
+                      color={tema.ikincilMetin}
+                    />
+                  </TouchableOpacity>
+                </View>
+
                 {cozumYukleniyor ? (
                   <View style={{ padding: 40, alignItems: "center" }}>
                     <ActivityIndicator size="large" color={tema.anaButon} />
@@ -699,6 +689,8 @@ export default function HistoryScreen() {
                       {seciliSoru.cozumDetayi.cardTitle || "Soru Çözümü"}
                     </Text>
 
+                    {(seciliSoru.cozumDetayi.subject ||
+                      seciliSoru.cozumDetayi.topic) && (
                     <View
                       style={[
                         styles.bilgiEtiketi,
@@ -716,10 +708,42 @@ export default function HistoryScreen() {
                           fontSize: 15,
                         }}
                       >
-                        📚 {seciliSoru.cozumDetayi.subject} ›{" "}
-                        {seciliSoru.cozumDetayi.topic}
+                        📚{" "}
+                        {[
+                          seciliSoru.cozumDetayi.subject,
+                          seciliSoru.cozumDetayi.topic,
+                        ]
+                          .filter(Boolean)
+                          .join(" › ")}
                       </Text>
                     </View>
+                    )}
+
+                    {seciliSoru.cozumDetayi.question ? (
+                      <View
+                        style={[
+                          styles.formulKutu,
+                          {
+                            backgroundColor: isGercektenKaranlik
+                              ? "#1A1A1A"
+                              : "#F9FAFB",
+                            borderColor: tema.kutuCerceve,
+                            borderStyle: "solid",
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[styles.kucukBaslik, { color: tema.ikincilMetin }]}
+                        >
+                          📝 SORU
+                        </Text>
+                        <Text
+                          style={[styles.adimIcerik, { color: tema.metin }]}
+                        >
+                          {seciliSoru.cozumDetayi.question}
+                        </Text>
+                      </View>
+                    ) : null}
 
                     {(seciliSoru.cozumDetayi.cardExpression ||
                       seciliSoru.cozumDetayi.expression) && (
@@ -946,8 +970,30 @@ export default function HistoryScreen() {
                     >
                       {cozumHatasi
                         ? "Çözüm şu an yüklenemedi. Lütfen bağlantını kontrol edip daha sonra tekrar dene."
+                        : seciliSoru?.durum === "Çözüldü"
+                        ? "Bu sorunun çözüm detayı şu an hazır değil. Birkaç dakika sonra tekrar dene."
                         : "Yapay zeka analiz dosyası bekleniyor..."}
                     </Text>
+                    {(cozumHatasi || seciliSoru?.durum === "Çözüldü") && (
+                      <TouchableOpacity
+                        onPress={() => soruDetayAc(seciliSoru)}
+                        activeOpacity={0.85}
+                        accessibilityRole="button"
+                        style={{
+                          marginTop: 18,
+                          paddingVertical: 12,
+                          paddingHorizontal: 28,
+                          borderRadius: 100,
+                          backgroundColor: tema.anaButon,
+                        }}
+                      >
+                        <Text
+                          style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}
+                        >
+                          Tekrar Dene
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 )}
 
@@ -983,6 +1029,62 @@ export default function HistoryScreen() {
                 )}
                 <View style={{ height: 40 }} />
               </ScrollView>
+
+              {dersSecimiAcik && (
+                <View style={styles.dersSecimKatman}>
+                  <Pressable
+                    style={StyleSheet.absoluteFill}
+                    onPress={() => setDersSecimiAcik(false)}
+                    accessibilityLabel="Kapat"
+                  />
+                  <View
+                    style={[
+                      styles.dersSecimKutu,
+                      {
+                        backgroundColor: tema.arkaplan,
+                        borderColor: tema.kutuCerceve,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.dersSecimBaslik, { color: tema.metin }]}>
+                      Dersi Seç
+                    </Text>
+                    {DERSLER.map((ders) => {
+                      const secili = dersBul(seciliSoru) === ders;
+                      return (
+                        <TouchableOpacity
+                          key={ders}
+                          onPress={() => dersiKaydet(ders)}
+                          activeOpacity={0.7}
+                          accessibilityRole="radio"
+                          accessibilityState={{ selected: secili }}
+                          style={[
+                            styles.dersSecimSatir,
+                            { borderTopColor: tema.kutuCerceve },
+                          ]}
+                        >
+                          <Text
+                            style={{
+                              color: secili ? tema.anaButon : tema.metin,
+                              fontSize: 16,
+                              fontWeight: secili ? "700" : "500",
+                            }}
+                          >
+                            {ders}
+                          </Text>
+                          {secili && (
+                            <Ionicons
+                              name="checkmark"
+                              size={20}
+                              color={tema.anaButon}
+                            />
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
             </View>
 
             {pratikModalGorunur && (
@@ -1309,6 +1411,51 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     alignItems: "center",
     borderColor: "#ccc",
+  },
+  dersSatiri: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 14,
+  },
+  dersEtiket: { fontSize: 14, fontWeight: "600" },
+  dersChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 100,
+    paddingVertical: 8,
+    paddingLeft: 16,
+    paddingRight: 12,
+  },
+  dersChipYazi: { fontSize: 15, fontWeight: "700" },
+  dersSecimKatman: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    padding: 28,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  dersSecimKutu: {
+    borderWidth: 1,
+    borderRadius: 20,
+    overflow: "hidden",
+  },
+  dersSecimBaslik: {
+    fontSize: 17,
+    fontWeight: "800",
+    textAlign: "center",
+    paddingVertical: 16,
+  },
+  dersSecimSatir: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   formulKutu: {
     padding: 20,

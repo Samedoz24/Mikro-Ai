@@ -41,7 +41,8 @@ import { useTheme } from "../ThemeContext";
 import { colors } from "../theme";
 import { usePremium } from "../PremiumContext";
 import { kotaYenilenmeHatirlatmasiKur } from "../utils/notificationManager";
-import { takvimGunFarki } from "../utils/tarih";
+import { takvimGunFarki, yerelTarih } from "../utils/tarih";
+import { kotaDurumu, maksimumKota } from "../utils/kota";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -213,33 +214,19 @@ export default function HomeScreen() {
         ? kullaniciSnap.data().premiumMu === true
         : false;
 
-      const maxKota = isPremium ? 50 : 3;
+      const maxKota = maksimumKota(isPremium);
       const cihazId = await getDeviceId();
 
-      const simdi = new Date();
-      const yyyy = simdi.getFullYear();
-      const mm = String(simdi.getMonth() + 1).padStart(2, "0");
-      const dd = String(simdi.getDate()).padStart(2, "0");
-      const bugunYerel = `${yyyy}-${mm}-${dd}`;
+      const bugunYerel = yerelTarih();
 
       const cihazRef = doc(db, "cihazHaklari", cihazId);
       const cihazSnap = await getDoc(cihazRef);
 
-      let mevcutKota = maxKota;
-
-      if (cihazSnap.exists()) {
-        const data = cihazSnap.data();
-        if (data.tarih === bugunYerel) {
-          mevcutKota = data.kalanSoru !== undefined ? data.kalanSoru : maxKota;
-
-          const eskiToplamHak = data.toplamHak || 3;
-          if (maxKota === 50 && eskiToplamHak === 3) {
-            mevcutKota += 47;
-          } else if (maxKota === 3 && eskiToplamHak === 50) {
-            mevcutKota = Math.max(0, mevcutKota - 47);
-          }
-        }
-      }
+      const mevcutKota = kotaDurumu(
+        cihazSnap.exists() ? cihazSnap.data() : null,
+        bugunYerel,
+        maxKota
+      ).kalan;
 
       if (mevcutKota <= 0) {
         setYukleniyor(false);

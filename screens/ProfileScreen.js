@@ -28,6 +28,11 @@ import { auth, db, storage } from "../firebaseConfig";
 import { signOut } from "firebase/auth";
 import { baglantiKoduGaranti } from "../utils/baglanti";
 import {
+  ROZETLER,
+  kazanilanRozetIdleri,
+  soruIstatistigi,
+} from "../utils/rozetler";
+import {
   doc,
   setDoc,
   updateDoc,
@@ -37,6 +42,7 @@ import {
   query,
   where,
   getDoc,
+  arrayUnion,
 } from "firebase/firestore";
 import { ref, deleteObject } from "firebase/storage";
 
@@ -111,6 +117,11 @@ export default function ProfileScreen() {
   const [baglantiKodu, setBaglantiKodu] = useState("Yükleniyor...");
 
   const [toplamSoru, setToplamSoru] = useState(0);
+  const [okunanCozum, setOkunanCozum] = useState(0);
+  const [farkliDers, setFarkliDers] = useState(0);
+  // Kalıcı rozetler: undefined = henüz yüklenmedi, null = belgede alan yok, dizi = kayıtlı rozet id'leri
+  const [rozetKaydi, setRozetKaydi] = useState(undefined);
+  const rozetIslenen = useRef(new Set());
   const [dersIstatistikleri, setDersIstatistikleri] = useState([]);
   const [istatistikYukleniyor, setIstatistikYukleniyor] = useState(true);
 
@@ -223,6 +234,7 @@ export default function ProfileScreen() {
             if (data.adSoyad) setAdSoyad(data.adSoyad);
             if (data.bildirimAktif !== undefined)
               setBildirimAktif(data.bildirimAktif);
+            setRozetKaydi(Array.isArray(data.rozetler) ? data.rozetler : null);
 
             if (data.premiumMu !== undefined) {
               setMaxKota(data.premiumMu ? 50 : 3);
@@ -314,15 +326,20 @@ export default function ProfileScreen() {
       (snapshot) => {
         let total = 0;
         const dersSayaclari = {};
+        const sorular = [];
 
         snapshot.forEach((doc) => {
           total++;
           const data = doc.data();
+          sorular.push(data);
           const ders = dersBul(data);
           dersSayaclari[ders] = (dersSayaclari[ders] || 0) + 1;
         });
 
+        const ist = soruIstatistigi(sorular, dersBul);
         setToplamSoru(total);
+        setOkunanCozum(ist.okunanCozum);
+        setFarkliDers(ist.farkliDers);
 
         if (total > 0) {
           const istatistikDizisi = Object.keys(dersSayaclari).map(
@@ -710,71 +727,73 @@ export default function ProfileScreen() {
   const mevcutSeviyeXP = kullaniciPuan % seviyeIcinGerekenXP;
   const ilerlemeYuzdesi = (mevcutSeviyeXP / seviyeIcinGerekenXP) * 100;
 
-  const rozetler = [
-    {
-      id: 1,
-      baslik: "İlk Adım",
-      ikon: "🌱",
-      aciklama: "İlk soru",
-      kazanildi: toplamSoru >= 1,
-    },
-    {
-      id: 2,
-      baslik: "Isınma Turu",
-      ikon: "⚡",
-      aciklama: "3 günlük seri",
-      kazanildi: seriGunu >= 3,
-    },
-    {
-      id: 3,
-      baslik: "İstikrarlı",
-      ikon: "📅",
-      aciklama: "7 günlük seri",
-      kazanildi: seriGunu >= 7,
-    },
-    {
-      id: 4,
-      baslik: "Soru Avcısı",
-      ikon: "🎯",
-      aciklama: "10 soru çözdün",
-      kazanildi: toplamSoru >= 10,
-    },
-    {
-      id: 5,
-      baslik: "Çırak",
-      ikon: "🛠️",
-      aciklama: "25 soru çözdün",
-      kazanildi: toplamSoru >= 25,
-    },
-    {
-      id: 6,
-      baslik: "Bilge Baykuş",
-      ikon: "🦉",
-      aciklama: "50 soru çözdün",
-      kazanildi: toplamSoru >= 50,
-    },
-    {
-      id: 7,
-      baslik: "Efsane",
-      ikon: "👑",
-      aciklama: "100 soru barajı",
-      kazanildi: toplamSoru >= 100,
-    },
-    {
-      id: 8,
-      baslik: "Usta",
-      ikon: "⚔️",
-      aciklama: "250 soru çözdün",
-      kazanildi: toplamSoru >= 250,
-    },
-    {
-      id: 9,
-      baslik: "Profesör",
-      ikon: "🎓",
-      aciklama: "500 soru çözdün",
-      kazanildi: toplamSoru >= 500,
-    },
-  ];
+  const kazanilanIdler = kazanilanRozetIdleri({
+    toplamSoru,
+    seriGunu,
+    adSoyad,
+    sinifSecildi: SINIFLAR.includes(seciliSinif),
+    okunanCozum,
+    farkliDers,
+  });
+  const kazanilanAnahtar = kazanilanIdler.join(",");
+
+  // Kalıcı kayıt ile anlık koşul birleşir: bir kez kazanılan rozet seri bozulsa da kaybolmaz
+  const rozetler = ROZETLER.map((r) => ({
+    ...r,
+    kazanildi:
+      kazanilanIdler.includes(r.id) || (rozetKaydi || []).includes(r.id),
+  }));
+  const kazanilanRozetSayisi = rozetler.filter((r) => r.kazanildi).length;
+
+  // Yeni kazanılan rozetler Firestore'a yazılır ve kullanıcıya bildirilir.
+  // Belgede hiç rozet alanı yokken (ilk çalıştırma) mevcut rozetler sessizce kaydedilir.
+  useEffect(() => {
+    if (
+      rol !== "ogrenci" ||
+      !user ||
+      !isFocused ||
+      istatistikYukleniyor ||
+      rozetKaydi === undefined
+    )
+      return;
+
+    const kayitli = rozetKaydi || [];
+    const yeniler = kazanilanIdler.filter(
+      (id) => !kayitli.includes(id) && !rozetIslenen.current.has(id)
+    );
+    if (yeniler.length === 0) return;
+
+    yeniler.forEach((id) => rozetIslenen.current.add(id));
+    const bildirimGerekli = rozetKaydi !== null;
+
+    updateDoc(doc(db, "kullanicilar", user.uid), {
+      rozetler: arrayUnion(...yeniler),
+    })
+      .then(() => {
+        if (!bildirimGerekli) return;
+        const satirlar = ROZETLER.filter((r) => yeniler.includes(r.id)).map(
+          (r) => `${r.ikon} ${r.baslik} (${r.aciklama})`
+        );
+        Alert.alert(
+          yeniler.length > 1
+            ? "Yeni rozetler kazandın! 🏆"
+            : "Yeni rozet kazandın! 🏆",
+          satirlar.join("\n")
+        );
+      })
+      .catch((hata) => {
+        // Yazılamadıysa bir sonraki açılışta yeniden denenir
+        yeniler.forEach((id) => rozetIslenen.current.delete(id));
+        console.log("Rozet kaydedilemedi:", hata?.code);
+      });
+  }, [
+    rol,
+    user,
+    isFocused,
+    istatistikYukleniyor,
+    rozetKaydi,
+    kazanilanAnahtar,
+  ]);
 
   const getModalButonStil = (mod) => {
     const isSelected = temaModu === mod;
@@ -930,7 +949,7 @@ export default function ProfileScreen() {
           {rol === "ogrenci" && (
             <>
               <Text style={[styles.sectionTitle, { color: tema.metin }]}>
-                🏆 Kazanılan Rozetler
+                🏆 Rozetler ({kazanilanRozetSayisi}/{rozetler.length})
               </Text>
               <ScrollView
                 horizontal

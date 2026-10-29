@@ -22,6 +22,20 @@ const HATA_MESAJLARI = {
     "Profilin henüz hazır değil. Uygulamayı kapatıp açıp tekrar dene.",
   "cok-fazla-deneme":
     "Çok fazla deneme yaptın. Lütfen bir saat sonra tekrar dene.",
+  "davet-yok":
+    "Bu e-posta adresi için tanımlı bir yönetici daveti bulunamadı. Lütfen dershane yetkilisiyle iletişime geç.",
+  "davet-kullanilmis":
+    "Bu davet başka bir hesap tarafından kullanılmış. Lütfen dershane yetkilisiyle iletişime geç.",
+  "davet-rol-hatali":
+    "Davetteki rol bilgisi geçersiz (mudur ya da ogretmen olmalı). Lütfen dershane yetkilisiyle iletişime geç.",
+  "davet-kurum-yok":
+    "Davette belirtilen dershane bulunamadı. Lütfen dershane yetkilisiyle iletişime geç.",
+  "davet-hatali":
+    "Davet bilgisi eksik ya da hatalı. Lütfen dershane yetkilisiyle iletişime geç.",
+  "hesap-kullaniliyor":
+    "Bu hesap öğrenci ya da veli olarak kullanılıyor. Yönetici girişi için farklı bir e-posta adresi kullan.",
+  "eposta-dogrulanmadi": "E-posta adresini doğrulaman gerekiyor.",
+  "eposta-yok": "Hesabında e-posta adresi bulunamadı.",
 };
 
 // Sunucu HttpsError mesajını (örn. "kod-bulunamadi") okunur Türkçe metne çevirir
@@ -42,6 +56,12 @@ export const kurumaKatil = async (kod) => {
     functions,
     "kurumaKatil"
   )({ kod, onay: true });
+  return sonuc.data;
+};
+
+// Davet edilmiş müdür/öğretmen yönetici yetkisi alır. Başarılıysa kimlik belirteci yenilenmelidir.
+export const yoneticiOl = async () => {
+  const sonuc = await httpsCallable(functions, "yoneticiOl")({});
   return sonuc.data;
 };
 

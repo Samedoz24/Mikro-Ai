@@ -155,3 +155,29 @@ export const KULLANIM_KOSULLARI_ICERIK = `
   <h2>💎 Abonelik Şartları</h2>
   <p>Abonelikler ve ödeme işlemleri doğrudan App Store veya Play Store üzerinden yönetilir. İptal ve iade süreçleri ilgili mağaza politikalarına tabidir.</p>
 `;
+
+// Dershane yöneticileri (müdür ve öğretmen) için. Hukuki incelemeden geçirilmeden yayına alınmamalıdır.
+export const YONETICI_KOSULLARI_ICERIK = `
+  <div class="card">
+    <p>Bu belge, Mikro AI'da bir dershanenin müdürü ya da öğretmeni olarak oturum açan kullanıcılar için geçerlidir.</p>
+  </div>
+
+  <h2>🏫 Yetki ve Hesap</h2>
+  <p>Yönetici hesabı, dershane tarafından davet edilen kişiye tanımlanır ve yalnızca o kişi tarafından kullanılabilir. Hesap bilgilerinizi başkalarıyla paylaşmamalısınız. Dershaneyle çalışma ilişkiniz sona erdiğinde yetkiniz kaldırılır.</p>
+
+  <h2>👁️ Erişebileceğiniz Veriler</h2>
+  <ul>
+    <li><span class="highlight">Müdür:</span> dershaneye bağlı öğrencilerin gönderdiği soruları, çözümleri ve istatistikleri görebilir.</li>
+    <li><span class="highlight">Öğretmen:</span> yalnızca öğrencilerin istatistiklerini (soru sayısı, ders dağılımı, aktiflik) görebilir; soru içeriklerine erişemez.</li>
+    <li>Yalnızca dershaneye kendi isteğiyle bağlanmış öğrencilerin verileri görünür. Öğrenci dilediği zaman dershaneden ayrılabilir; ayrıldığında verilerine erişiminiz sona erer.</li>
+  </ul>
+
+  <h2>🔒 Veri Kullanımı ve Gizlilik</h2>
+  <p>Öğrenci verilerini yalnızca dershanenin eğitim ve öğretim faaliyetleri amacıyla kullanmalısınız. Bu verileri üçüncü kişilerle paylaşamaz, kopyalayıp başka ortamlara aktaramaz ve amacı dışında kullanamazsınız. Öğrencilerin çoğunun 18 yaşından küçük olabileceğini unutmayın; bu verilerin korunmasında özenli davranmanız gerekir.</p>
+
+  <h2>🗑️ Hesap Silme</h2>
+  <p>Hesabım sayfasından hesabınızı istediğiniz zaman silebilirsiniz. Dershane verileri ve öğrenci kayıtları bu işlemden etkilenmez.</p>
+
+  <h2>📋 Sorumluluk</h2>
+  <p>Yönetici hesabınızla yapılan işlemlerden ve erişilen verilerin kullanımından siz sorumlusunuz. Kurallara aykırı kullanım hesabınızın kapatılmasına yol açabilir.</p>
+`;

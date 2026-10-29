@@ -103,7 +103,12 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
 
   const isGercektenKaranlik = tema.arkaplan === colors.dark.arkaplan;
 
-  const dinamikAnaRenk = seciliRol === "veli" ? "#4F46E5" : tema.anaButon;
+  const dinamikAnaRenk =
+    seciliRol === "veli"
+      ? "#4F46E5"
+      : seciliRol === "yonetici"
+      ? "#0F766E"
+      : tema.anaButon;
 
   const handleKayitOl = async () => {
     const eposta = email.trim();
@@ -217,6 +222,10 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
       ? gosterilenSayfa === "giris"
         ? "Hoş Geldin"
         : "Hesap Oluştur"
+      : seciliRol === "yonetici"
+      ? gosterilenSayfa === "giris"
+        ? "Yönetici Girişi"
+        : "Yönetici Hesabı Oluştur"
       : gosterilenSayfa === "giris"
       ? "Veli Girişi"
       : "Veli Hesabı Oluştur";
@@ -226,6 +235,8 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
       ? gosterilenSayfa === "giris"
         ? "Yapay zeka destekli eğitim asistanınıza erişmek için giriş yapın."
         : "Kişiselleştirilmiş öğrenim deneyimine adım atmak için hesabınızı oluşturun."
+      : seciliRol === "yonetici"
+      ? "Yalnızca dershane tarafından davet edilen müdür ve öğretmenler içindir. Davet edilen e-posta adresinle giriş yap."
       : gosterilenSayfa === "giris"
       ? "Öğrencinizin akademik gelişimini detaylı analiz etmek için giriş yapın."
       : "Öğrencinizin eğitim sürecini yakından takip etmek için veli hesabı oluşturun.";
@@ -355,7 +366,7 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
       alignItems: "center",
       borderRadius: 12,
     },
-    tabYazi: { fontSize: 16, fontWeight: "bold" },
+    tabYazi: { fontSize: 15, fontWeight: "bold" },
     cizgiKutu: {
       flexDirection: "row",
       alignItems: "center",
@@ -438,6 +449,26 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
           ]}
         >
           Veli
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[
+          dinamikStil.tabButon,
+          {
+            backgroundColor:
+              seciliRol === "yonetici" ? dinamikAnaRenk : "transparent",
+          },
+        ]}
+        onPress={() => setSeciliRol("yonetici")}
+        disabled={yukleniyor || googleYukleniyor}
+      >
+        <Text
+          style={[
+            dinamikStil.tabYazi,
+            { color: seciliRol === "yonetici" ? "#fff" : tema.ikincilMetin },
+          ]}
+        >
+          Yönetici
         </Text>
       </TouchableOpacity>
     </View>

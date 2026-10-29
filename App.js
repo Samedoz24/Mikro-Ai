@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
 import { View, ActivityIndicator, Alert } from "react-native";
 import { auth, db } from "./firebaseConfig";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import {
+  onAuthStateChanged,
+  signOut,
+  sendEmailVerification,
+} from "firebase/auth";
 import {
   collection,
   query,
@@ -34,6 +38,8 @@ import HistoryScreen from "./screens/HistoryScreen";
 import ParentDashboard from "./screens/ParentDashboard";
 import OnboardingScreen from "./screens/OnboardingScreen";
 import YasOnayScreen from "./screens/YasOnayScreen";
+import YoneticiAnaEkran from "./screens/YoneticiAnaEkran";
+import { yoneticiOl, kurumHataMesaji } from "./utils/kurumIstemci";
 import { YAS_ONAYI_SURUMU } from "./utils/yasalMetinler";
 import { PremiumProvider } from "./PremiumContext";
 import { dersiTamamla } from "./utils/dersTamamla";
@@ -41,6 +47,46 @@ import { dersBul, dersBilgisiVar } from "./utils/ders";
 import ErrorBoundary from "./ErrorBoundary";
 
 const Tab = createBottomTabNavigator();
+
+const ROL_ETIKETLERI = {
+  ogrenci: "Öğrenci",
+  veli: "Veli",
+  yonetici: "Yönetici",
+};
+
+// Yönetici sekmesinden girişte sunucudan yetki alınır. Davet yoksa ya da e-posta doğrulanmamışsa
+// giriş reddedilir. Dönen değer: { basarili: true } ya da { basarili: false, baslik, mesaj }
+const yoneticiYetkisiAl = async (kullanici) => {
+  try {
+    await yoneticiOl();
+    // Yeni yetki kimlik belirtecine ancak yenilenince yazılır
+    await kullanici.getIdToken(true);
+    return { basarili: true };
+  } catch (e) {
+    console.log("Yönetici yetkisi alınamadı:", e?.code, e?.message);
+    if (e?.message === "eposta-dogrulanmadi") {
+      let ek = "";
+      try {
+        await sendEmailVerification(kullanici);
+        ek =
+          " Adresine bir doğrulama bağlantısı gönderdik. Bağlantıya tıkladıktan sonra tekrar giriş yap.";
+      } catch (gonderimHatasi) {
+        console.log("Doğrulama e-postası gönderilemedi:", gonderimHatasi?.code);
+        ek = " Doğrulama bağlantısı gönderilemedi, biraz sonra tekrar dene.";
+      }
+      return {
+        basarili: false,
+        baslik: "E-posta Doğrulanmadı",
+        mesaj: kurumHataMesaji(e) + ek,
+      };
+    }
+    return {
+      basarili: false,
+      baslik: "Yönetici Girişi Yapılamadı",
+      mesaj: kurumHataMesaji(e),
+    };
+  }
+};
 
 function MainApp() {
   const [kullanici, setKullanici] = useState(null);
@@ -62,24 +108,42 @@ function MainApp() {
       if (aktifKullanici) {
         try {
           const userDocRef = doc(db, "kullanicilar", aktifKullanici.uid);
-          const userDoc = await getDoc(userDocRef);
+          let userDoc = await getDoc(userDocRef);
           const hedefRol = await AsyncStorage.getItem("hedefRol");
+
+          // Girişi reddedip oturumu kapatır; giriş ekranının yükleniyor durumunu sıfırlar
+          const girisiReddet = async (baslik, mesaj) => {
+            await signOut(auth);
+            Alert.alert(baslik, mesaj);
+            await AsyncStorage.removeItem("hedefRol");
+            setKullanici(null);
+            setGirisReddi((n) => n + 1);
+            setYukleniyor(false);
+          };
+
+          // Yönetici sekmesi: hesap henüz yönetici değilse sunucudan davetle yetki alınır
+          if (
+            hedefRol === "yonetici" &&
+            !(userDoc.exists() && userDoc.data().rol === "yonetici")
+          ) {
+            const sonuc = await yoneticiYetkisiAl(aktifKullanici);
+            if (!sonuc.basarili) {
+              await girisiReddet(sonuc.baslik, sonuc.mesaj);
+              return;
+            }
+            userDoc = await getDoc(userDocRef);
+          }
 
           if (userDoc.exists()) {
             const gercekRol = userDoc.data().rol || "ogrenci";
 
             if (hedefRol && gercekRol !== hedefRol) {
-              await signOut(auth);
-              Alert.alert(
+              await girisiReddet(
                 "Hatalı Giriş ❌",
                 `Bu e-posta adresi bir ${
-                  gercekRol === "ogrenci" ? "Öğrenci" : "Veli"
+                  ROL_ETIKETLERI[gercekRol] || "Öğrenci"
                 } hesabına ait. Lütfen doğru sekmeyi seçin.`
               );
-              await AsyncStorage.removeItem("hedefRol");
-              setKullanici(null);
-              setGirisReddi((n) => n + 1);
-              setYukleniyor(false);
               return;
             }
 
@@ -264,6 +328,8 @@ function MainApp() {
               iconName = focused ? "book" : "book-outline";
             } else if (route.name === "Profil") {
               iconName = focused ? "person" : "person-outline";
+            } else if (route.name === "Yönetim") {
+              iconName = focused ? "business" : "business-outline";
             } else if (route.name === "Veli Paneli") {
               iconName = focused
                 ? "shield-checkmark"
@@ -301,6 +367,19 @@ function MainApp() {
                   fontWeight: "bold",
                 },
               }}
+            />
+            <Tab.Screen
+              name="Profil"
+              component={ProfileScreen}
+              options={{ title: "Hesabım" }}
+            />
+          </>
+        ) : kullaniciRolu === "yonetici" ? (
+          <>
+            <Tab.Screen
+              name="Yönetim"
+              component={YoneticiAnaEkran}
+              options={{ title: "Dershane" }}
             />
             <Tab.Screen
               name="Profil"

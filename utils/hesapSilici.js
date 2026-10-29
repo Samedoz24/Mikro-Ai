@@ -22,6 +22,7 @@ import {
 import { ref, listAll, deleteObject } from "firebase/storage";
 import { db, storage } from "../firebaseConfig";
 import { cozumOnbelleginiTemizle } from "./cozumYukleyici";
+import { kurumdanAyril } from "./kurumIstemci";
 
 // Kullanıcının işlem iptal etmesi (Google penceresini kapatma) gibi hata olmayan çıkışlar için
 export const SILME_IPTAL = "hesap-silme/iptal";
@@ -128,6 +129,21 @@ const baglantiKodunuSil = async (uid) => {
 export const kullaniciVerileriniSil = async (user) => {
   const uid = user.uid;
   const eposta = user.email;
+
+  // Kurum (dershane) öğrencisiyse koltuk boşalsın ve kurumun verdiği premium geri alınsın.
+  // Başarısız olsa bile hesap silme engellenmez; kurum lisansı bitince üyelik zaten temizlenir.
+  try {
+    const profil = await getDoc(doc(db, "kullanicilar", uid));
+    if (
+      profil.exists() &&
+      profil.data().kurumId &&
+      profil.data().rol !== "yonetici"
+    ) {
+      await kurumdanAyril();
+    }
+  } catch (e) {
+    console.log("Kurumdan ayrılma (hesap silme):", e?.code, e?.message);
+  }
 
   // 1) Sorular: belgeler + her sorunun fotoğrafı
   let soruBelgeleri = [];

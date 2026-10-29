@@ -30,6 +30,15 @@ const normKod = (kod) =>
 
 const normEposta = (eposta) => String(eposta ?? "").trim().toLowerCase();
 
+// Davet belgesi elle yazıldığı için küçük yazım farkları (boşluk, büyük harf, Türkçe karakter) tolere edilir
+const YONETICI_ROLLERI = {
+  mudur: "mudur",
+  müdür: "mudur",
+  ogretmen: "ogretmen",
+  öğretmen: "ogretmen",
+};
+const normRol = (rol) => YONETICI_ROLLERI[String(rol ?? "").trim().toLocaleLowerCase("tr-TR")] || null;
+
 // Firestore Timestamp, Date ya da ISO metin olarak yazılmış tarihi milisaniyeye çevirir
 const milisaniye = (deger) => {
   if (!deger) return null;
@@ -185,14 +194,32 @@ const yoneticiOl = async (uid, token) => {
   if (!davetSnap.exists) throw new HttpsError("permission-denied", "davet-yok");
   const davet = davetSnap.data();
   if (davet.iptal === true) throw new HttpsError("permission-denied", "davet-yok");
-  if (!["mudur", "ogretmen"].includes(davet.rol)) {
-    throw new HttpsError("failed-precondition", "davet-hatali");
+  const rol = normRol(davet.rol);
+  if (!rol) {
+    // JSON.stringify görünmeyen boşlukları ve yanlış türleri kayıtta görünür kılar
+    console.warn("davet-rol-hatali", JSON.stringify({ eposta, rol: davet.rol }));
+    throw new HttpsError("failed-precondition", "davet-rol-hatali");
   }
-  if (davet.uid && davet.uid !== uid) throw new HttpsError("permission-denied", "davet-kullanilmis");
+  const kurumId = String(davet.kurumId ?? "").trim();
+  if (!kurumId) throw new HttpsError("failed-precondition", "davet-kurum-yok");
+  if (davet.uid && davet.uid !== uid) {
+    // Daveti alan hesap silinmişse (yönetici hesabını silip yeniden açtıysa) davet yeniden kullanılabilir
+    const eskiHesapVar = await getAuth()
+      .getUser(davet.uid)
+      .then(() => true)
+      .catch((hata) => {
+        if (hata?.code === "auth/user-not-found") return false;
+        throw hata;
+      });
+    if (eskiHesapVar) throw new HttpsError("permission-denied", "davet-kullanilmis");
+  }
 
-  const kurumRef = db().doc(`kurumlar/${davet.kurumId}`);
+  const kurumRef = db().doc(`kurumlar/${kurumId}`);
   const kurumSnap = await kurumRef.get();
-  if (!kurumSnap.exists) throw new HttpsError("failed-precondition", "davet-hatali");
+  if (!kurumSnap.exists) {
+    console.warn("davet-kurum-yok", JSON.stringify({ eposta, kurumId: davet.kurumId }));
+    throw new HttpsError("failed-precondition", "davet-kurum-yok");
+  }
   const kurum = kurumSnap.data();
   if (!lisansGecerli(kurum)) throw new HttpsError("failed-precondition", "lisans-gecersiz");
 
@@ -202,18 +229,18 @@ const yoneticiOl = async (uid, token) => {
   const kullanici = userSnap.exists ? userSnap.data() : {};
   const soruVar = !(await db().collection("sorular").where("kullaniciUid", "==", uid).limit(1).get()).empty;
   const veliBagi = Array.isArray(kullanici.bagliOgrenciIdleri) && kullanici.bagliOgrenciIdleri.length > 0;
-  const baskaKurumda = kullanici.kurumId && kullanici.kurumId !== davet.kurumId;
+  const baskaKurumda = kullanici.kurumId && kullanici.kurumId !== kurumId;
   const ogrenciUyesi = kullanici.kurumId && kullanici.rol !== "yonetici";
   if (soruVar || veliBagi || baskaKurumda || ogrenciUyesi) {
     throw new HttpsError("failed-precondition", "hesap-kullaniliyor");
   }
 
   const batch = db().batch();
-  batch.set(userRef, { eposta, rol: "yonetici", kurumId: davet.kurumId }, { merge: true });
+  batch.set(userRef, { eposta, rol: "yonetici", kurumId }, { merge: true });
   batch.set(kurumRef.collection("yoneticiler").doc(eposta), {
     uid,
     eposta,
-    rol: davet.rol,
+    rol,
     katilma: FieldValue.serverTimestamp(),
   });
   batch.set(davetRef, { uid, kullanildi: FieldValue.serverTimestamp() }, { merge: true });
@@ -223,11 +250,11 @@ const yoneticiOl = async (uid, token) => {
   const kayit = await auth.getUser(uid);
   await auth.setCustomUserClaims(uid, {
     ...(kayit.customClaims || {}),
-    kurumId: davet.kurumId,
-    kurumRol: davet.rol,
+    kurumId,
+    kurumRol: rol,
   });
 
-  return { kurumId: davet.kurumId, kurumAdi: kurum.ad, rol: davet.rol };
+  return { kurumId, kurumAdi: kurum.ad, rol };
 };
 
 // ---------------------------------------------------------------------------

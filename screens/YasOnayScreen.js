@@ -26,6 +26,7 @@ import { colors } from "../theme";
 import {
   htmlSablonUret,
   KULLANIM_KOSULLARI_ICERIK,
+  YONETICI_KOSULLARI_ICERIK,
   YAS_ONAYI_SURUMU,
   ASGARI_YAS,
 } from "../utils/yasalMetinler";
@@ -37,13 +38,39 @@ export default function YasOnayScreen({ kullanici, rol, onOnaylandi }) {
   const insets = useSafeAreaInsets();
   const isKaranlik = tema.arkaplan === colors.dark.arkaplan;
   const veliMi = rol === "veli";
-  const anaRenk = veliMi ? "#4F46E5" : tema.anaButon;
+  // Dershane müdürü ya da öğretmeni: kendi metni ve belgesi vardır
+  const yoneticiMi = rol === "yonetici";
+  const anaRenk = yoneticiMi ? "#0F766E" : veliMi ? "#4F46E5" : tema.anaButon;
 
   const [onaylandi, setOnaylandi] = useState(false);
   const [kaydediliyor, setKaydediliyor] = useState(false);
   const [kosullarGorunur, setKosullarGorunur] = useState(false);
 
-  const maddeler = veliMi
+  const yoneticiMaddeleri = [
+    {
+      ikon: "business-outline",
+      metin:
+        "Bu hesabı, bağlı olduğun dershanenin yetkilisi (müdür ya da öğretmen) olarak kullanıyorsun.",
+    },
+    {
+      ikon: "eye-outline",
+      metin:
+        "Müdür öğrencilerin sorularını ve çözümlerini, öğretmen yalnızca istatistiklerini görür. Yalnızca dershaneye kendi isteğiyle bağlanan öğrencilerin verileri görünür.",
+    },
+    {
+      ikon: "lock-closed-outline",
+      metin:
+        "Öğrenci verilerini yalnızca dershanenin eğitim faaliyetleri için kullanmalı, üçüncü kişilerle paylaşmamalısın.",
+    },
+    {
+      ikon: "trash-outline",
+      metin: "Hesabını istediğin zaman Hesabım sayfasından silebilirsin.",
+    },
+  ];
+
+  const maddeler = yoneticiMi
+    ? yoneticiMaddeleri
+    : veliMi
     ? [
         {
           ikon: "person-outline",
@@ -80,9 +107,15 @@ export default function YasOnayScreen({ kullanici, rol, onOnaylandi }) {
         },
       ];
 
-  const onayMetni = veliMi
+  const onayMetni = yoneticiMi
+    ? "Dershanenin yetkilisi olduğumu, öğrenci verilerini yalnızca eğitim faaliyetleri için kullanacağımı ve "
+    : veliMi
     ? "18 yaşını doldurduğumu ve "
     : `${ASGARI_YAS} yaşını doldurduğumu, 18 yaşından küçükse velimin bilgisi dahilinde kullandığımı ve `;
+
+  const kosullarBasligi = yoneticiMi
+    ? "Yönetici Kullanım Koşulları"
+    : "Kullanım Koşulları";
 
   const onayla = async () => {
     if (!onaylandi || kaydediliyor || !kullanici) return;
@@ -138,8 +171,9 @@ export default function YasOnayScreen({ kullanici, rol, onOnaylandi }) {
           Devam Etmeden Önce
         </Text>
         <Text style={[styles.altBaslik, { color: tema.ikincilMetin }]}>
-          Mikro AI'yı güvenle kullanabilmen için aşağıdaki bilgileri
-          okuyup onaylaman gerekiyor.
+          {yoneticiMi
+            ? "Dershane yönetici hesabını kullanmadan önce aşağıdaki bilgileri okuyup onaylaman gerekiyor."
+            : "Mikro AI'yı güvenle kullanabilmen için aşağıdaki bilgileri okuyup onaylaman gerekiyor."}
         </Text>
 
         <View
@@ -197,7 +231,7 @@ export default function YasOnayScreen({ kullanici, rol, onOnaylandi }) {
               }}
               accessibilityRole="link"
             >
-              Kullanım Koşulları
+              {kosullarBasligi}
             </Text>
             'nı okuyup kabul ettiğimi onaylıyorum.
           </Text>
@@ -271,7 +305,7 @@ export default function YasOnayScreen({ kullanici, rol, onOnaylandi }) {
               style={[styles.modalBaslikYazi, { color: tema.metin }]}
               accessibilityRole="header"
             >
-              Kullanım Koşulları
+              {kosullarBasligi}
             </Text>
             <TouchableOpacity
               onPress={() => setKosullarGorunur(false)}
@@ -295,7 +329,7 @@ export default function YasOnayScreen({ kullanici, rol, onOnaylandi }) {
                 isKaranlik,
                 "Yasal Şartlar",
                 "Hukuki Metin",
-                KULLANIM_KOSULLARI_ICERIK
+                yoneticiMi ? YONETICI_KOSULLARI_ICERIK : KULLANIM_KOSULLARI_ICERIK
               ),
             }}
             style={{

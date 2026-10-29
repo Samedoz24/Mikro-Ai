@@ -1169,7 +1169,7 @@ export default function ProfileScreen() {
                 <KurumKarti uid={user.uid} tema={tema} />
               )}
 
-              {rol !== "veli" && (
+              {rol === "ogrenci" && (
                 <View
                   style={[
                     styles.kutu,

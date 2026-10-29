@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import { getFunctions } from "firebase/functions";
 import {
   initializeAuth,
   getReactNativePersistence,
@@ -32,5 +33,7 @@ try {
 
 const db = getFirestore(app);
 const storage = getStorage(app);
+// Kurum (dershane) fonksiyonları Avrupa bölgesinde çalışır
+const functions = getFunctions(app, "europe-west1");
 
-export { auth, db, storage };
+export { auth, db, storage, functions };

@@ -27,6 +27,7 @@ import { useIsFocused } from "@react-navigation/native";
 import { auth, db, storage } from "../firebaseConfig";
 import { signOut } from "firebase/auth";
 import { baglantiKoduGaranti } from "../utils/baglanti";
+import KurumKarti from "./KurumKarti";
 import {
   ROZETLER,
   kazanilanRozetIdleri,
@@ -1163,6 +1164,10 @@ export default function ProfileScreen() {
                   />
                 </View>
               </View>
+
+              {rol === "ogrenci" && user?.uid && (
+                <KurumKarti uid={user.uid} tema={tema} />
+              )}
 
               {rol !== "veli" && (
                 <View

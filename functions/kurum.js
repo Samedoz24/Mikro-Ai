@@ -118,6 +118,7 @@ const kurumaKatil = async (uid, veri) => {
 
     tx.set(uyeRef, {
       uid,
+      kurumAdi: kurum.ad || null,
       eposta: kullanici.eposta || null,
       adSoyad: kullanici.adSoyad || null,
       katilma: FieldValue.serverTimestamp(),

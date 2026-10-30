@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Share,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { doc, onSnapshot } from "firebase/firestore";
@@ -16,20 +17,30 @@ import useYoneticiYetkisi, {
   YONETICI_RENGI,
   ROL_ETIKETLERI,
 } from "../utils/useYoneticiYetkisi";
+import useKurumOzetleri from "../utils/useKurumOzetleri";
+import {
+  kurumGenelBakis,
+  milisaniye,
+  ogrenciSatiri,
+} from "../utils/kurumIstatistik";
+import {
+  bosKoltuk,
+  haftalikOzetMetni,
+  lisansDurumu,
+  ogrenciDavetMetni,
+  turkceTarih,
+} from "../utils/kurumRapor";
 
-const tarihMetni = (deger) => {
-  const tarih = deger?.toDate ? deger.toDate() : deger ? new Date(deger) : null;
-  return tarih && !Number.isNaN(tarih.getTime())
-    ? tarih.toLocaleDateString("tr-TR")
-    : "-";
-};
+const UYARI_RENGI = "#D97706";
 
-// Müdür ve öğretmenin ana ekranı. Yetki, sunucunun kimlik belirtecine yazdığı kurumId ve
-// kurumRol bilgilerinden gelir; yetki alınmamış ya da geri alınmışsa bilgi ekranı gösterilir.
+// Müdür ve öğretmenin dershane ekranı: lisans, kontenjan, öğrenci kayıt kodu ve paylaşımlar.
+// Yetki, sunucunun kimlik belirtecine yazdığı kurumId ve kurumRol bilgilerinden gelir;
+// yetki alınmamış ya da geri alınmışsa bilgi ekranı gösterilir.
 export default function YoneticiAnaEkran() {
   const { tema } = useTheme();
   const insets = useSafeAreaInsets();
   const { yetki, yenile: yetkiyiOku } = useYoneticiYetkisi();
+  const { ozetler } = useKurumOzetleri(yetki?.kurumId);
   const [kurum, setKurum] = useState(null);
 
   useEffect(() => {
@@ -52,13 +63,12 @@ export default function YoneticiAnaEkran() {
     { backgroundColor: tema.kutuArkaplan, borderColor: tema.kutuCerceve },
   ];
 
-  const kodPaylas = async () => {
+  const paylas = async (mesaj) => {
     try {
-      await Share.share({
-        message: `Mikro AI dershane kodun: ${kurum.kurumKodu}\nUygulamada Profil > Dershane Kodu Gir bölümünden kodu girerek bağlanabilirsin.`,
-      });
+      await Share.share({ message: mesaj });
     } catch (hata) {
-      console.log("Kod paylaşılamadı:", hata?.message);
+      console.log("Paylaşılamadı:", hata?.message);
+      Alert.alert("Paylaşılamadı", "Paylaşma penceresi açılamadı.");
     }
   };
 
@@ -105,6 +115,24 @@ export default function YoneticiAnaEkran() {
   const koltuk = kurum?.koltuk || 0;
   const uyeSayisi = kurum?.uyeSayisi || 0;
   const doluluk = koltuk > 0 ? Math.min(100, (uyeSayisi / koltuk) * 100) : 0;
+  const simdi = Date.now();
+  const lisans = lisansDurumu(kurum?.lisansBitis, kurum?.durum, simdi);
+  const lisansRengi =
+    lisans.seviye === "iyi"
+      ? YONETICI_RENGI
+      : lisans.seviye === "yaklasiyor"
+        ? UYARI_RENGI
+        : lisans.seviye === "bilinmiyor"
+          ? tema.ikincilMetin
+          : tema.hataKirmizi;
+  const bitisMs = milisaniye(kurum?.lisansBitis);
+
+  const haftalikOzetiPaylas = () => {
+    const satirlar = (ozetler || []).map((o) => ogrenciSatiri(o.id, o, simdi));
+    paylas(
+      haftalikOzetMetni(kurum?.ad, kurumGenelBakis(satirlar, simdi), simdi)
+    );
+  };
 
   return (
     <ScrollView
@@ -114,6 +142,7 @@ export default function YoneticiAnaEkran() {
         paddingBottom: 40,
         paddingHorizontal: 20,
       }}
+      showsVerticalScrollIndicator={false}
     >
       <View style={styles.ustSatir}>
         <View style={{ flex: 1 }}>
@@ -139,13 +168,47 @@ export default function YoneticiAnaEkran() {
         </View>
       ) : (
         <>
-          {kurum.durum !== "aktif" && (
-            <View style={[kutuStili, { borderColor: tema.hataKirmizi }]}>
+          {lisans.seviye === "bitti" && (
+            <View
+              style={[
+                kutuStili,
+                { borderColor: tema.hataKirmizi, borderWidth: 2 },
+              ]}
+            >
               <Text style={[styles.kutuBaslik, { color: tema.hataKirmizi }]}>
                 Kullanım süresi sona erdi
               </Text>
+              <Text style={[styles.kucukYazi, { color: tema.ikincilMetin }]}>
+                Öğrencilerin dershane bağlantısı ve premium hakları sona erdi.
+                Yeniden başlamak için Mikro AI ekibiyle iletişime geç.
+              </Text>
             </View>
           )}
+
+          <View style={kutuStili}>
+            <View style={styles.kutuUstSatir}>
+              <Text style={[styles.kutuBaslik, { color: tema.metin }]}>
+                Lisans
+              </Text>
+              <Text style={[styles.sayi, { color: lisansRengi }]}>
+                {lisans.metin}
+              </Text>
+            </View>
+            <Text style={[styles.kucukYazi, { color: tema.ikincilMetin }]}>
+              Bitiş tarihi: {bitisMs !== null ? turkceTarih(bitisMs) : "-"}
+            </Text>
+            {(lisans.seviye === "yaklasiyor" || lisans.seviye === "kritik") && (
+              <Text
+                style={[
+                  styles.kucukYazi,
+                  { color: lisansRengi, marginTop: 8, fontWeight: "600" },
+                ]}
+              >
+                Lisans süresi yaklaşıyor. Kesinti olmaması için yenilemek üzere
+                Mikro AI ekibiyle iletişime geç.
+              </Text>
+            )}
+          </View>
 
           <View style={kutuStili}>
             <View style={styles.kutuUstSatir}>
@@ -170,7 +233,9 @@ export default function YoneticiAnaEkran() {
               />
             </View>
             <Text style={[styles.kucukYazi, { color: tema.ikincilMetin }]}>
-              Lisans bitiş tarihi: {tarihMetni(kurum.lisansBitis)}
+              {bosKoltuk(koltuk, uyeSayisi) > 0
+                ? `${bosKoltuk(koltuk, uyeSayisi)} boş koltuk var.`
+                : "Boş koltuk kalmadı. Yeni öğrenci eklemek için ek koltuk gerekir."}
             </Text>
           </View>
 
@@ -183,18 +248,53 @@ export default function YoneticiAnaEkran() {
                 {kurum.kurumKodu}
               </Text>
               <Text style={[styles.kucukYazi, { color: tema.ikincilMetin }]}>
-                Öğrencilerin Profil sayfasındaki "Dershane Kodu Gir" bölümüne bu
-                kodu girmesi yeterli.
+                Öğrenciler Profil sayfasındaki "Dershane Kodu Gir" bölümüne bu
+                kodu girerek dershaneye bağlanır. Aşağıdaki düğme, adımların
+                yazılı olduğu hazır bir mesajı paylaşır.
               </Text>
               <TouchableOpacity
                 style={[styles.buton, { backgroundColor: YONETICI_RENGI }]}
-                onPress={kodPaylas}
+                onPress={() =>
+                  paylas(ogrenciDavetMetni(kurum.ad, kurum.kurumKodu))
+                }
                 activeOpacity={0.8}
+                accessibilityRole="button"
               >
-                <Text style={styles.butonYazi}>Kodu Paylaş</Text>
+                <Text style={styles.butonYazi}>Katılım Mesajını Paylaş</Text>
               </TouchableOpacity>
             </View>
           )}
+
+          <View style={kutuStili}>
+            <Text style={[styles.kutuBaslik, { color: tema.metin }]}>
+              Haftalık Özet
+            </Text>
+            <Text
+              style={[
+                styles.kucukYazi,
+                { color: tema.ikincilMetin, marginTop: 6 },
+              ]}
+            >
+              Bu haftanın sayılarını (aktif öğrenci, sorulan soru, en çok
+              sorulan konular) hazır bir mesaj olarak paylaş. Öğrenci adı
+              içermez.
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.buton,
+                {
+                  backgroundColor: YONETICI_RENGI,
+                  opacity: ozetler === null ? 0.5 : 1,
+                },
+              ]}
+              onPress={haftalikOzetiPaylas}
+              disabled={ozetler === null}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+            >
+              <Text style={styles.butonYazi}>Özeti Paylaş</Text>
+            </TouchableOpacity>
+          </View>
         </>
       )}
     </ScrollView>

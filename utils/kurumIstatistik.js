@@ -39,13 +39,17 @@ export const gunDizisi = (gunler, gunSayisi, simdi = Date.now()) => {
   return dizi;
 };
 
+// İki zaman arasındaki takvim günü farkı (saat farkı değil): dün 23:00 ile bugün 01:00 = 1 gün
+export const takvimGunFarki = (ms, simdi = Date.now()) =>
+  Math.round(
+    (Date.parse(gunAnahtari(simdi)) - Date.parse(gunAnahtari(ms))) / GUN_MS
+  );
+
 // "Bugün", "Dün", "3 gün önce"... Takvim günü farkıyla hesaplanır (saat farkıyla değil).
 export const aktiflikMetni = (sonAktiflik, simdi = Date.now()) => {
   const ms = milisaniye(sonAktiflik);
   if (ms === null) return "Henüz soru sormadı";
-  const fark = Math.round(
-    (Date.parse(gunAnahtari(simdi)) - Date.parse(gunAnahtari(ms))) / GUN_MS
-  );
+  const fark = takvimGunFarki(ms, simdi);
   if (fark <= 0) return "Bugün";
   if (fark === 1) return "Dün";
   if (fark < 30) return `${fark} gün önce`;
@@ -66,6 +70,17 @@ export const dersListesi = (dersDagilimi) => {
     .sort((a, b) => b.adet - a.adet || a.ders.localeCompare(b.ders, "tr"));
 };
 
+// Özetteki konu dizisini güvenli biçime getirir: [{ ders, konu, adet }], çoktan aza
+export const konuListesi = (konular) =>
+  (Array.isArray(konular) ? konular : [])
+    .map((k) => ({
+      ders: String(k?.ders ?? "").trim() || "Diğer",
+      konu: String(k?.konu ?? "").trim(),
+      adet: sayi(k?.adet),
+    }))
+    .filter((k) => k.konu && k.adet > 0)
+    .sort((a, b) => b.adet - a.adet || a.konu.localeCompare(b.konu, "tr"));
+
 // Bir öğrencinin liste satırı
 export const ogrenciSatiri = (id, ozet, simdi = Date.now()) => {
   const gunler = ozet?.gunler;
@@ -81,8 +96,10 @@ export const ogrenciSatiri = (id, ozet, simdi = Date.now()) => {
     son30: sonGunlerToplami(gunler, 30, simdi),
     aktif: son7 > 0,
     sonAktiflikMs: milisaniye(ozet?.sonAktiflik),
+    katilmaMs: milisaniye(ozet?.katilma),
     enCokDers: dersler.length ? dersler[0].ders : null,
     dersler,
+    konular: konuListesi(ozet?.konular),
     gunler: gunler || {},
   };
 };
@@ -126,4 +143,79 @@ export const ogrenciSirala = (satirlar, olcut = "aktiflik", aranan = "") => {
     isim: isimle,
   }[olcut];
   return liste.sort(karsilastir || isimle);
+};
+
+const YENI_KATILAN_GUN = 7;
+
+/**
+ * Müdür ve öğretmenin "Genel Bakış" ekranı için kurum geneli sayılar.
+ *  - gunler: son gunSayisi günün tüm öğrencilerce sorulan toplam soru sayısı (eskiden yeniye)
+ *  - dersler: ders dağılımı, konular: en çok sorulan konular (hepsi öğrenciler toplamı)
+ *  - dikkat: son 7 günde hiç soru sormamış öğrenciler, en uzun süredir pasif olan başta.
+ *    Son 7 günde katılanlar henüz ısınmamış sayılır ve listeye alınmaz.
+ *  - enAktif: bu hafta en çok soru soran öğrenciler
+ */
+export const kurumGenelBakis = (
+  satirlar,
+  simdi = Date.now(),
+  gunSayisi = 14
+) => {
+  const gunler = gunDizisi({}, gunSayisi, simdi).map((g) => ({
+    anahtar: g.anahtar,
+    adet: satirlar.reduce((t, s) => t + sayi(s.gunler?.[g.anahtar]), 0),
+  }));
+
+  const dersToplam = {};
+  const konuToplam = new Map();
+  satirlar.forEach((s) => {
+    s.dersler.forEach((d) => {
+      dersToplam[d.ders] = (dersToplam[d.ders] || 0) + d.adet;
+    });
+    s.konular.forEach((k) => {
+      const anahtar = `${k.ders}\u0000${k.konu}`;
+      konuToplam.set(anahtar, (konuToplam.get(anahtar) || 0) + k.adet);
+    });
+  });
+  const konular = [...konuToplam.entries()]
+    .map(([anahtar, adet]) => {
+      const [ders, konu] = anahtar.split("\u0000");
+      return { ders, konu, adet };
+    })
+    .sort((a, b) => b.adet - a.adet || a.konu.localeCompare(b.konu, "tr"));
+
+  const dikkat = satirlar
+    .filter((s) => {
+      if (s.aktif) return false;
+      const yeni =
+        s.katilmaMs !== null &&
+        takvimGunFarki(s.katilmaMs, simdi) < YENI_KATILAN_GUN;
+      return !yeni;
+    })
+    .map((s) => {
+      const referans = s.sonAktiflikMs ?? s.katilmaMs;
+      return {
+        id: s.id,
+        isim: s.isim,
+        hicBaslamadi: s.sonAktiflikMs === null,
+        pasifGun: referans === null ? null : takvimGunFarki(referans, simdi),
+      };
+    })
+    .sort(
+      (a, b) =>
+        (b.pasifGun ?? -1) - (a.pasifGun ?? -1) ||
+        a.isim.localeCompare(b.isim, "tr")
+    );
+
+  const enAktif = satirlar
+    .filter((s) => s.son7 > 0)
+    .sort((a, b) => b.son7 - a.son7 || a.isim.localeCompare(b.isim, "tr"));
+
+  return {
+    toplamlar: kurumToplamlari(satirlar),
+    gunler,
+    dersler: dersListesi(dersToplam),
+    konular,
+    dikkat,
+    enAktif,
+  };
 };

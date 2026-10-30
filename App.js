@@ -40,6 +40,7 @@ import OnboardingScreen from "./screens/OnboardingScreen";
 import YasOnayScreen from "./screens/YasOnayScreen";
 import YoneticiAnaEkran from "./screens/YoneticiAnaEkran";
 import OgrenciListesiEkrani from "./screens/OgrenciListesiEkrani";
+import GenelBakisEkrani from "./screens/GenelBakisEkrani";
 import { yoneticiOl, kurumHataMesaji } from "./utils/kurumIstemci";
 import { YAS_ONAYI_SURUMU } from "./utils/yasalMetinler";
 import { PremiumProvider } from "./PremiumContext";
@@ -329,6 +330,8 @@ function MainApp() {
               iconName = focused ? "person" : "person-outline";
             } else if (route.name === "Yönetim") {
               iconName = focused ? "business" : "business-outline";
+            } else if (route.name === "Genel Bakış") {
+              iconName = focused ? "stats-chart" : "stats-chart-outline";
             } else if (route.name === "Öğrenciler") {
               iconName = focused ? "people" : "people-outline";
             } else if (route.name === "Veli Paneli") {
@@ -378,14 +381,19 @@ function MainApp() {
         ) : kullaniciRolu === "yonetici" ? (
           <>
             <Tab.Screen
-              name="Yönetim"
-              component={YoneticiAnaEkran}
-              options={{ title: "Dershane" }}
+              name="Genel Bakış"
+              component={GenelBakisEkrani}
+              options={{ title: "Genel Bakış" }}
             />
             <Tab.Screen
               name="Öğrenciler"
               component={OgrenciListesiEkrani}
               options={{ title: "Öğrenciler" }}
+            />
+            <Tab.Screen
+              name="Yönetim"
+              component={YoneticiAnaEkran}
+              options={{ title: "Dershane" }}
             />
             <Tab.Screen
               name="Profil"

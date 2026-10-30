@@ -11,13 +11,22 @@ const db = () => getFirestore();
 const GUN_PENCERESI = 90;
 const GUN_MS = 86400000;
 const DERS_ADI_SINIRI = 40;
+const KONU_ADI_SINIRI = 60;
+const EN_COK_KONU = 20;
 
 const gunBicimi = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Istanbul" });
 const gunAnahtari = (ms) => gunBicimi.format(new Date(ms)); // YYYY-MM-DD, Türkiye saati
 
+// Sorunun konusu: n8n'in belgeye yazdığı alt konu, yoksa konu
+const konuBul = (soru) =>
+  String(soru?.subtopic || soru?.topic || soru?.konu || "")
+    .trim()
+    .slice(0, KONU_ADI_SINIRI);
+
 // Saf hesap: soru belgeleri -> özet alanları
 const ozetHesapla = (sorular, simdi = Date.now()) => {
   const dersDagilimi = {};
+  const konuSayaci = new Map();
   const gunler = {};
   let okunanCozum = 0;
   let sonAktiflik = null;
@@ -28,6 +37,12 @@ const ozetHesapla = (sorular, simdi = Date.now()) => {
     dersDagilimi[ders] = (dersDagilimi[ders] || 0) + 1;
     if (soru.okunduMu === true) okunanCozum++;
 
+    const konu = konuBul(soru);
+    if (konu) {
+      const anahtar = `${ders}\u0000${konu}`;
+      konuSayaci.set(anahtar, (konuSayaci.get(anahtar) || 0) + 1);
+    }
+
     const ms = Date.parse(soru.tarih);
     if (!Number.isFinite(ms)) continue;
     if (sonAktiflik === null || ms > sonAktiflik) sonAktiflik = ms;
@@ -37,10 +52,20 @@ const ozetHesapla = (sorular, simdi = Date.now()) => {
     }
   }
 
+  // En çok sorulan konular. Dizi olarak saklanır: konu adlarındaki nokta gibi karakterler sorun çıkarmaz.
+  const konular = [...konuSayaci.entries()]
+    .map(([anahtar, adet]) => {
+      const [ders, konu] = anahtar.split("\u0000");
+      return { ders, konu, adet };
+    })
+    .sort((a, b) => b.adet - a.adet || a.konu.localeCompare(b.konu, "tr"))
+    .slice(0, EN_COK_KONU);
+
   return {
     toplamSoru: sorular.length,
     okunanCozum,
     dersDagilimi,
+    konular,
     gunler,
     sonAktiflik: sonAktiflik === null ? null : Timestamp.fromMillis(sonAktiflik),
   };
@@ -69,10 +94,12 @@ const ozetYenile = async (uid) => {
     tx.set(ozetRef, {
       ...alanlar,
       isim: gorunenIsim(userSnap.data()),
+      // Yeni katılan öğrenci "pasif" sayılmasın diye katılma zamanı da özette durur
+      katilma: uyeSnap.data().katilma ?? null,
       guncelleme: FieldValue.serverTimestamp(),
     });
     return true;
   });
 };
 
-module.exports = { ozetHesapla, ozetYenile, gunAnahtari };
+module.exports = { ozetHesapla, ozetYenile, gunAnahtari, konuBul };

@@ -7,27 +7,21 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
-  Modal,
-  Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { collection, onSnapshot } from "firebase/firestore";
-import { db } from "../firebaseConfig";
 import { useTheme } from "../ThemeContext";
 import useYoneticiYetkisi, {
   YONETICI_RENGI,
 } from "../utils/useYoneticiYetkisi";
+import useKurumOzetleri from "../utils/useKurumOzetleri";
 import {
   SIRALAMALAR,
   aktiflikMetni,
-  kurumToplamlari,
   ogrenciSatiri,
   ogrenciSirala,
 } from "../utils/kurumIstatistik";
-import OgrenciDetay from "./OgrenciDetay";
-import OgrenciSorulari from "./OgrenciSorulari";
-import SoruIncelemesi from "./SoruIncelemesi";
+import OgrenciPenceresi from "./OgrenciPenceresi";
 
 // Müdür ve öğretmenin öğrenci listesi. Yalnızca sunucunun hazırladığı istatistik özetlerini okur;
 // soru içerikleri bu ekranda yoktur.
@@ -35,42 +29,21 @@ export default function OgrenciListesiEkrani() {
   const { tema } = useTheme();
   const insets = useSafeAreaInsets();
   const { yetki, yenile } = useYoneticiYetkisi();
+  const { ozetler, hata } = useKurumOzetleri(yetki?.kurumId);
 
-  const [ozetler, setOzetler] = useState(null); // null: yükleniyor
-  const [hata, setHata] = useState(false);
   const [olcut, setOlcut] = useState("aktiflik");
   const [aranan, setAranan] = useState("");
   const [seciliId, setSeciliId] = useState(null);
-  // Pencerenin içeriği: öğrenci özeti -> soru listesi (yalnızca müdür) -> soru incelemesi
-  const [gorunum, setGorunum] = useState({ tur: "ozet" });
   // "Bugün" ve "dün" gibi ifadeler özet her değiştiğinde yeniden hesaplanır
   const [simdi, setSimdi] = useState(Date.now());
-
   useEffect(() => {
-    if (!yetki) {
-      setOzetler(null);
-      return;
-    }
-    setHata(false);
-    return onSnapshot(
-      collection(db, "kurumlar", yetki.kurumId, "ozet"),
-      (snap) => {
-        setOzetler(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-        setSimdi(Date.now());
-        setHata(false);
-      },
-      (e) => {
-        console.log("Öğrenci özetleri okunamadı:", e?.code);
-        setHata(true);
-      }
-    );
-  }, [yetki]);
+    setSimdi(Date.now());
+  }, [ozetler]);
 
   const satirlar = useMemo(
     () => (ozetler || []).map((o) => ogrenciSatiri(o.id, o, simdi)),
     [ozetler, simdi]
   );
-  const toplamlar = useMemo(() => kurumToplamlari(satirlar), [satirlar]);
   const liste = useMemo(
     () => ogrenciSirala(satirlar, olcut, aranan),
     [satirlar, olcut, aranan]
@@ -78,23 +51,6 @@ export default function OgrenciListesiEkrani() {
   // Seçili öğrenci özet güncellenince canlı kalır; öğrenci ayrılırsa pencere kapanır
   const secili = satirlar.find((s) => s.id === seciliId) || null;
   const mudurMu = yetki?.kurumRol === "mudur";
-
-  // Öğrenci dershaneden ayrılırsa ya da pencere kapanırsa görünüm özet ekranına döner
-  useEffect(() => {
-    if (!secili) setGorunum({ tur: "ozet" });
-  }, [secili]);
-
-  const pencereyiKapat = () => {
-    setSeciliId(null);
-    setGorunum({ tur: "ozet" });
-  };
-
-  // Android geri tuşu / iOS aşağı çekme: önce bir adım geri, özetteyse pencereyi kapat
-  const geriGit = () => {
-    if (gorunum.tur === "soru") setGorunum({ tur: "sorular" });
-    else if (gorunum.tur === "sorular") setGorunum({ tur: "ozet" });
-    else pencereyiKapat();
-  };
 
   const ortala = (icerik) => (
     <View
@@ -148,39 +104,11 @@ export default function OgrenciListesiEkrani() {
     return ortala(<ActivityIndicator size="large" color={YONETICI_RENGI} />);
   }
 
-  const ozetKartlari = [
-    { etiket: "Öğrenci", deger: toplamlar.ogrenci },
-    { etiket: "Bugün soru", deger: toplamlar.bugun },
-    { etiket: "7 gün soru", deger: toplamlar.son7 },
-    { etiket: "Aktif öğrenci", deger: toplamlar.aktifOgrenci },
-  ];
-
   const baslik = (
     <View>
       <Text style={[styles.baslik, { color: tema.metin }]}>Öğrenciler</Text>
-      <View style={styles.ozetSatiri}>
-        {ozetKartlari.map((kart) => (
-          <View
-            key={kart.etiket}
-            style={[
-              styles.ozetKart,
-              {
-                backgroundColor: tema.kutuArkaplan,
-                borderColor: tema.kutuCerceve,
-              },
-            ]}
-          >
-            <Text style={[styles.ozetSayi, { color: YONETICI_RENGI }]}>
-              {kart.deger}
-            </Text>
-            <Text style={[styles.ozetEtiket, { color: tema.ikincilMetin }]}>
-              {kart.etiket}
-            </Text>
-          </View>
-        ))}
-      </View>
       <Text style={[styles.aciklama, { color: tema.ikincilMetin }]}>
-        Aktif öğrenci: son 7 günde en az bir soru soran öğrenci sayısı.
+        {satirlar.length} öğrenci
       </Text>
 
       <View
@@ -204,25 +132,25 @@ export default function OgrenciListesiEkrani() {
 
       <View style={styles.sirala}>
         {SIRALAMALAR.map((s) => {
-          const secili = s.id === olcut;
+          const secilen = s.id === olcut;
           return (
             <TouchableOpacity
               key={s.id}
               onPress={() => setOlcut(s.id)}
               activeOpacity={0.7}
               accessibilityRole="button"
-              accessibilityState={{ selected: secili }}
+              accessibilityState={{ selected: secilen }}
               style={[
                 styles.siraSecenek,
                 {
-                  backgroundColor: secili ? YONETICI_RENGI : "transparent",
-                  borderColor: secili ? YONETICI_RENGI : tema.kutuCerceve,
+                  backgroundColor: secilen ? YONETICI_RENGI : "transparent",
+                  borderColor: secilen ? YONETICI_RENGI : tema.kutuCerceve,
                 },
               ]}
             >
               <Text
                 style={{
-                  color: secili ? "#fff" : tema.ikincilMetin,
+                  color: secilen ? "#fff" : tema.ikincilMetin,
                   fontSize: 13,
                   fontWeight: "600",
                 }}
@@ -310,70 +238,13 @@ export default function OgrenciListesiEkrani() {
         showsVerticalScrollIndicator={false}
       />
 
-      <Modal
-        visible={!!secili}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={geriGit}
-        onDismiss={pencereyiKapat}
-      >
-        <View
-          style={{
-            flex: 1,
-            paddingTop: Platform.OS === "android" ? insets.top : 0,
-            backgroundColor: tema.arkaplan,
-          }}
-        >
-          {secili && (
-            <OgrenciDetay
-              satir={secili}
-              tema={tema}
-              simdi={simdi}
-              onKapat={pencereyiKapat}
-              mudurMu={mudurMu}
-              onSorulariAc={() => setGorunum({ tur: "sorular" })}
-            />
-          )}
-          {secili && mudurMu && gorunum.tur !== "ozet" && (
-            <View
-              style={[
-                StyleSheet.absoluteFill,
-                {
-                  paddingTop: Platform.OS === "android" ? insets.top : 0,
-                  backgroundColor: tema.arkaplan,
-                },
-              ]}
-            >
-              <OgrenciSorulari
-                key={secili.id}
-                ogrenciId={secili.id}
-                isim={secili.isim}
-                tema={tema}
-                onGeri={geriGit}
-                onSoruAc={(soru) => setGorunum({ tur: "soru", soru })}
-              />
-              {gorunum.tur === "soru" && (
-                <View
-                  style={[
-                    StyleSheet.absoluteFill,
-                    {
-                      paddingTop: Platform.OS === "android" ? insets.top : 0,
-                      backgroundColor: tema.arkaplan,
-                    },
-                  ]}
-                >
-                  <SoruIncelemesi
-                    key={gorunum.soru.id}
-                    soru={gorunum.soru}
-                    tema={tema}
-                    onGeri={geriGit}
-                  />
-                </View>
-              )}
-            </View>
-          )}
-        </View>
-      </Modal>
+      <OgrenciPenceresi
+        satir={secili}
+        tema={tema}
+        simdi={simdi}
+        mudurMu={mudurMu}
+        onKapat={() => setSeciliId(null)}
+      />
     </View>
   );
 }
@@ -385,19 +256,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 30,
   },
-  baslik: { fontSize: 26, fontWeight: "900", marginBottom: 16 },
-  ozetSatiri: { flexDirection: "row", justifyContent: "space-between" },
-  ozetKart: {
-    width: "23.5%",
-    paddingVertical: 12,
-    paddingHorizontal: 4,
-    borderRadius: 14,
-    borderWidth: 1,
-    alignItems: "center",
-  },
-  ozetSayi: { fontSize: 20, fontWeight: "900" },
-  ozetEtiket: { fontSize: 10, marginTop: 3, textAlign: "center" },
-  aciklama: { fontSize: 12, marginTop: 8, marginBottom: 16 },
+  baslik: { fontSize: 26, fontWeight: "900" },
+  aciklama: { fontSize: 13, marginTop: 2, marginBottom: 16 },
   aramaKutusu: {
     flexDirection: "row",
     alignItems: "center",

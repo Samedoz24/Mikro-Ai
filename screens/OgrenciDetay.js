@@ -9,9 +9,11 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { YONETICI_RENGI } from "../utils/useYoneticiYetkisi";
 import { aktiflikMetni, gunDizisi } from "../utils/kurumIstatistik";
+import GunlukGrafik from "./GunlukGrafik";
+import DersCubuklari from "./DersCubuklari";
+import KonuListesi from "./KonuListesi";
 
 const GRAFIK_GUNU = 14;
-const GRAFIK_YUKSEKLIK = 90;
 
 // Tek bir öğrencinin istatistik özeti (soru içeriği içermez; yalnızca sayılar).
 export default function OgrenciDetay({
@@ -28,7 +30,6 @@ export default function OgrenciDetay({
   ];
 
   const gunler = gunDizisi(satir.gunler, GRAFIK_GUNU, simdi);
-  const enYuksek = Math.max(1, ...gunler.map((g) => g.adet));
   const okunanYuzde =
     satir.toplam > 0 ? Math.round((satir.okunan / satir.toplam) * 100) : 0;
 
@@ -131,77 +132,50 @@ export default function OgrenciDetay({
 
         <View style={kutuStili}>
           <Text
-            style={[styles.kutuBaslik, { color: tema.metin, marginBottom: 14 }]}
+            style={[
+              styles.kutuBaslik,
+              styles.baslikAralik,
+              { color: tema.metin },
+            ]}
           >
             Son {GRAFIK_GUNU} Gün
           </Text>
-          <View style={styles.grafik}>
-            {gunler.map((gun) => (
-              <View key={gun.anahtar} style={styles.grafikSutun}>
-                <Text style={[styles.grafikSayi, { color: tema.ikincilMetin }]}>
-                  {gun.adet > 0 ? gun.adet : ""}
-                </Text>
-                <View
-                  style={[
-                    styles.grafikCubuk,
-                    {
-                      height: Math.max(
-                        gun.adet > 0 ? 6 : 3,
-                        (gun.adet / enYuksek) * GRAFIK_YUKSEKLIK
-                      ),
-                      backgroundColor:
-                        gun.adet > 0 ? YONETICI_RENGI : tema.kutuCerceve,
-                    },
-                  ]}
-                />
-                <Text style={[styles.grafikGun, { color: tema.ikincilMetin }]}>
-                  {Number(gun.anahtar.slice(8))}
-                </Text>
-              </View>
-            ))}
-          </View>
+          <GunlukGrafik gunler={gunler} tema={tema} />
         </View>
 
         <View style={kutuStili}>
           <Text
-            style={[styles.kutuBaslik, { color: tema.metin, marginBottom: 14 }]}
+            style={[
+              styles.kutuBaslik,
+              styles.baslikAralik,
+              { color: tema.metin },
+            ]}
           >
             Ders Dağılımı
           </Text>
-          {satir.dersler.length === 0 ? (
-            <Text style={[styles.altYazi, { color: tema.ikincilMetin }]}>
-              Henüz soru gönderilmedi.
-            </Text>
-          ) : (
-            satir.dersler.map((ders) => (
-              <View key={ders.ders} style={{ marginBottom: 12 }}>
-                <View style={styles.kutuUstSatir}>
-                  <Text style={[styles.dersAdi, { color: tema.metin }]}>
-                    {ders.ders}
-                  </Text>
-                  <Text style={[styles.dersSayi, { color: tema.ikincilMetin }]}>
-                    {ders.adet} soru · %{ders.yuzde}
-                  </Text>
-                </View>
-                <View
-                  style={[
-                    styles.barArkaplan,
-                    { backgroundColor: tema.kutuCerceve, height: 6 },
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.barDolu,
-                      {
-                        backgroundColor: YONETICI_RENGI,
-                        width: `${ders.yuzde}%`,
-                      },
-                    ]}
-                  />
-                </View>
-              </View>
-            ))
-          )}
+          <DersCubuklari
+            dersler={satir.dersler}
+            tema={tema}
+            bosMetin="Henüz soru gönderilmedi."
+          />
+        </View>
+
+        <View style={kutuStili}>
+          <Text
+            style={[
+              styles.kutuBaslik,
+              styles.baslikAralik,
+              { color: tema.metin },
+            ]}
+          >
+            En Çok Sorduğu Konular
+          </Text>
+          <KonuListesi
+            konular={satir.konular}
+            tema={tema}
+            sinir={5}
+            bosMetin="Konu bilgisi, öğrenci yeni soru sorduktan sonra burada görünür."
+          />
         </View>
       </ScrollView>
     </View>
@@ -257,19 +231,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   kutuBaslik: { fontSize: 15, fontWeight: "bold" },
+  baslikAralik: { marginBottom: 14 },
   kutuSayi: { fontSize: 16, fontWeight: "bold" },
   barArkaplan: { height: 8, borderRadius: 4, width: "100%", marginBottom: 8 },
   barDolu: { height: "100%", borderRadius: 4 },
-  grafik: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    height: GRAFIK_YUKSEKLIK + 40,
-  },
-  grafikSutun: { flex: 1, alignItems: "center", justifyContent: "flex-end" },
-  grafikSayi: { fontSize: 10, marginBottom: 2, height: 14 },
-  grafikCubuk: { width: "60%", borderRadius: 3 },
-  grafikGun: { fontSize: 10, marginTop: 4 },
-  dersAdi: { fontSize: 14, fontWeight: "500" },
-  dersSayi: { fontSize: 13 },
 });

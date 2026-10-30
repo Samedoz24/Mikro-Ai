@@ -26,6 +26,8 @@ import {
   ogrenciSirala,
 } from "../utils/kurumIstatistik";
 import OgrenciDetay from "./OgrenciDetay";
+import OgrenciSorulari from "./OgrenciSorulari";
+import SoruIncelemesi from "./SoruIncelemesi";
 
 // Müdür ve öğretmenin öğrenci listesi. Yalnızca sunucunun hazırladığı istatistik özetlerini okur;
 // soru içerikleri bu ekranda yoktur.
@@ -39,6 +41,8 @@ export default function OgrenciListesiEkrani() {
   const [olcut, setOlcut] = useState("aktiflik");
   const [aranan, setAranan] = useState("");
   const [seciliId, setSeciliId] = useState(null);
+  // Pencerenin içeriği: öğrenci özeti -> soru listesi (yalnızca müdür) -> soru incelemesi
+  const [gorunum, setGorunum] = useState({ tur: "ozet" });
   // "Bugün" ve "dün" gibi ifadeler özet her değiştiğinde yeniden hesaplanır
   const [simdi, setSimdi] = useState(Date.now());
 
@@ -73,6 +77,24 @@ export default function OgrenciListesiEkrani() {
   );
   // Seçili öğrenci özet güncellenince canlı kalır; öğrenci ayrılırsa pencere kapanır
   const secili = satirlar.find((s) => s.id === seciliId) || null;
+  const mudurMu = yetki?.kurumRol === "mudur";
+
+  // Öğrenci dershaneden ayrılırsa ya da pencere kapanırsa görünüm özet ekranına döner
+  useEffect(() => {
+    if (!secili) setGorunum({ tur: "ozet" });
+  }, [secili]);
+
+  const pencereyiKapat = () => {
+    setSeciliId(null);
+    setGorunum({ tur: "ozet" });
+  };
+
+  // Android geri tuşu / iOS aşağı çekme: önce bir adım geri, özetteyse pencereyi kapat
+  const geriGit = () => {
+    if (gorunum.tur === "soru") setGorunum({ tur: "sorular" });
+    else if (gorunum.tur === "sorular") setGorunum({ tur: "ozet" });
+    else pencereyiKapat();
+  };
 
   const ortala = (icerik) => (
     <View
@@ -292,8 +314,8 @@ export default function OgrenciListesiEkrani() {
         visible={!!secili}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setSeciliId(null)}
-        onDismiss={() => setSeciliId(null)}
+        onRequestClose={geriGit}
+        onDismiss={pencereyiKapat}
       >
         <View
           style={{
@@ -307,8 +329,48 @@ export default function OgrenciListesiEkrani() {
               satir={secili}
               tema={tema}
               simdi={simdi}
-              onKapat={() => setSeciliId(null)}
+              onKapat={pencereyiKapat}
+              mudurMu={mudurMu}
+              onSorulariAc={() => setGorunum({ tur: "sorular" })}
             />
+          )}
+          {secili && mudurMu && gorunum.tur !== "ozet" && (
+            <View
+              style={[
+                StyleSheet.absoluteFill,
+                {
+                  paddingTop: Platform.OS === "android" ? insets.top : 0,
+                  backgroundColor: tema.arkaplan,
+                },
+              ]}
+            >
+              <OgrenciSorulari
+                key={secili.id}
+                ogrenciId={secili.id}
+                isim={secili.isim}
+                tema={tema}
+                onGeri={geriGit}
+                onSoruAc={(soru) => setGorunum({ tur: "soru", soru })}
+              />
+              {gorunum.tur === "soru" && (
+                <View
+                  style={[
+                    StyleSheet.absoluteFill,
+                    {
+                      paddingTop: Platform.OS === "android" ? insets.top : 0,
+                      backgroundColor: tema.arkaplan,
+                    },
+                  ]}
+                >
+                  <SoruIncelemesi
+                    key={gorunum.soru.id}
+                    soru={gorunum.soru}
+                    tema={tema}
+                    onGeri={geriGit}
+                  />
+                </View>
+              )}
+            </View>
           )}
         </View>
       </Modal>

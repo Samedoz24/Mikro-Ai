@@ -14,7 +14,14 @@ const GRAFIK_GUNU = 14;
 const GRAFIK_YUKSEKLIK = 90;
 
 // Tek bir öğrencinin istatistik özeti (soru içeriği içermez; yalnızca sayılar).
-export default function OgrenciDetay({ satir, tema, simdi, onKapat }) {
+export default function OgrenciDetay({
+  satir,
+  tema,
+  simdi,
+  onKapat,
+  mudurMu,
+  onSorulariAc,
+}) {
   const kutuStili = [
     styles.kutu,
     { backgroundColor: tema.kutuArkaplan, borderColor: tema.kutuCerceve },
@@ -61,6 +68,21 @@ export default function OgrenciDetay({ satir, tema, simdi, onKapat }) {
         contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
       >
+        {mudurMu && (
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={onSorulariAc}
+            accessibilityRole="button"
+            style={[styles.soruButonu, { backgroundColor: YONETICI_RENGI }]}
+          >
+            <Ionicons name="document-text-outline" size={22} color="#fff" />
+            <Text style={styles.soruButonuYazi}>
+              Gönderdiği Soruları Gör ({satir.toplam})
+            </Text>
+            <Ionicons name="chevron-forward" size={20} color="#fff" />
+          </TouchableOpacity>
+        )}
+
         <View style={styles.kartSatiri}>
           {kartlar.map((kart) => (
             <View
@@ -196,6 +218,22 @@ const styles = StyleSheet.create({
   },
   isim: { fontSize: 20, fontWeight: "900" },
   altYazi: { fontSize: 13, lineHeight: 19, marginTop: 2 },
+  soruButonu: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 15,
+    paddingHorizontal: 18,
+    borderRadius: 14,
+    marginBottom: 16,
+  },
+  soruButonuYazi: {
+    flex: 1,
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "bold",
+    marginLeft: 12,
+  },
   kartSatiri: {
     flexDirection: "row",
     flexWrap: "wrap",

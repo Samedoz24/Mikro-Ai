@@ -220,9 +220,11 @@ const onbellegeYaz = async (anahtar, deger) => {
 
 // Yolları sırayla dener. Hiçbirinde dosya yoksa { deger: null }; dosya bulunamadığı için değil,
 // gerçekten bir hata (ağ, izin) yüzünden ulaşılamadıysa { deger: null, hata } döner.
-const getir = async (anahtar, yollar, jsonMu, onbellegeYazilsin) => {
-  const kayitli = await onbellekten(anahtar);
-  if (kayitli !== null) return { deger: kayitli };
+const getir = async (anahtar, yollar, jsonMu, onbellegeYazilsin, onbellektenOku = true) => {
+  if (onbellektenOku) {
+    const kayitli = await onbellekten(anahtar);
+    if (kayitli !== null) return { deger: kayitli };
+  }
 
   let sonHata = null;
   for (const yol of yollar) {
@@ -249,18 +251,21 @@ const getir = async (anahtar, yollar, jsonMu, onbellegeYazilsin) => {
  * Bir sorunun çözüm JSON'unu ve çözüm kartı resmini getirir.
  * Dönüş: { cozumDetayi, cozumKartiLink, hata }
  *  hata: dosya yok değil, gerçekten bir yükleme hatası olduysa dolu gelir.
+ * secenek.onbellek === false ise çözüm cihaza kaydedilmez ve cihazdan okunmaz. Başkasının
+ * (örn. dershane öğrencisinin) çözümünü gösteren ekranlar bunu kullanır.
  */
-export const cozumYukle = async (soru, eposta) => {
+export const cozumYukle = async (soru, eposta, secenek = {}) => {
   const zaman = zamanDamgasiBul(soru);
   const yollar = cozumYollari(soru, eposta);
   const gomulu = gomuluCozum(soru.cozumDetayi);
-  const onbellegeYazilsin = soru.durum === "Çözüldü";
+  const onbellek = secenek.onbellek !== false;
+  const onbellegeYazilsin = onbellek && soru.durum === "Çözüldü";
 
   const [json, resim] = await Promise.all([
     gomulu
       ? Promise.resolve({ deger: gomulu })
-      : getir(`cozum:json:${eposta}:${zaman}`, yollar.json, true, onbellegeYazilsin),
-    getir(`cozum:resim:${eposta}:${zaman}`, yollar.resim, false, onbellegeYazilsin),
+      : getir(`cozum:json:${eposta}:${zaman}`, yollar.json, true, onbellegeYazilsin, onbellek),
+    getir(`cozum:resim:${eposta}:${zaman}`, yollar.resim, false, onbellegeYazilsin, onbellek),
   ]);
 
   // Son çare: belgedeki hazır kart bağlantısı (imzalı bağlantılar kısa süre geçerli olabilir,

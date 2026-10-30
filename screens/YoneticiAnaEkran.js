@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -9,13 +9,13 @@ import {
   Share,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useIsFocused } from "@react-navigation/native";
 import { doc, onSnapshot } from "firebase/firestore";
-import { auth, db } from "../firebaseConfig";
+import { db } from "../firebaseConfig";
 import { useTheme } from "../ThemeContext";
-
-const ROL_ETIKETLERI = { mudur: "Müdür", ogretmen: "Öğretmen" };
-const YONETICI_RENGI = "#0F766E";
+import useYoneticiYetkisi, {
+  YONETICI_RENGI,
+  ROL_ETIKETLERI,
+} from "../utils/useYoneticiYetkisi";
 
 const tarihMetni = (deger) => {
   const tarih = deger?.toDate ? deger.toDate() : deger ? new Date(deger) : null;
@@ -29,28 +29,8 @@ const tarihMetni = (deger) => {
 export default function YoneticiAnaEkran() {
   const { tema } = useTheme();
   const insets = useSafeAreaInsets();
-  const odakta = useIsFocused();
-
-  const [yetki, setYetki] = useState(undefined); // undefined: yükleniyor, null: yetki yok
+  const { yetki, yenile: yetkiyiOku } = useYoneticiYetkisi();
   const [kurum, setKurum] = useState(null);
-
-  // Belirteç her açılışta sunucudan yenilenir: geri alınan yetki en geç bu ekranda fark edilir
-  const yetkiyiOku = useCallback(async () => {
-    try {
-      const kullanici = auth.currentUser;
-      if (!kullanici) return;
-      const sonuc = await kullanici.getIdTokenResult(true);
-      const { kurumId, kurumRol } = sonuc.claims;
-      setYetki(kurumId && kurumRol ? { kurumId, kurumRol } : null);
-    } catch (hata) {
-      console.log("Yönetici yetkisi okunamadı:", hata?.code);
-      setYetki((onceki) => (onceki === undefined ? null : onceki));
-    }
-  }, []);
-
-  useEffect(() => {
-    if (odakta) yetkiyiOku();
-  }, [odakta, yetkiyiOku]);
 
   useEffect(() => {
     if (!yetki) {
@@ -215,16 +195,6 @@ export default function YoneticiAnaEkran() {
               </TouchableOpacity>
             </View>
           )}
-
-          <View style={kutuStili}>
-            <Text style={[styles.kutuBaslik, { color: tema.metin }]}>
-              Öğrenci İstatistikleri
-            </Text>
-            <Text style={[styles.kucukYazi, { color: tema.ikincilMetin }]}>
-              Öğrenci listesi ve istatistikler bir sonraki sürümde burada
-              olacak.
-            </Text>
-          </View>
         </>
       )}
     </ScrollView>

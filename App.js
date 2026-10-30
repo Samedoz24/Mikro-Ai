@@ -122,11 +122,9 @@ function MainApp() {
             setYukleniyor(false);
           };
 
-          // Yönetici sekmesi: hesap henüz yönetici değilse sunucudan davetle yetki alınır
-          if (
-            hedefRol === "yonetici" &&
-            !(userDoc.exists() && userDoc.data().rol === "yonetici")
-          ) {
+          // Yönetici sekmesi: her girişte sunucuya sorulur. Hesap ilk kez yönetici oluyorsa yetki verilir;
+          // zaten yöneticiyse davet hâlâ geçerli mi bakılır ve rol değişikliği (müdür/öğretmen) uygulanır.
+          if (hedefRol === "yonetici") {
             const sonuc = await yoneticiYetkisiAl(aktifKullanici);
             if (!sonuc.basarili) {
               await girisiReddet(sonuc.baslik, sonuc.mesaj);

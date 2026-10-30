@@ -241,6 +241,7 @@ const yoneticiOl = async (uid, token) => {
     uid,
     eposta,
     rol,
+    durum: "aktif",
     katilma: FieldValue.serverTimestamp(),
   });
   batch.set(davetRef, { uid, kullanildi: FieldValue.serverTimestamp() }, { merge: true });
@@ -267,6 +268,136 @@ const yoneticiYetkisiniKaldir = async (uid) => {
   delete claims.kurumId;
   delete claims.kurumRol;
   await auth.setCustomUserClaims(uid, Object.keys(claims).length ? claims : null);
+};
+
+// ---------------------------------------------------------------------------
+// Müdür: öğretmen daveti ve kaldırma
+// ---------------------------------------------------------------------------
+const OGRETMEN_SINIRI = 20;
+const EPOSTA_BICIMI = /^[^\s@/]+@[^\s@/]+\.[^\s@/]+$/;
+
+// Çağıran gerçekten bu kurumun müdürü mü? Kimlik belirtecindeki claim tek başına yetmez:
+// iptal edilen yetki belirteçte bir süre kalabildiği için kurum kaydındaki müdür girdisi de aranır.
+const mudurDogrula = async (uid, token) => {
+  const kurumId = token?.kurumId;
+  if (token?.kurumRol !== "mudur" || typeof kurumId !== "string" || !kurumId) {
+    throw new HttpsError("permission-denied", "yetki-yok");
+  }
+  const eposta = normEposta(token.email);
+  if (!eposta) throw new HttpsError("permission-denied", "yetki-yok");
+
+  const kurumRef = db().doc(`kurumlar/${kurumId}`);
+  const [kayitSnap, kurumSnap] = await Promise.all([
+    kurumRef.collection("yoneticiler").doc(eposta).get(),
+    kurumRef.get(),
+  ]);
+  const kayit = kayitSnap.data();
+  if (!kayitSnap.exists || kayit.uid !== uid || kayit.rol !== "mudur") {
+    throw new HttpsError("permission-denied", "yetki-yok");
+  }
+  if (!kurumSnap.exists || !lisansGecerli(kurumSnap.data())) {
+    throw new HttpsError("failed-precondition", "lisans-gecersiz");
+  }
+  return { kurumId, kurumRef, eposta, kurum: kurumSnap.data() };
+};
+
+const hedefEposta = (veri) => {
+  const eposta = normEposta(veri?.eposta);
+  if (!eposta || eposta.length > 254 || !EPOSTA_BICIMI.test(eposta)) {
+    throw new HttpsError("invalid-argument", "eposta-gecersiz");
+  }
+  return eposta;
+};
+
+// Müdür bir öğretmeni davet eder. Davet hemen ekip listesinde "davetli" görünür;
+// öğretmen Yönetici sekmesinden giriş yapınca "aktif" olur. Girdi: { eposta }
+const ogretmenDavetEt = async (uid, token, veri) => {
+  const hedef = hedefEposta(veri);
+  const { kurumId, kurumRef, eposta: ben } = await mudurDogrula(uid, token);
+  if (hedef === ben) throw new HttpsError("failed-precondition", "zaten-yonetici");
+
+  const davetRef = db().doc(`yoneticiDavetleri/${hedef}`);
+  const ekipRef = kurumRef.collection("yoneticiler");
+  const kayitRef = ekipRef.doc(hedef);
+
+  return db().runTransaction(async (tx) => {
+    const [davetSnap, kayitSnap, ekipSnap] = await Promise.all([
+      tx.get(davetRef),
+      tx.get(kayitRef),
+      tx.get(ekipRef),
+    ]);
+
+    if (kayitSnap.exists && kayitSnap.data().rol === "mudur") {
+      throw new HttpsError("failed-precondition", "zaten-yonetici");
+    }
+    const davet = davetSnap.data();
+    if (davetSnap.exists && davet.iptal !== true && davet.kurumId !== kurumId) {
+      // Adres başka bir dershanenin yöneticisi ya da davetlisi
+      throw new HttpsError("already-exists", "baska-kurumda-davetli");
+    }
+    if (davetSnap.exists && davet.iptal !== true && kayitSnap.exists) {
+      // Aynı dershane için zaten davetli ya da aktif öğretmen: işlem tekrarlanabilir
+      return { eposta: hedef, durum: kayitSnap.data().durum || "aktif", zatenVar: true };
+    }
+
+    const ogretmenSayisi = ekipSnap.docs.filter((d) => d.data().rol === "ogretmen").length;
+    if (ogretmenSayisi >= OGRETMEN_SINIRI) {
+      throw new HttpsError("resource-exhausted", "ogretmen-siniri");
+    }
+
+    // set: önceki (iptal edilmiş ya da silinmiş hesaba ait) davetin uid/iptal alanlarını temizler
+    tx.set(davetRef, {
+      kurumId,
+      rol: "ogretmen",
+      davetEden: uid,
+      olusturma: FieldValue.serverTimestamp(),
+    });
+    tx.set(kayitRef, {
+      eposta: hedef,
+      rol: "ogretmen",
+      durum: "davetli",
+      davetZamani: FieldValue.serverTimestamp(),
+    });
+    return { eposta: hedef, durum: "davetli", zatenVar: false };
+  });
+};
+
+// Müdür bir öğretmeni kaldırır (davetliyse daveti iptal eder). Müdür kendini ya da başka bir
+// müdürü kaldıramaz. Yetki hemen kapanır: claim silinir, hesap öğrenci hesabına döner.
+const yoneticiKaldir = async (uid, token, veri) => {
+  const hedef = hedefEposta(veri);
+  const { kurumId, kurumRef, eposta: ben } = await mudurDogrula(uid, token);
+  if (hedef === ben) throw new HttpsError("failed-precondition", "kendini-kaldiramaz");
+
+  const kayitRef = kurumRef.collection("yoneticiler").doc(hedef);
+  const davetRef = db().doc(`yoneticiDavetleri/${hedef}`);
+  const [kayitSnap, davetSnap] = await Promise.all([kayitRef.get(), davetRef.get()]);
+
+  if (!kayitSnap.exists) return { kaldirildi: false };
+  const kayit = kayitSnap.data();
+  if (kayit.rol !== "ogretmen") {
+    throw new HttpsError("failed-precondition", "kaldirilamaz-rol");
+  }
+
+  // Önce yetki kapatılır, kayıtlar en son silinir: yarıda kalırsa işlem yeniden denenebilir
+  if (kayit.uid) {
+    await yoneticiYetkisiniKaldir(kayit.uid).catch((hata) => {
+      if (hata?.code !== "auth/user-not-found") throw hata;
+    });
+    const userRef = db().doc(`kullanicilar/${kayit.uid}`);
+    const userSnap = await userRef.get();
+    // Yönetici hesabı hiç öğrenci/veli olarak kullanılmamıştı (yetki alırken denetlenir);
+    // başka kuruma ait yeni bir yetkisi yoksa öğrenci hesabına döner
+    if (userSnap.exists && userSnap.data().rol === "yonetici" && userSnap.data().kurumId === kurumId) {
+      await userRef.update({ rol: "ogrenci", kurumId: FieldValue.delete() });
+    }
+  }
+
+  const batch = db().batch();
+  batch.delete(kayitRef);
+  if (davetSnap.exists && davetSnap.data().kurumId === kurumId) batch.delete(davetRef);
+  await batch.commit();
+  return { kaldirildi: true };
 };
 
 const kurumuKapat = async (kurumId) => {
@@ -327,6 +458,8 @@ module.exports = {
   kurumaKatil,
   kurumdanAyril,
   yoneticiOl,
+  ogretmenDavetEt,
+  yoneticiKaldir,
   kurumuKapat,
   lisansKontrol,
   girisliUid,

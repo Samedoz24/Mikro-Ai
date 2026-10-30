@@ -72,6 +72,19 @@ export const ogrenciDavetMetni = (kurumAdi, kod) =>
     "Bağlandıktan sonra premium haklarından yararlanırsın. Dershane yönetimi, gönderdiğin soruların istatistiklerini görebilir. İstediğin zaman Hesabım sayfasından ayrılabilirsin.",
   ].join("\n");
 
+// Müdürün davet ettiği öğretmene göndereceği hazır mesaj
+export const ogretmenDavetMetni = (kurumAdi, eposta) =>
+  [
+    `🏫 ${kurumAdi || "Dershanemiz"} — Mikro AI öğretmen daveti`,
+    "",
+    "Seni dershanemizin Mikro AI hesabına öğretmen olarak ekledik:",
+    "1. Mikro AI uygulamasını telefonuna indir.",
+    "2. Giriş ekranında Yönetici sekmesini seç.",
+    `3. ${eposta} adresiyle giriş yap (Google ile Giriş Yap önerilir).`,
+    "",
+    "Giriş yaptığında öğrencilerin istatistiklerini görebilirsin.",
+  ].join("\n");
+
 /**
  * Haftalık özet metni (paylaşılabilir). Öğrenci adı içermez: yalnızca sayılar ve konular.
  * @param bakis kurumGenelBakis(...) sonucu

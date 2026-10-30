@@ -18,6 +18,7 @@ import useYoneticiYetkisi, {
   ROL_ETIKETLERI,
 } from "../utils/useYoneticiYetkisi";
 import useKurumOzetleri from "../utils/useKurumOzetleri";
+import EkipKarti from "./EkipKarti";
 import {
   kurumGenelBakis,
   milisaniye,
@@ -263,6 +264,14 @@ export default function YoneticiAnaEkran() {
                 <Text style={styles.butonYazi}>Katılım Mesajını Paylaş</Text>
               </TouchableOpacity>
             </View>
+          )}
+
+          {mudurMu && (
+            <EkipKarti
+              kurumId={yetki.kurumId}
+              kurumAdi={kurum.ad}
+              tema={tema}
+            />
           )}
 
           <View style={kutuStili}>

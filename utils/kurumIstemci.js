@@ -36,6 +36,14 @@ const HATA_MESAJLARI = {
     "Bu hesap öğrenci ya da veli olarak kullanılıyor. Yönetici girişi için farklı bir e-posta adresi kullan.",
   "eposta-dogrulanmadi": "E-posta adresini doğrulaman gerekiyor.",
   "eposta-yok": "Hesabında e-posta adresi bulunamadı.",
+  "eposta-gecersiz": "Geçerli bir e-posta adresi yaz.",
+  "zaten-yonetici": "Bu adres zaten dershanenin yöneticisi.",
+  "baska-kurumda-davetli":
+    "Bu e-posta adresi başka bir dershanede yönetici olarak kayıtlı.",
+  "ogretmen-siniri": "En fazla 20 öğretmen ekleyebilirsin.",
+  "yetki-yok": "Bu işlem için müdür yetkisi gerekiyor.",
+  "kendini-kaldiramaz": "Kendini ekipten kaldıramazsın.",
+  "kaldirilamaz-rol": "Müdürler uygulamadan kaldırılamaz.",
 };
 
 // Sunucu HttpsError mesajını (örn. "kod-bulunamadi") okunur Türkçe metne çevirir
@@ -62,6 +70,18 @@ export const kurumaKatil = async (kod) => {
 // Davet edilmiş müdür/öğretmen yönetici yetkisi alır. Başarılıysa kimlik belirteci yenilenmelidir.
 export const yoneticiOl = async () => {
   const sonuc = await httpsCallable(functions, "yoneticiOl")({});
+  return sonuc.data;
+};
+
+// Müdür bir öğretmeni davet eder ({ eposta, durum, zatenVar } döner)
+export const ogretmenDavetEt = async (eposta) => {
+  const sonuc = await httpsCallable(functions, "ogretmenDavetEt")({ eposta });
+  return sonuc.data;
+};
+
+// Müdür bir öğretmeni kaldırır ya da davetini iptal eder
+export const yoneticiKaldir = async (eposta) => {
+  const sonuc = await httpsCallable(functions, "yoneticiKaldir")({ eposta });
   return sonuc.data;
 };
 

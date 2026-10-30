@@ -152,21 +152,26 @@ const kurumaKatil = async (uid, veri) => {
 // ---------------------------------------------------------------------------
 // Öğrenci: kurumdan ayrılma
 // ---------------------------------------------------------------------------
-const kurumdanAyril = async (uid) => {
+// Öğrencinin kurum üyeliğini sonlandırır; öğrenci kendisi ayrılırken de müdür çıkarırken de bu
+// kullanılır. Üyelik ve özet silinir, koltuk boşalır, kurumun verdiği premium geri alınır
+// (öğrencinin kendi premium'u korunur). Öğrencinin soruları ve profili silinmez.
+// Yönetici hesaplarına dokunulmaz. Döndürdüğü değer: bir şey değiştiyse true.
+const uyelikSonlandir = async (uid, kurumId) => {
   return db().runTransaction(async (tx) => {
     const userRef = db().doc(`kullanicilar/${uid}`);
-    const userSnap = await tx.get(userRef);
-    const kullanici = userSnap.exists ? userSnap.data() : null;
-    const kurumId = kullanici?.kurumId;
-    if (!kurumId) return { ayrildi: false };
-    if (kullanici.rol === "yonetici") throw new HttpsError("failed-precondition", "rol-uygun-degil");
-
     const kurumRef = db().doc(`kurumlar/${kurumId}`);
     const uyeRef = kurumRef.collection("uyeler").doc(uid);
-    const [kurumSnap, uyeSnap] = await Promise.all([tx.get(kurumRef), tx.get(uyeRef)]);
+    const [userSnap, kurumSnap, uyeSnap] = await Promise.all([
+      tx.get(userRef),
+      tx.get(kurumRef),
+      tx.get(uyeRef),
+    ]);
 
-    const guncelleme = { kurumId: FieldValue.delete() };
-    if (uyeSnap.exists) guncelleme.premiumMu = uyeSnap.data().oncekiPremium === true;
+    const kullanici = userSnap.exists ? userSnap.data() : null;
+    if (kullanici?.rol === "yonetici") return false;
+    // Kullanıcı belgesi bu kuruma işaret ediyor mu? (üyelik kaydı yoksa tutarsız durumu temizler)
+    const baglantiVar = kullanici?.kurumId === kurumId;
+    if (!uyeSnap.exists && !baglantiVar) return false;
 
     if (uyeSnap.exists) {
       tx.delete(uyeRef);
@@ -175,9 +180,39 @@ const kurumdanAyril = async (uid) => {
       }
     }
     tx.delete(kurumRef.collection("ozet").doc(uid));
-    tx.update(userRef, guncelleme);
-    return { ayrildi: true };
+
+    if (userSnap.exists) {
+      const guncelleme = {};
+      if (baglantiVar) guncelleme.kurumId = FieldValue.delete();
+      // Premium yalnızca öğrenci bu kurumdaysa (ya da hiçbir kurumda görünmüyorsa) geri alınır
+      if (uyeSnap.exists && (baglantiVar || !kullanici.kurumId)) {
+        guncelleme.premiumMu = uyeSnap.data().oncekiPremium === true;
+      }
+      if (Object.keys(guncelleme).length > 0) tx.update(userRef, guncelleme);
+    }
+    return true;
   });
+};
+
+// Öğrenci kendi isteğiyle kurumdan ayrılır
+const kurumdanAyril = async (uid) => {
+  const userSnap = await db().doc(`kullanicilar/${uid}`).get();
+  const kullanici = userSnap.exists ? userSnap.data() : null;
+  const kurumId = kullanici?.kurumId;
+  if (!kurumId) return { ayrildi: false };
+  if (kullanici.rol === "yonetici") throw new HttpsError("failed-precondition", "rol-uygun-degil");
+  return { ayrildi: await uyelikSonlandir(uid, kurumId) };
+};
+
+// Müdür bir öğrenciyi dershaneden çıkarır. Yalnızca kendi kurumunun üyelerini çıkarabilir.
+// Girdi: { uid }. Öğrenci kodu yeniden girerse tekrar katılabilir (kod yenilenerek engellenir).
+const ogrenciCikar = async (uid, token, veri) => {
+  const hedef = typeof veri?.uid === "string" ? veri.uid.trim() : "";
+  if (!hedef || hedef.length > 128 || hedef.includes("/")) {
+    throw new HttpsError("invalid-argument", "uid-gecersiz");
+  }
+  const { kurumId } = await mudurDogrula(uid, token);
+  return { cikarildi: await uyelikSonlandir(hedef, kurumId) };
 };
 
 // ---------------------------------------------------------------------------
@@ -460,6 +495,7 @@ module.exports = {
   yoneticiOl,
   ogretmenDavetEt,
   yoneticiKaldir,
+  ogrenciCikar,
   kurumuKapat,
   lisansKontrol,
   girisliUid,

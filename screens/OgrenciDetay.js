@@ -1,14 +1,17 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Alert,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { YONETICI_RENGI } from "../utils/useYoneticiYetkisi";
 import { aktiflikMetni, gunDizisi } from "../utils/kurumIstatistik";
+import { kurumHataMesaji, ogrenciCikar } from "../utils/kurumIstemci";
 import GunlukGrafik from "./GunlukGrafik";
 import DersCubuklari from "./DersCubuklari";
 import KonuListesi from "./KonuListesi";
@@ -28,6 +31,39 @@ export default function OgrenciDetay({
     styles.kutu,
     { backgroundColor: tema.kutuArkaplan, borderColor: tema.kutuCerceve },
   ];
+
+  const [cikariliyor, setCikariliyor] = useState(false);
+  const canli = useRef(true);
+  useEffect(() => {
+    canli.current = true;
+    return () => {
+      canli.current = false;
+    };
+  }, []);
+
+  const cikarmayiOnayla = () => {
+    Alert.alert(
+      "Öğrenciyi Dershaneden Çıkar",
+      `${satir.isim} dershaneden çıkarılacak:\n\n• Koltuğu boşalır\n• Dershanenin verdiği premium hakları sona erer\n• Siz artık istatistiklerini ve sorularını göremezsiniz\n\nÖğrencinin hesabı ve soruları silinmez. Öğrenci kodu yeniden girerse tekrar katılabilir.`,
+      [
+        { text: "Vazgeç", style: "cancel" },
+        { text: "Çıkar", style: "destructive", onPress: cikar },
+      ]
+    );
+  };
+
+  const cikar = async () => {
+    setCikariliyor(true);
+    try {
+      // Başarılı olunca öğrencinin özeti silinir ve bu pencere kendiliğinden kapanır
+      await ogrenciCikar(satir.id);
+    } catch (e) {
+      console.log("Öğrenci çıkarma hatası:", e?.code, e?.message);
+      if (canli.current) Alert.alert("Çıkarılamadı", kurumHataMesaji(e));
+    } finally {
+      if (canli.current) setCikariliyor(false);
+    }
+  };
 
   const gunler = gunDizisi(satir.gunler, GRAFIK_GUNU, simdi);
   const okunanYuzde =
@@ -177,6 +213,24 @@ export default function OgrenciDetay({
             bosMetin="Konu bilgisi, öğrenci yeni soru sorduktan sonra burada görünür."
           />
         </View>
+
+        {mudurMu && (
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={cikarmayiOnayla}
+            disabled={cikariliyor}
+            accessibilityRole="button"
+            style={[styles.cikarButonu, { borderColor: tema.hataKirmizi }]}
+          >
+            {cikariliyor ? (
+              <ActivityIndicator color={tema.hataKirmizi} />
+            ) : (
+              <Text style={[styles.cikarYazi, { color: tema.hataKirmizi }]}>
+                Öğrenciyi Dershaneden Çıkar
+              </Text>
+            )}
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </View>
   );
@@ -192,6 +246,16 @@ const styles = StyleSheet.create({
   },
   isim: { fontSize: 20, fontWeight: "900" },
   altYazi: { fontSize: 13, lineHeight: 19, marginTop: 2 },
+  cikarButonu: {
+    marginTop: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 48,
+  },
+  cikarYazi: { fontSize: 15, fontWeight: "bold" },
   soruButonu: {
     flexDirection: "row",
     alignItems: "center",

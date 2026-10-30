@@ -44,6 +44,7 @@ const HATA_MESAJLARI = {
   "yetki-yok": "Bu işlem için müdür yetkisi gerekiyor.",
   "kendini-kaldiramaz": "Kendini ekipten kaldıramazsın.",
   "kaldirilamaz-rol": "Müdürler uygulamadan kaldırılamaz.",
+  "uid-gecersiz": "Öğrenci bilgisi geçersiz. Listeyi yenileyip tekrar dene.",
 };
 
 // Sunucu HttpsError mesajını (örn. "kod-bulunamadi") okunur Türkçe metne çevirir
@@ -76,6 +77,12 @@ export const yoneticiOl = async () => {
 // Müdür bir öğretmeni davet eder ({ eposta, durum, zatenVar } döner)
 export const ogretmenDavetEt = async (eposta) => {
   const sonuc = await httpsCallable(functions, "ogretmenDavetEt")({ eposta });
+  return sonuc.data;
+};
+
+// Müdür bir öğrenciyi dershaneden çıkarır ({ cikarildi } döner)
+export const ogrenciCikar = async (uid) => {
+  const sonuc = await httpsCallable(functions, "ogrenciCikar")({ uid });
   return sonuc.data;
 };
 

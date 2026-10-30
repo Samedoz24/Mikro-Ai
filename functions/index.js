@@ -34,6 +34,11 @@ exports.yoneticiKaldir = onCall(ORTAK, (request) =>
   kurum.yoneticiKaldir(kurum.girisliUid(request), request.auth.token, request.data)
 );
 
+// Müdür bir öğrenciyi dershaneden çıkarır. Girdi: { uid }
+exports.ogrenciCikar = onCall(ORTAK, (request) =>
+  kurum.ogrenciCikar(kurum.girisliUid(request), request.auth.token, request.data)
+);
+
 // Her gece süresi dolan lisansları kapatır
 exports.lisansKontrol = onSchedule(
   { region: "europe-west1", schedule: "every day 03:00", timeZone: "Europe/Istanbul", timeoutSeconds: 540 },

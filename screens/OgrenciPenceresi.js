@@ -12,6 +12,7 @@ export default function OgrenciPenceresi({
   tema,
   simdi,
   mudurMu,
+  kurumAdi,
   onKapat,
 }) {
   const insets = useSafeAreaInsets();
@@ -58,6 +59,7 @@ export default function OgrenciPenceresi({
             simdi={simdi}
             onKapat={kapat}
             mudurMu={mudurMu}
+            kurumAdi={kurumAdi}
             onSorulariAc={() => setGorunum({ tur: "sorular" })}
           />
         )}

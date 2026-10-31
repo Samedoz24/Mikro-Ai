@@ -12,6 +12,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { YONETICI_RENGI } from "../utils/useYoneticiYetkisi";
 import { aktiflikMetni, gunDizisi } from "../utils/kurumIstatistik";
 import { kurumHataMesaji, ogrenciCikar } from "../utils/kurumIstemci";
+import { ogrenciRaporuHtml, raporDosyaAdi } from "../utils/ogrenciRaporu";
+import { raporuPaylas } from "../utils/raporPaylas";
 import GunlukGrafik from "./GunlukGrafik";
 import DersCubuklari from "./DersCubuklari";
 import KonuListesi from "./KonuListesi";
@@ -25,6 +27,7 @@ export default function OgrenciDetay({
   simdi,
   onKapat,
   mudurMu,
+  kurumAdi,
   onSorulariAc,
 }) {
   const kutuStili = [
@@ -33,6 +36,7 @@ export default function OgrenciDetay({
   ];
 
   const [cikariliyor, setCikariliyor] = useState(false);
+  const [raporHazirlaniyor, setRaporHazirlaniyor] = useState(false);
   const canli = useRef(true);
   useEffect(() => {
     canli.current = true;
@@ -40,6 +44,32 @@ export default function OgrenciDetay({
       canli.current = false;
     };
   }, []);
+
+  // Öğrenci raporunu PDF olarak hazırlayıp paylaşma penceresini açar (yalnızca müdür)
+  const raporuHazirla = async () => {
+    setRaporHazirlaniyor(true);
+    try {
+      const an = Date.now();
+      const sonuc = await raporuPaylas({
+        html: ogrenciRaporuHtml({ kurumAdi, satir, simdi: an }),
+        dosyaAdi: raporDosyaAdi(satir.isim, an),
+        baslik: "Öğrenci Raporunu Paylaş",
+      });
+      if (sonuc.desteklenmiyor && canli.current) {
+        Alert.alert("Bilgi", "Cihazınızda paylaşım özelliği desteklenmiyor.");
+      }
+    } catch (e) {
+      console.log("Rapor hazırlama hatası:", e?.message);
+      if (canli.current) {
+        Alert.alert(
+          "Rapor Hazırlanamadı",
+          "Rapor oluşturulurken bir sorun yaşandı. Lütfen tekrar dene."
+        );
+      }
+    } finally {
+      if (canli.current) setRaporHazirlaniyor(false);
+    }
+  };
 
   const cikarmayiOnayla = () => {
     Alert.alert(
@@ -117,6 +147,37 @@ export default function OgrenciDetay({
               Gönderdiği Soruları Gör ({satir.toplam})
             </Text>
             <Ionicons name="chevron-forward" size={20} color="#fff" />
+          </TouchableOpacity>
+        )}
+
+        {mudurMu && (
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={raporuHazirla}
+            disabled={raporHazirlaniyor}
+            accessibilityRole="button"
+            style={[
+              styles.raporButonu,
+              {
+                borderColor: YONETICI_RENGI,
+                opacity: raporHazirlaniyor ? 0.6 : 1,
+              },
+            ]}
+          >
+            {raporHazirlaniyor ? (
+              <ActivityIndicator color={YONETICI_RENGI} />
+            ) : (
+              <>
+                <Ionicons
+                  name="share-outline"
+                  size={20}
+                  color={YONETICI_RENGI}
+                />
+                <Text style={[styles.raporYazi, { color: YONETICI_RENGI }]}>
+                  Raporu PDF Olarak Paylaş
+                </Text>
+              </>
+            )}
           </TouchableOpacity>
         )}
 
@@ -246,6 +307,17 @@ const styles = StyleSheet.create({
   },
   isim: { fontSize: 20, fontWeight: "900" },
   altYazi: { fontSize: 13, lineHeight: 19, marginTop: 2 },
+  raporButonu: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 13,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    marginBottom: 16,
+    minHeight: 48,
+  },
+  raporYazi: { fontSize: 15, fontWeight: "bold", marginLeft: 8 },
   cikarButonu: {
     marginTop: 8,
     paddingVertical: 14,

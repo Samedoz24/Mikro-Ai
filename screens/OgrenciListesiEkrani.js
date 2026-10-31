@@ -15,6 +15,7 @@ import useYoneticiYetkisi, {
   YONETICI_RENGI,
 } from "../utils/useYoneticiYetkisi";
 import useKurumOzetleri from "../utils/useKurumOzetleri";
+import useKurum from "../utils/useKurum";
 import {
   DURUM_FILTRELERI,
   SIRALAMALAR,
@@ -34,6 +35,7 @@ export default function OgrenciListesiEkrani() {
   const insets = useSafeAreaInsets();
   const { yetki, yenile } = useYoneticiYetkisi();
   const { ozetler, hata } = useKurumOzetleri(yetki?.kurumId);
+  const kurum = useKurum(yetki?.kurumId);
 
   const [olcut, setOlcut] = useState("aktiflik");
   const [durum, setDurum] = useState("hepsi");
@@ -340,6 +342,7 @@ export default function OgrenciListesiEkrani() {
         tema={tema}
         simdi={simdi}
         mudurMu={mudurMu}
+        kurumAdi={kurum?.ad}
         onKapat={() => setSeciliId(null)}
       />
     </View>

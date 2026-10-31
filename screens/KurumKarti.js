@@ -14,6 +14,9 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { doc, onSnapshot } from "firebase/firestore";
+import { useOgrenciDuyurulari } from "../utils/DuyuruContext";
+import { duyuruZamanMetni } from "../utils/kurumDuyuru";
+import { yeniMi } from "../utils/ogrenciDuyuru";
 import { db } from "../firebaseConfig";
 import {
   kurumaKatil,
@@ -31,6 +34,17 @@ export default function KurumKarti({ uid, tema }) {
   const [onayli, setOnayli] = useState(false);
   const [calisiyor, setCalisiyor] = useState(false);
   const mounted = useRef(true);
+  const { duyurular, okunmamis, esik, okunduIsaretle } = useOgrenciDuyurulari();
+  const [duyuruPenceresi, setDuyuruPenceresi] = useState(false);
+  // Pencere açıldığında hangi duyuruların yeni olduğu bu eşikle işaretlenir (açılınca okundu sayılsa da
+  // o oturumda "Yeni" etiketi görünmeye devam eder)
+  const [acilisEsigi, setAcilisEsigi] = useState(0);
+
+  const duyurulariAc = () => {
+    setAcilisEsigi(esik);
+    setDuyuruPenceresi(true);
+    okunduIsaretle();
+  };
 
   useEffect(() => {
     mounted.current = true;
@@ -133,36 +147,171 @@ export default function KurumKarti({ uid, tema }) {
 
   if (kurumId) {
     return (
-      <View style={kartStili}>
-        <View style={styles.baslikSatiri}>
-          <Text style={[styles.baslik, { color: tema.metin }]}>Dershanem</Text>
-          <Text style={styles.ikon}>🏫</Text>
-        </View>
-        <Text style={[styles.kurumAdi, { color: tema.anaButon }]}>
-          {kurumAdi || "Bağlı dershane"}
-        </Text>
-        <Text style={[styles.aciklama, { color: tema.ikincilMetin }]}>
-          Dershane müdürün sorularını ve çözümlerini, öğretmenlerin ise soru
-          sayın ve ders dağılımın gibi istatistiklerini görebilir. İstediğin
-          zaman ayrılabilirsin.
-        </Text>
-        <TouchableOpacity
-          style={[styles.ikincilButon, { borderColor: tema.hataKirmizi }]}
-          onPress={ayrilmayiOnayla}
-          disabled={calisiyor}
-          activeOpacity={0.7}
-        >
-          {calisiyor ? (
-            <ActivityIndicator color={tema.hataKirmizi} />
-          ) : (
-            <Text
-              style={[styles.ikincilButonYazi, { color: tema.hataKirmizi }]}
-            >
-              Dershaneden Ayrıl
+      <>
+        <View style={kartStili}>
+          <View style={styles.baslikSatiri}>
+            <Text style={[styles.baslik, { color: tema.metin }]}>
+              Dershanem
             </Text>
-          )}
-        </TouchableOpacity>
-      </View>
+            <Text style={styles.ikon}>🏫</Text>
+          </View>
+          <Text style={[styles.kurumAdi, { color: tema.anaButon }]}>
+            {kurumAdi || "Bağlı dershane"}
+          </Text>
+          <Text style={[styles.aciklama, { color: tema.ikincilMetin }]}>
+            Dershane müdürün sorularını ve çözümlerini, öğretmenlerin ise soru
+            sayın ve ders dağılımın gibi istatistiklerini görebilir. İstediğin
+            zaman ayrılabilirsin.
+          </Text>
+          <TouchableOpacity
+            style={[styles.duyuruSatiri, { borderColor: tema.kutuCerceve }]}
+            onPress={duyurulariAc}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={
+              okunmamis > 0 ? `Duyurular, ${okunmamis} okunmamış` : "Duyurular"
+            }
+          >
+            <Ionicons
+              name="megaphone-outline"
+              size={20}
+              color={tema.anaButon}
+            />
+            <Text style={[styles.duyuruYazi, { color: tema.metin }]}>
+              Duyurular
+            </Text>
+            {okunmamis > 0 && (
+              <View style={styles.duyuruRozet}>
+                <Text style={styles.duyuruRozetYazi}>{okunmamis}</Text>
+              </View>
+            )}
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color={tema.ikincilMetin}
+              style={{ marginLeft: 8 }}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.ikincilButon, { borderColor: tema.hataKirmizi }]}
+            onPress={ayrilmayiOnayla}
+            disabled={calisiyor}
+            activeOpacity={0.7}
+          >
+            {calisiyor ? (
+              <ActivityIndicator color={tema.hataKirmizi} />
+            ) : (
+              <Text
+                style={[styles.ikincilButonYazi, { color: tema.hataKirmizi }]}
+              >
+                Dershaneden Ayrıl
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        <Modal
+          visible={duyuruPenceresi}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setDuyuruPenceresi(false)}
+        >
+          <View style={styles.modalArkaplan}>
+            <View
+              style={[
+                styles.modalKutu,
+                { backgroundColor: tema.kutuArkaplan, maxHeight: "85%" },
+              ]}
+            >
+              <View style={styles.duyuruBaslikSatiri}>
+                <Text
+                  style={[
+                    styles.modalBaslik,
+                    { color: tema.metin, marginBottom: 0 },
+                  ]}
+                  accessibilityRole="header"
+                >
+                  Duyurular
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setDuyuruPenceresi(false)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Kapat"
+                >
+                  <Ionicons
+                    name="close-circle"
+                    size={30}
+                    color={tema.ikincilMetin}
+                  />
+                </TouchableOpacity>
+              </View>
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingTop: 14 }}
+              >
+                {duyurular.length === 0 ? (
+                  <Text style={[styles.aciklama, { color: tema.ikincilMetin }]}>
+                    Dershanenden henüz duyuru gelmedi.
+                  </Text>
+                ) : (
+                  duyurular.map((d) => {
+                    const yeni = yeniMi(d, acilisEsigi);
+                    return (
+                      <View
+                        key={d.id}
+                        style={[
+                          styles.duyuruKarti,
+                          {
+                            backgroundColor: tema.arkaplan,
+                            borderColor: yeni
+                              ? tema.anaButon
+                              : tema.kutuCerceve,
+                          },
+                        ]}
+                      >
+                        <View style={styles.duyuruUst}>
+                          <Text
+                            style={[styles.duyuruBaslik, { color: tema.metin }]}
+                          >
+                            {d.baslik}
+                          </Text>
+                          {yeni && (
+                            <View
+                              style={[
+                                styles.yeniEtiket,
+                                { backgroundColor: tema.anaButon },
+                              ]}
+                            >
+                              <Text style={styles.yeniEtiketYazi}>Yeni</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text
+                          style={[
+                            styles.duyuruAlt,
+                            { color: tema.ikincilMetin },
+                          ]}
+                        >
+                          {d.grupaOzel ? "Grubuna özel" : "Tüm dershane"}
+                          {d.zamanMs !== null
+                            ? ` · ${duyuruZamanMetni(d.zamanMs)}`
+                            : ""}
+                        </Text>
+                        <Text
+                          style={[styles.duyuruMetin, { color: tema.metin }]}
+                        >
+                          {d.metin}
+                        </Text>
+                      </View>
+                    );
+                  })
+                )}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      </>
     );
   }
 
@@ -305,6 +454,53 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   anaButonYazi: { color: "#fff", fontSize: 15, fontWeight: "bold" },
+  duyuruSatiri: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    marginBottom: 10,
+    minHeight: 48,
+  },
+  duyuruYazi: { flex: 1, fontSize: 15, fontWeight: "600", marginLeft: 10 },
+  duyuruRozet: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    paddingHorizontal: 6,
+    backgroundColor: "#EF4444",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  duyuruRozetYazi: { color: "#fff", fontSize: 12, fontWeight: "bold" },
+  duyuruBaslikSatiri: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  duyuruKarti: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
+  },
+  duyuruUst: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+  },
+  duyuruBaslik: { flex: 1, fontSize: 16, fontWeight: "bold" },
+  yeniEtiket: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginLeft: 8,
+  },
+  yeniEtiketYazi: { color: "#fff", fontSize: 11, fontWeight: "bold" },
+  duyuruAlt: { fontSize: 12, marginTop: 3, marginBottom: 8 },
+  duyuruMetin: { fontSize: 14, lineHeight: 21 },
   ikincilButon: {
     paddingVertical: 12,
     borderRadius: 12,

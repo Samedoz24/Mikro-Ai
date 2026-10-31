@@ -41,6 +41,8 @@ import YasOnayScreen from "./screens/YasOnayScreen";
 import YoneticiAnaEkran from "./screens/YoneticiAnaEkran";
 import OgrenciListesiEkrani from "./screens/OgrenciListesiEkrani";
 import GenelBakisEkrani from "./screens/GenelBakisEkrani";
+import useDuyuruKutusu from "./utils/useDuyuruKutusu";
+import { DuyuruContext } from "./utils/DuyuruContext";
 import { yoneticiOl, kurumHataMesaji } from "./utils/kurumIstemci";
 import { YAS_ONAYI_SURUMU } from "./utils/yasalMetinler";
 import { PremiumProvider } from "./PremiumContext";
@@ -102,6 +104,10 @@ function MainApp() {
   // n8n bir soruyu birden çok kez güncelleyebilir; her soru için yalnızca bir kez bildirim gönderilir
   const bildirilenSorular = useRef(new Set());
   const [premiumMu, setPremiumMu] = useState(false);
+  // Öğrencinin dershane duyuruları: tek dinleyici, rozet ve liste için paylaşılır
+  const duyuruKutusu = useDuyuruKutusu(
+    kullaniciRolu === "ogrenci" && kullanici ? kullanici.uid : null
+  );
 
   const { tema } = useTheme();
 
@@ -317,6 +323,7 @@ function MainApp() {
   // 🚀 DÜZELTME: NavigationContainer buradan silindi, en dıştaki (ölümsüz) App bileşenine taşındı.
   return (
     <PremiumProvider premiumMu={premiumMu} rol={kullaniciRolu}>
+      <DuyuruContext.Provider value={duyuruKutusu}>
       <Tab.Navigator
         screenOptions={({ route }) => ({
           tabBarIcon: ({ focused, color, size }) => {
@@ -375,7 +382,17 @@ function MainApp() {
             <Tab.Screen
               name="Profil"
               component={ProfileScreen}
-              options={{ title: "Hesabım" }}
+              options={{
+                title: "Hesabım",
+                tabBarBadge:
+                  duyuruKutusu.okunmamis > 0 ? duyuruKutusu.okunmamis : null,
+                tabBarBadgeStyle: {
+                  backgroundColor: "#EF4444",
+                  color: "#FFFFFF",
+                  fontSize: 12,
+                  fontWeight: "bold",
+                },
+              }}
             />
           </>
         ) : kullaniciRolu === "yonetici" ? (
@@ -416,6 +433,7 @@ function MainApp() {
           </>
         )}
       </Tab.Navigator>
+      </DuyuruContext.Provider>
     </PremiumProvider>
   );
 }

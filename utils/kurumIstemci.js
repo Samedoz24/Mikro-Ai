@@ -47,6 +47,18 @@ const HATA_MESAJLARI = {
   "uid-gecersiz": "Öğrenci bilgisi geçersiz. Listeyi yenileyip tekrar dene.",
   "cok-sik": "Kod az önce yenilendi. Bir dakika sonra tekrar dene.",
   "kod-uretilemedi": "Yeni kod üretilemedi. Lütfen tekrar dene.",
+  "grup-adi-gecersiz":
+    "Grup adı 1-30 karakter olmalı ve < > gibi özel karakterler içermemeli.",
+  "grup-adi-var": "Bu adla bir grup zaten var.",
+  "grup-siniri": "En fazla 30 grup oluşturabilirsin.",
+  "grup-yok": "Bu grup artık yok. Listeyi yenileyip tekrar dene.",
+  "grup-gecersiz": "Grup bilgisi geçersiz. Listeyi yenileyip tekrar dene.",
+  "grup-uretilemedi": "Grup oluşturulamadı. Lütfen tekrar dene.",
+  "ogrenci-yok": "Bu öğrenci artık dershanede değil. Listeyi yenile.",
+  "kapsam-gecersiz": "Kapsam bilgisi geçersiz.",
+  "cok-grup": "Bir öğretmene en fazla 10 grup atanabilir.",
+  "ogretmen-yok": "Bu öğretmen artık ekipte değil. Listeyi yenile.",
+  "kapsam-rol": "Müdürün kapsamı değiştirilemez.",
 };
 
 // Sunucu HttpsError mesajını (örn. "kod-bulunamadi") okunur Türkçe metne çevirir
@@ -85,6 +97,47 @@ export const ogretmenDavetEt = async (eposta) => {
 // Müdür öğrenci kayıt kodunu yeniler ({ kurumKodu } döner); eski kod anında geçersiz olur
 export const kodYenile = async () => {
   const sonuc = await httpsCallable(functions, "kodYenile")({});
+  return sonuc.data;
+};
+
+// Müdür grup (sınıf/şube) yönetimi
+export const grupOlustur = async (ad) => {
+  const sonuc = await httpsCallable(functions, "grupOlustur")({ ad });
+  return sonuc.data;
+};
+
+export const grupAdiDegistir = async (grupId, ad) => {
+  const sonuc = await httpsCallable(
+    functions,
+    "grupAdiDegistir"
+  )({ grupId, ad });
+  return sonuc.data;
+};
+
+export const grupSil = async (grupId) => {
+  const sonuc = await httpsCallable(functions, "grupSil")({ grupId });
+  return sonuc.data;
+};
+
+// Öğrenciyi gruba atar; grupId null ise gruptan çıkarır
+export const ogrenciGrupAta = async (uid, grupId) => {
+  const sonuc = await httpsCallable(
+    functions,
+    "ogrenciGrupAta"
+  )({ uid, grupId });
+  return sonuc.data;
+};
+
+// Öğretmenin kapsamı: kapsam "tum" ya da "gruplar" (gruplar: grup kimlikleri)
+export const ogretmenKapsamAta = async (eposta, kapsam, gruplar = []) => {
+  const sonuc = await httpsCallable(
+    functions,
+    "ogretmenKapsamAta"
+  )({
+    eposta,
+    kapsam,
+    gruplar,
+  });
   return sonuc.data;
 };
 

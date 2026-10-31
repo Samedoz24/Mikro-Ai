@@ -16,8 +16,12 @@ import useYoneticiYetkisi, {
 } from "../utils/useYoneticiYetkisi";
 import useKurumOzetleri from "../utils/useKurumOzetleri";
 import useKurum from "../utils/useKurum";
+import useGruplar from "../utils/useGruplar";
 import {
   DURUM_FILTRELERI,
+  GRUPSUZ,
+  grupAdiBul,
+  grupSayilari,
   SIRALAMALAR,
   aktiflikMetni,
   dersSecenekleri,
@@ -36,10 +40,12 @@ export default function OgrenciListesiEkrani() {
   const { yetki, yenile } = useYoneticiYetkisi();
   const { ozetler, hata } = useKurumOzetleri(yetki?.kurumId);
   const kurum = useKurum(yetki?.kurumId);
+  const gruplar = useGruplar(yetki?.kurumId);
 
   const [olcut, setOlcut] = useState("aktiflik");
   const [durum, setDurum] = useState("hepsi");
   const [ders, setDers] = useState(null);
+  const [grup, setGrup] = useState(null); // null: tüm gruplar, GRUPSUZ ya da grup kimliği
   const [aranan, setAranan] = useState("");
   const [seciliId, setSeciliId] = useState(null);
   // "Bugün" ve "dün" gibi ifadeler özet her değiştiğinde yeniden hesaplanır
@@ -55,18 +61,30 @@ export default function OgrenciListesiEkrani() {
   const dersler = useMemo(() => dersSecenekleri(satirlar), [satirlar]);
   // Seçili ders artık hiçbir öğrencide yoksa (öğrenci ayrıldı vb.) süzgeç kendiliğinden kalkar
   const gecerliDers = dersler.some((d) => d.ders === ders) ? ders : null;
+  const grupListesi = gruplar || [];
+  // Seçili grup silindiyse süzgeç kendiliğinden kalkar
+  const gecerliGrup =
+    grup === GRUPSUZ || grupListesi.some((g) => g.id === grup) ? grup : null;
+  const grupSayilar = useMemo(
+    () => grupSayilari(satirlar, grupListesi),
+    [satirlar, grupListesi]
+  );
   const sayilar = useMemo(
-    () => durumSayilari(satirlar, gecerliDers),
-    [satirlar, gecerliDers]
+    () => durumSayilari(satirlar, gecerliDers, gecerliGrup),
+    [satirlar, gecerliDers, gecerliGrup]
   );
   const liste = useMemo(
     () =>
       ogrenciSirala(
-        ogrenciFiltrele(satirlar, { durum, ders: gecerliDers }),
+        ogrenciFiltrele(satirlar, {
+          durum,
+          ders: gecerliDers,
+          grup: gecerliGrup,
+        }),
         olcut,
         aranan
       ),
-    [satirlar, durum, gecerliDers, olcut, aranan]
+    [satirlar, durum, gecerliDers, gecerliGrup, olcut, aranan]
   );
   // Seçili öğrenci özet güncellenince canlı kalır; öğrenci ayrılırsa pencere kapanır
   const secili = satirlar.find((s) => s.id === seciliId) || null;
@@ -187,6 +205,52 @@ export default function OgrenciListesiEkrani() {
         })}
       </View>
 
+      {grupListesi.length > 0 && (
+        <>
+          <Text style={[styles.grupEtiket, { color: tema.ikincilMetin }]}>
+            Grup
+          </Text>
+          <View style={styles.sirala}>
+            {[
+              { id: null, etiket: "Tüm gruplar" },
+              ...grupListesi.map((g) => ({
+                id: g.id,
+                etiket: `${g.ad} (${grupSayilar[g.id] || 0})`,
+              })),
+              { id: GRUPSUZ, etiket: `Grupsuz (${grupSayilar[GRUPSUZ] || 0})` },
+            ].map((g) => {
+              const secilen = g.id === gecerliGrup;
+              return (
+                <TouchableOpacity
+                  key={g.id ?? "hepsi"}
+                  onPress={() => setGrup(g.id)}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: secilen }}
+                  style={[
+                    styles.siraSecenek,
+                    {
+                      backgroundColor: secilen ? YONETICI_RENGI : "transparent",
+                      borderColor: secilen ? YONETICI_RENGI : tema.kutuCerceve,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={{
+                      color: secilen ? "#fff" : tema.ikincilMetin,
+                      fontSize: 13,
+                      fontWeight: "600",
+                    }}
+                  >
+                    {g.etiket}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </>
+      )}
+
       {dersler.length > 1 && (
         <>
           <Text style={[styles.grupEtiket, { color: tema.ikincilMetin }]}>
@@ -302,6 +366,9 @@ export default function OgrenciListesiEkrani() {
         >
           {aktiflikMetni(item.sonAktiflikMs, simdi)}
           {item.enCokDers ? ` · ${item.enCokDers}` : ""}
+          {item.grupId && grupAdiBul(grupListesi, item.grupId)
+            ? ` · ${grupAdiBul(grupListesi, item.grupId)}`
+            : ""}
         </Text>
       </View>
       <View style={{ alignItems: "flex-end" }}>
@@ -343,6 +410,7 @@ export default function OgrenciListesiEkrani() {
         simdi={simdi}
         mudurMu={mudurMu}
         kurumAdi={kurum?.ad}
+        gruplar={gruplar}
         onKapat={() => setSeciliId(null)}
       />
     </View>

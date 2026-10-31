@@ -15,6 +15,7 @@ import useYoneticiYetkisi, {
 } from "../utils/useYoneticiYetkisi";
 import useKurumOzetleri from "../utils/useKurumOzetleri";
 import useKurum from "../utils/useKurum";
+import useGruplar from "../utils/useGruplar";
 import { kurumGenelBakis, ogrenciSatiri } from "../utils/kurumIstatistik";
 import GunlukGrafik from "./GunlukGrafik";
 import DersCubuklari from "./DersCubuklari";
@@ -44,6 +45,7 @@ export default function GenelBakisEkrani() {
   const { yetki, yenile } = useYoneticiYetkisi();
   const { ozetler, hata } = useKurumOzetleri(yetki?.kurumId);
   const kurum = useKurum(yetki?.kurumId);
+  const gruplar = useGruplar(yetki?.kurumId);
 
   const [seciliId, setSeciliId] = useState(null);
   // Seçilen zaman aralığı (gün): grafik, aktif öğrenci, en aktif ve dikkat gerektirenler buna göre hesaplanır
@@ -351,6 +353,7 @@ export default function GenelBakisEkrani() {
         simdi={simdi}
         mudurMu={mudurMu}
         kurumAdi={kurum?.ad}
+        gruplar={gruplar}
         onKapat={() => setSeciliId(null)}
       />
     </View>

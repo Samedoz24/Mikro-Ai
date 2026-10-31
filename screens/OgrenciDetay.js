@@ -11,7 +11,12 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { YONETICI_RENGI } from "../utils/useYoneticiYetkisi";
 import { aktiflikMetni, gunDizisi } from "../utils/kurumIstatistik";
-import { kurumHataMesaji, ogrenciCikar } from "../utils/kurumIstemci";
+import {
+  kurumHataMesaji,
+  ogrenciCikar,
+  ogrenciGrupAta,
+} from "../utils/kurumIstemci";
+import { grupAdiBul } from "../utils/kurumIstatistik";
 import { ogrenciRaporuHtml, raporDosyaAdi } from "../utils/ogrenciRaporu";
 import { raporuPaylas } from "../utils/raporPaylas";
 import GunlukGrafik from "./GunlukGrafik";
@@ -28,6 +33,7 @@ export default function OgrenciDetay({
   onKapat,
   mudurMu,
   kurumAdi,
+  gruplar,
   onSorulariAc,
 }) {
   const kutuStili = [
@@ -37,6 +43,31 @@ export default function OgrenciDetay({
 
   const [cikariliyor, setCikariliyor] = useState(false);
   const [raporHazirlaniyor, setRaporHazirlaniyor] = useState(false);
+  const [grupSecimiAcik, setGrupSecimiAcik] = useState(false);
+  const [grupAtaniyor, setGrupAtaniyor] = useState(false);
+
+  const grupListesi = gruplar || [];
+  const grupAdi = satir.grupId
+    ? (grupAdiBul(grupListesi, satir.grupId) ?? "Silinmiş grup")
+    : "Grupsuz";
+
+  // Müdür öğrenciyi gruba atar ya da gruptan çıkarır (grupId null)
+  const grupSec = async (grupId) => {
+    if (grupId === satir.grupId) {
+      setGrupSecimiAcik(false);
+      return;
+    }
+    setGrupAtaniyor(true);
+    try {
+      await ogrenciGrupAta(satir.id, grupId);
+      if (canli.current) setGrupSecimiAcik(false);
+    } catch (e) {
+      console.log("Grup atama hatası:", e?.code, e?.message);
+      if (canli.current) Alert.alert("Atanamadı", kurumHataMesaji(e));
+    } finally {
+      if (canli.current) setGrupAtaniyor(false);
+    }
+  };
   const canli = useRef(true);
   useEffect(() => {
     canli.current = true;
@@ -181,6 +212,88 @@ export default function OgrenciDetay({
           </TouchableOpacity>
         )}
 
+        <View style={kutuStili}>
+          <View style={styles.kutuUstSatir}>
+            <Text style={[styles.kutuBaslik, { color: tema.metin }]}>Grup</Text>
+            {mudurMu ? (
+              <TouchableOpacity
+                onPress={() => setGrupSecimiAcik((a) => !a)}
+                disabled={grupAtaniyor}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel="Grubu değiştir"
+                style={styles.grupSatiri}
+              >
+                <Text style={[styles.kutuSayi, { color: YONETICI_RENGI }]}>
+                  {grupAdi}
+                </Text>
+                <Ionicons
+                  name={grupSecimiAcik ? "chevron-up" : "chevron-down"}
+                  size={18}
+                  color={YONETICI_RENGI}
+                  style={{ marginLeft: 4 }}
+                />
+              </TouchableOpacity>
+            ) : (
+              <Text style={[styles.kutuSayi, { color: tema.ikincilMetin }]}>
+                {grupAdi}
+              </Text>
+            )}
+          </View>
+          {mudurMu && grupSecimiAcik && (
+            <View style={{ marginTop: 6 }}>
+              {grupListesi.length === 0 ? (
+                <Text style={[styles.altYazi, { color: tema.ikincilMetin }]}>
+                  Henüz grup yok. Dershane sekmesindeki Gruplar bölümünden grup
+                  oluşturabilirsin.
+                </Text>
+              ) : (
+                [{ id: null, ad: "Grupsuz" }, ...grupListesi].map((g) => {
+                  const secili = g.id === satir.grupId;
+                  return (
+                    <TouchableOpacity
+                      key={g.id ?? "grupsuz"}
+                      onPress={() => grupSec(g.id)}
+                      disabled={grupAtaniyor}
+                      activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: secili }}
+                      style={[
+                        styles.grupSecenegi,
+                        { borderTopColor: tema.kutuCerceve },
+                      ]}
+                    >
+                      <Text
+                        style={{
+                          flex: 1,
+                          fontSize: 15,
+                          color: secili ? YONETICI_RENGI : tema.metin,
+                          fontWeight: secili ? "700" : "500",
+                        }}
+                      >
+                        {g.ad}
+                      </Text>
+                      {secili && (
+                        <Ionicons
+                          name="checkmark"
+                          size={20}
+                          color={YONETICI_RENGI}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+              {grupAtaniyor && (
+                <ActivityIndicator
+                  color={YONETICI_RENGI}
+                  style={{ marginTop: 10 }}
+                />
+              )}
+            </View>
+          )}
+        </View>
+
         <View style={styles.kartSatiri}>
           {kartlar.map((kart) => (
             <View
@@ -318,6 +431,13 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   raporYazi: { fontSize: 15, fontWeight: "bold", marginLeft: 8 },
+  grupSatiri: { flexDirection: "row", alignItems: "center" },
+  grupSecenegi: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 13,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
   cikarButonu: {
     marginTop: 8,
     paddingVertical: 14,

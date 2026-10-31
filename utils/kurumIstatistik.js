@@ -96,6 +96,9 @@ export const ogrenciSatiri = (id, ozet, simdi = Date.now()) => {
     son30: sonGunlerToplami(gunler, 30, simdi),
     aktif: son7 > 0,
     sonAktiflikMs: milisaniye(ozet?.sonAktiflik),
+    // Öğrencinin grubu (sunucu yazar); grup yoksa ya da eski özetse null
+    grupId:
+      typeof ozet?.grupId === "string" && ozet.grupId ? ozet.grupId : null,
     katilmaMs: milisaniye(ozet?.katilma),
     enCokDers: dersler.length ? dersler[0].ders : null,
     dersler,
@@ -252,25 +255,64 @@ const durumUygun = (s, durum) => {
 
 /**
  * Öğrenci satırlarını durum ve derse göre süzer (girdi dizisini değiştirmez).
- * @param secenek { durum: "hepsi"|"aktif"|"pasif"|"baslamayan", ders: null | "Matematik" }
+ * @param secenek { durum: "hepsi"|"aktif"|"pasif"|"baslamayan", ders: null | "Matematik",
+ *                  grup: null (hepsi) | GRUPSUZ | grup kimliği }
  */
+export const GRUPSUZ = "__grupsuz__";
+
+const grupUygun = (s, grup) => {
+  if (!grup) return true;
+  if (grup === GRUPSUZ) return s.grupId === null;
+  return s.grupId === grup;
+};
+
 export const ogrenciFiltrele = (
   satirlar,
-  { durum = "hepsi", ders = null } = {}
+  { durum = "hepsi", ders = null, grup = null } = {}
 ) =>
   satirlar.filter(
     (s) =>
-      durumUygun(s, durum) && (!ders || s.dersler.some((d) => d.ders === ders))
+      durumUygun(s, durum) &&
+      grupUygun(s, grup) &&
+      (!ders || s.dersler.some((d) => d.ders === ders))
   );
 
-// Durum süzgeçlerinin yanında gösterilecek sayılar (seçili ders süzgeci dikkate alınır)
-export const durumSayilari = (satirlar, ders = null) =>
+// Durum süzgeçlerinin yanında gösterilecek sayılar (seçili ders ve grup süzgeçleri dikkate alınır)
+export const durumSayilari = (satirlar, ders = null, grup = null) =>
   Object.fromEntries(
     DURUM_FILTRELERI.map((f) => [
       f.id,
-      ogrenciFiltrele(satirlar, { durum: f.id, ders }).length,
+      ogrenciFiltrele(satirlar, { durum: f.id, ders, grup }).length,
     ])
   );
+
+// Gruplardaki öğrenci sayıları: { [grupId]: sayı, [GRUPSUZ]: sayı }. Var olmayan bir gruba bağlı
+// görünen öğrenci (grup silinirken geçici durum) grupsuz sayılır.
+export const grupSayilari = (satirlar, gruplar) => {
+  const var_ = new Set(gruplar.map((g) => g.id));
+  const sayilar = { [GRUPSUZ]: 0 };
+  gruplar.forEach((g) => {
+    sayilar[g.id] = 0;
+  });
+  satirlar.forEach((s) => {
+    if (s.grupId && var_.has(s.grupId)) sayilar[s.grupId] += 1;
+    else sayilar[GRUPSUZ] += 1;
+  });
+  return sayilar;
+};
+
+// Grup kimliğinden grup adı (grup yoksa null)
+export const grupAdiBul = (gruplar, grupId) =>
+  gruplar.find((g) => g.id === grupId)?.ad ?? null;
+
+// Gruplar ekranda ada göre (Türkçe sıralama) gösterilir; silinmekte olanlar listeye girmez
+export const gruplariHazirla = (belgeler) =>
+  belgeler
+    .filter(
+      (g) => g && g.silinecek !== true && typeof g.ad === "string" && g.ad
+    )
+    .map((g) => ({ id: g.id, ad: g.ad }))
+    .sort((a, b) => a.ad.localeCompare(b.ad, "tr", { numeric: true }));
 
 // Öğrencilerin sorduğu dersler, çok soru soranlar önde: [{ ders, ogrenci }]
 export const dersSecenekleri = (satirlar) => {

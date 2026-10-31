@@ -19,6 +19,7 @@ import useYoneticiYetkisi, {
 } from "../utils/useYoneticiYetkisi";
 import useKurumOzetleri from "../utils/useKurumOzetleri";
 import EkipKarti from "./EkipKarti";
+import GruplarKarti from "./GruplarKarti";
 import { kodYenile, kurumHataMesaji } from "../utils/kurumIstemci";
 import {
   kurumGenelBakis,
@@ -327,6 +328,8 @@ export default function YoneticiAnaEkran() {
               tema={tema}
             />
           )}
+
+          {mudurMu && <GruplarKarti kurumId={yetki.kurumId} tema={tema} />}
 
           <View style={kutuStili}>
             <Text style={[styles.kutuBaslik, { color: tema.metin }]}>

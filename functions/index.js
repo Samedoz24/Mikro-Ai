@@ -4,6 +4,7 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const kurum = require("./kurum");
 const ozet = require("./ozet");
+const duyuru = require("./duyuru");
 
 initializeApp();
 
@@ -63,6 +64,15 @@ exports.ogrenciGrupAta = onCall(ORTAK, (request) =>
 
 exports.ogretmenKapsamAta = onCall(ORTAK, (request) =>
   kurum.ogretmenKapsamAta(kurum.girisliUid(request), request.auth.token, request.data)
+);
+
+// Müdür öğrencilere duyuru gönderir / siler
+exports.duyuruGonder = onCall(ORTAK, (request) =>
+  duyuru.duyuruGonder(kurum.girisliUid(request), request.auth.token, request.data)
+);
+
+exports.duyuruSil = onCall(ORTAK, (request) =>
+  duyuru.duyuruSil(kurum.girisliUid(request), request.auth.token, request.data)
 );
 
 // Her gece süresi dolan lisansları kapatır

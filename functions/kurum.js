@@ -517,8 +517,9 @@ const grupSil = async (uid, token, veri) => {
     }
   }
 
-  // Aradaki sürede gruba atanan olursa onlar da temizlenir; sonra grup silinir
+  // Aradaki sürede gruba atanan olursa onlar da temizlenir; grubun duyuruları silinir, sonra grup silinir
   await grubuBosalt(kurumRef, grupId);
+  await require("./duyuru").grubunDuyurulariniSil(kurumRef, grupId);
   await grupRef.delete();
   return { silindi: true };
 };
@@ -769,7 +770,8 @@ const kurumuKapat = async (kurumId) => {
     await batch.commit();
   }
 
-  // Üyeler çıkarıldı; grupların özet kopyaları da silinir (veri azaltma)
+  // Üyeler çıkarıldı; duyurular ve grupların özet kopyaları da silinir (veri azaltma)
+  await require("./duyuru").tumDuyurulariSil(kurumRef);
   const kapananGruplar = await kurumRef.collection("gruplar").get();
   for (const grup of kapananGruplar.docs) await koleksiyonuBosalt(grup.ref.collection("ozet"));
 
@@ -817,6 +819,9 @@ module.exports = {
   grupSil,
   ogrenciGrupAta,
   ogretmenKapsamAta,
+  mudurDogrula,
+  koleksiyonuBosalt,
+  gecerliGrupKimligi,
   kurumuKapat,
   lisansKontrol,
   girisliUid,

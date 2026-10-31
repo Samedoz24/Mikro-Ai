@@ -14,6 +14,8 @@ rules_version = '2';
 //   kurumlar/{kurumId}        dershane. Yalnızca sunucu (Admin SDK / Cloud Functions) yazar.
 //     /ozet/{uid}             öğrenci başına istatistik özeti; müdür ve "tum" kapsamlı öğretmen okur.
 //     /gruplar/{grupId}       sınıf/şube; /ozet/{uid} altındaki grup kopyasını yetkili öğretmen okur.
+//     /duyurular/{id}         müdürün duyuru yönetim listesi; yalnızca müdür okur.
+//     /duyuruKutusu/{kutu}/duyurular/{id}  öğrencilere teslim kopyası; kutu "hepsi" ya da öğrencinin grubu.
 //     /uyeler/{uid}           öğrenci üyeliği ve onay kaydı; müdür ve öğrencinin kendisi okur.
 //     /yoneticiler/{eposta}   müdür/öğretmen davetleri; yalnızca müdür okur.
 //   diğer her şey (örn. questions)  istemciye kapalı.
@@ -75,6 +77,15 @@ service cloud.firestore {
         || (kurumYoneticisiMi(kurumId)
             && request.auth.token.get('kapsam', 'tum') == 'gruplar'
             && grupId in request.auth.token.get('gruplar', []));
+    }
+
+    // Duyuru kutusu: kurumun üyesi olan öğrenci "hepsi" kutusunu ve yalnızca KENDİ grubunun kutusunu okur.
+    // Kutu kimliği yoldan gelir; kural sorgu içeriğine değil yola bakar.
+    function uyeKutusuMu(kurumId, kutuId) {
+      return girisli()
+        && exists(/databases/$(database)/documents/kurumlar/$(kurumId)/uyeler/$(request.auth.uid))
+        && (kutuId == 'hepsi'
+            || get(/databases/$(database)/documents/kurumlar/$(kurumId)/uyeler/$(request.auth.uid)).data.get('grupId', '') == kutuId);
     }
 
     // Öğrencinin sunucu tarafından atanmış kurumu bu müdürün kurumuysa true
@@ -158,6 +169,18 @@ service cloud.firestore {
           allow read: if grupKapsamiMi(kurumId, grupId);
           allow write: if false;
         }
+      }
+
+      // Duyurular: müdürün yönetim listesi (gönderen e-postası içerir). Yazma yalnızca sunucuda.
+      match /duyurular/{duyuruId} {
+        allow read: if mudurMu(kurumId);
+        allow write: if false;
+      }
+
+      // Duyuru teslim kutuları: "hepsi" ya da bir grubun kimliği. Öğrenciler yalnızca okur.
+      match /duyuruKutusu/{kutuId}/duyurular/{duyuruId} {
+        allow read: if uyeKutusuMu(kurumId, kutuId);
+        allow write: if false;
       }
 
       match /uyeler/{uid} {

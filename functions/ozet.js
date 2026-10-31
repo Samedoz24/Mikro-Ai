@@ -75,6 +75,11 @@ const gorunenIsim = (kullanici) =>
   kullanici?.adSoyad || String(kullanici?.eposta || "").split("@")[0] || "Öğrenci";
 
 // Öğrenci bir kurumun üyesiyse özetini yeniden hesaplar. Üye değilse hiçbir şey yazmaz.
+// Öğrencinin özetinin grup kopyasının yolu. Öğretmenler yalnızca yetkili oldukları grupların bu
+// yoluna erişir (güvenlik kuralları yol bazlıdır); müdür kurum geneli ozet koleksiyonunu okur.
+const grupOzetRef = (kurumId, grupId, uid) =>
+  db().doc(`kurumlar/${kurumId}/gruplar/${grupId}/ozet/${uid}`);
+
 const ozetYenile = async (uid) => {
   const userSnap = await db().doc(`kullanicilar/${uid}`).get();
   const kurumId = userSnap.exists ? userSnap.data().kurumId : null;
@@ -89,17 +94,27 @@ const ozetYenile = async (uid) => {
   const ozetRef = db().doc(`kurumlar/${kurumId}/ozet/${uid}`);
   // Üyelik kontrolü ve yazma aynı işlemde: aynı anda ayrılan öğrencinin özeti geri oluşmaz
   return db().runTransaction(async (tx) => {
-    const uyeSnap = await tx.get(uyeRef);
+    const [uyeSnap, ozetSnap] = await Promise.all([tx.get(uyeRef), tx.get(ozetRef)]);
     if (!uyeSnap.exists) return false;
-    tx.set(ozetRef, {
+
+    const grupId = uyeSnap.data().grupId || null;
+    const oncekiGrupId = ozetSnap.exists ? ozetSnap.data().grupId || null : null;
+    const veri = {
       ...alanlar,
       isim: gorunenIsim(userSnap.data()),
       // Yeni katılan öğrenci "pasif" sayılmasın diye katılma zamanı da özette durur
       katilma: uyeSnap.data().katilma ?? null,
+      grupId,
       guncelleme: FieldValue.serverTimestamp(),
-    });
+    };
+    tx.set(ozetRef, veri);
+    // Öğrenci bir gruptaysa özetin aynısı grubun yoluna da yazılır; grup değiştiyse eskisi silinir
+    if (oncekiGrupId && oncekiGrupId !== grupId) {
+      tx.delete(grupOzetRef(kurumId, oncekiGrupId, uid));
+    }
+    if (grupId) tx.set(grupOzetRef(kurumId, grupId, uid), veri);
     return true;
   });
 };
 
-module.exports = { ozetHesapla, ozetYenile, gunAnahtari, konuBul };
+module.exports = { ozetHesapla, ozetYenile, gunAnahtari, konuBul, grupOzetRef };

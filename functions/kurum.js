@@ -162,10 +162,12 @@ const uyelikSonlandir = async (uid, kurumId) => {
     const userRef = db().doc(`kullanicilar/${uid}`);
     const kurumRef = db().doc(`kurumlar/${kurumId}`);
     const uyeRef = kurumRef.collection("uyeler").doc(uid);
-    const [userSnap, kurumSnap, uyeSnap] = await Promise.all([
+    const ozetRef = kurumRef.collection("ozet").doc(uid);
+    const [userSnap, kurumSnap, uyeSnap, ozetSnap] = await Promise.all([
       tx.get(userRef),
       tx.get(kurumRef),
       tx.get(uyeRef),
+      tx.get(ozetRef),
     ]);
 
     const kullanici = userSnap.exists ? userSnap.data() : null;
@@ -180,7 +182,10 @@ const uyelikSonlandir = async (uid, kurumId) => {
         tx.update(kurumRef, { uyeSayisi: FieldValue.increment(-1) });
       }
     }
-    tx.delete(kurumRef.collection("ozet").doc(uid));
+    tx.delete(ozetRef);
+    // Öğrenci bir gruptaysa özetinin grup kopyası da silinir (üyelik ya da özet kaydı grubu bilir)
+    const grupId = (uyeSnap.exists && uyeSnap.data().grupId) || (ozetSnap.exists && ozetSnap.data().grupId);
+    if (grupId) tx.delete(kurumRef.collection("gruplar").doc(grupId).collection("ozet").doc(uid));
 
     if (userSnap.exists) {
       const guncelleme = {};
@@ -271,22 +276,34 @@ const yoneticiOl = async (uid, token) => {
     throw new HttpsError("failed-precondition", "hesap-kullaniliyor");
   }
 
+  // Öğretmenin kapsamı (tüm öğrenciler ya da seçili gruplar) ekip kaydından gelir; davet edilirken
+  // ya da sonradan müdür tarafından belirlenmiş olabilir. Silinmiş gruplar kapsamdan düşer.
+  const ekipKaydiRef = kurumRef.collection("yoneticiler").doc(eposta);
+  const ekipKaydi = (await ekipKaydiRef.get()).data() || {};
+  const kapsam = rol === "ogretmen" ? (ekipKaydi.kapsam === "gruplar" ? "gruplar" : "tum") : null;
+  const gruplar = kapsam === "gruplar" ? await gecerliGruplar(kurumRef, ekipKaydi.gruplar) : [];
+
   const batch = db().batch();
   batch.set(userRef, { eposta, rol: "yonetici", kurumId }, { merge: true });
-  batch.set(kurumRef.collection("yoneticiler").doc(eposta), {
-    uid,
-    eposta,
-    rol,
-    durum: "aktif",
-    katilma: FieldValue.serverTimestamp(),
-  });
+  batch.set(
+    ekipKaydiRef,
+    {
+      uid,
+      eposta,
+      rol,
+      durum: "aktif",
+      katilma: FieldValue.serverTimestamp(),
+      ...kapsamAlanlari(kapsam, gruplar),
+    },
+    { merge: true }
+  );
   batch.set(davetRef, { uid, kullanildi: FieldValue.serverTimestamp() }, { merge: true });
   await batch.commit();
 
   const auth = getAuth();
   const kayit = await auth.getUser(uid);
   await auth.setCustomUserClaims(uid, {
-    ...(kayit.customClaims || {}),
+    ...kapsamClaimleri(kayit.customClaims, kapsam, gruplar),
     kurumId,
     kurumRol: rol,
   });
@@ -337,6 +354,253 @@ const kodYenile = async (uid, token, uretici = kurumKoduUret) => {
 };
 
 // ---------------------------------------------------------------------------
+// Gruplar (sınıf/şube) ve öğretmen kapsamı
+// ---------------------------------------------------------------------------
+// Müdür grup oluşturur, öğrencileri gruplara atar ve her öğretmenin kapsamını belirler:
+//   kapsam "tum"     -> öğretmen kurumun tüm öğrencilerinin istatistiklerini görür
+//   kapsam "gruplar" -> yalnızca atandığı grupların öğrencilerini görür (grup yoksa hiçbirini)
+// Kapsam kimlik belirtecindeki claim'lerle (kapsam, gruplar) güvenlik kurallarına taşınır;
+// kurallar yol bazlıdır: öğretmen yalnızca kendi gruplarının ozet yoluna erişebilir.
+const EN_FAZLA_GRUP = 30;
+const OGRETMEN_EN_FAZLA_GRUP = 10;
+const GRUP_ADI_SINIRI = 30;
+const GRUP_KIMLIGI = /^[A-HJ-NP-Z2-9]{8}$/;
+
+const gecerliGrupKimligi = (id) => typeof id === "string" && GRUP_KIMLIGI.test(id);
+const grupAdiTemizle = (ad) => (typeof ad === "string" ? ad.replace(/\s+/g, " ").trim() : "");
+const grupAdiGecerli = (ad) =>
+  ad.length >= 1 && ad.length <= GRUP_ADI_SINIRI && !/[\u0000-\u001f\u007f<>]/.test(ad);
+const grupAdiAnahtari = (ad) => ad.toLocaleLowerCase("tr-TR");
+
+const grupKimligiUret = () => {
+  let id = "";
+  for (let i = 0; i < 8; i++) id += KOD_KARAKTERLERI.charAt(crypto.randomInt(KOD_KARAKTERLERI.length));
+  return id;
+};
+
+// Ekip kaydında saklanan kapsam alanları (kapsam yoksa ikisi de silinir)
+const kapsamAlanlari = (kapsam, gruplar) => {
+  if (kapsam === "gruplar") return { kapsam, gruplar };
+  if (kapsam === "tum") return { kapsam, gruplar: FieldValue.delete() };
+  return { kapsam: FieldValue.delete(), gruplar: FieldValue.delete() };
+};
+
+// Kimlik belirtecine yazılacak claim'ler; kapsamla ilgisiz claim'ler korunur
+const kapsamClaimleri = (claims, kapsam, gruplar) => {
+  const yeni = { ...(claims || {}) };
+  delete yeni.kapsam;
+  delete yeni.gruplar;
+  if (kapsam) yeni.kapsam = kapsam;
+  if (kapsam === "gruplar") yeni.gruplar = gruplar;
+  return yeni;
+};
+
+// Verilen grup kimliklerinden biçimi doğru, kurumda var olan ve silinmekte olmayanlar
+const gecerliGruplar = async (kurumRef, idler) => {
+  if (!Array.isArray(idler)) return [];
+  const adaylar = [...new Set(idler.filter(gecerliGrupKimligi))];
+  if (adaylar.length === 0) return [];
+  const snaplar = await Promise.all(
+    adaylar.map((id) => kurumRef.collection("gruplar").doc(id).get())
+  );
+  return adaylar.filter((id, i) => snaplar[i].exists && snaplar[i].data().silinecek !== true);
+};
+
+const koleksiyonuBosalt = async (ref) => {
+  for (;;) {
+    const snap = await ref.limit(TOPLU_BOYUT).get();
+    if (snap.empty) return;
+    const batch = db().batch();
+    snap.docs.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+  }
+};
+
+// Müdür yeni bir grup oluşturur. Girdi: { ad }
+const grupOlustur = async (uid, token, veri) => {
+  const ad = grupAdiTemizle(veri?.ad);
+  if (!grupAdiGecerli(ad)) throw new HttpsError("invalid-argument", "grup-adi-gecersiz");
+  const { kurumRef } = await mudurDogrula(uid, token);
+  const anahtar = grupAdiAnahtari(ad);
+
+  for (let deneme = 0; deneme < 5; deneme++) {
+    const grupRef = kurumRef.collection("gruplar").doc(grupKimligiUret());
+    const sonuc = await db().runTransaction(async (tx) => {
+      const [gruplarSnap, grupSnap] = await Promise.all([
+        tx.get(kurumRef.collection("gruplar")),
+        tx.get(grupRef),
+      ]);
+      if (grupSnap.exists) return null; // kimlik çakışması: yenisi denenir
+      const aktifler = gruplarSnap.docs.filter((d) => d.data().silinecek !== true);
+      if (aktifler.length >= EN_FAZLA_GRUP) throw new HttpsError("resource-exhausted", "grup-siniri");
+      if (aktifler.some((d) => d.data().adAnahtar === anahtar)) {
+        throw new HttpsError("already-exists", "grup-adi-var");
+      }
+      tx.set(grupRef, { ad, adAnahtar: anahtar, olusturma: FieldValue.serverTimestamp() });
+      return { grupId: grupRef.id, ad };
+    });
+    if (sonuc) return sonuc;
+  }
+  throw new HttpsError("internal", "grup-uretilemedi");
+};
+
+// Müdür bir grubun adını değiştirir. Girdi: { grupId, ad }
+const grupAdiDegistir = async (uid, token, veri) => {
+  if (!gecerliGrupKimligi(veri?.grupId)) throw new HttpsError("invalid-argument", "grup-gecersiz");
+  const ad = grupAdiTemizle(veri?.ad);
+  if (!grupAdiGecerli(ad)) throw new HttpsError("invalid-argument", "grup-adi-gecersiz");
+  const { kurumRef } = await mudurDogrula(uid, token);
+  const anahtar = grupAdiAnahtari(ad);
+
+  return db().runTransaction(async (tx) => {
+    const gruplarSnap = await tx.get(kurumRef.collection("gruplar"));
+    const grup = gruplarSnap.docs.find((d) => d.id === veri.grupId);
+    if (!grup || grup.data().silinecek === true) throw new HttpsError("not-found", "grup-yok");
+    const baskasi = gruplarSnap.docs.some(
+      (d) => d.id !== veri.grupId && d.data().silinecek !== true && d.data().adAnahtar === anahtar
+    );
+    if (baskasi) throw new HttpsError("already-exists", "grup-adi-var");
+    tx.update(grup.ref, { ad, adAnahtar: anahtar });
+    return { grupId: veri.grupId, ad };
+  });
+};
+
+// Grubun üyelerini gruptan çıkarır ve grubun özet kopyalarını siler
+const grubuBosalt = async (kurumRef, grupId) => {
+  const grupRef = kurumRef.collection("gruplar").doc(grupId);
+  for (;;) {
+    const uyeler = await kurumRef.collection("uyeler").where("grupId", "==", grupId).limit(TOPLU_BOYUT).get();
+    if (uyeler.empty) break;
+    for (const uye of uyeler.docs) {
+      const ozetRef = kurumRef.collection("ozet").doc(uye.id);
+      const ozetSnap = await ozetRef.get();
+      const batch = db().batch();
+      batch.update(uye.ref, { grupId: FieldValue.delete() });
+      if (ozetSnap.exists) batch.update(ozetRef, { grupId: null });
+      batch.delete(grupRef.collection("ozet").doc(uye.id));
+      await batch.commit();
+    }
+  }
+  await koleksiyonuBosalt(grupRef.collection("ozet"));
+};
+
+// Müdür bir grubu siler: öğrenciler gruptan çıkar (kurumda kalır), öğretmenlerin kapsamından düşer.
+// Girdi: { grupId }. Yarıda kalırsa aynı çağrı tekrarlanarak tamamlanır.
+const grupSil = async (uid, token, veri) => {
+  const grupId = veri?.grupId;
+  if (!gecerliGrupKimligi(grupId)) throw new HttpsError("invalid-argument", "grup-gecersiz");
+  const { kurumRef } = await mudurDogrula(uid, token);
+  const grupRef = kurumRef.collection("gruplar").doc(grupId);
+  if (!(await grupRef.get()).exists) return { silindi: false };
+
+  // Önce grup silinecek diye işaretlenir: yeni atamalar ve kapsamlar bu gruba artık yapılamaz
+  await grupRef.update({ silinecek: true });
+  await grubuBosalt(kurumRef, grupId);
+
+  // Kapsamında bu grup olan öğretmenlerden grup düşer (kalan grup yoksa hiçbir şey göremezler)
+  const ogretmenler = await kurumRef.collection("yoneticiler").where("kapsam", "==", "gruplar").get();
+  for (const ogretmen of ogretmenler.docs) {
+    const kayit = ogretmen.data();
+    if (!Array.isArray(kayit.gruplar) || !kayit.gruplar.includes(grupId)) continue;
+    const kalan = kayit.gruplar.filter((g) => g !== grupId);
+    await ogretmen.ref.update({ gruplar: kalan });
+    if (kayit.uid) {
+      const auth = getAuth();
+      await auth
+        .getUser(kayit.uid)
+        .then((k) =>
+          auth.setCustomUserClaims(kayit.uid, kapsamClaimleri(k.customClaims, "gruplar", kalan))
+        )
+        .catch((hata) => {
+          if (hata?.code !== "auth/user-not-found") throw hata;
+        });
+    }
+  }
+
+  // Aradaki sürede gruba atanan olursa onlar da temizlenir; sonra grup silinir
+  await grubuBosalt(kurumRef, grupId);
+  await grupRef.delete();
+  return { silindi: true };
+};
+
+// Müdür bir öğrenciyi gruba atar ya da gruptan çıkarır. Girdi: { uid, grupId | null }
+const ogrenciGrupAta = async (uid, token, veri) => {
+  const hedef = typeof veri?.uid === "string" ? veri.uid.trim() : "";
+  if (!hedef || hedef.length > 128 || hedef.includes("/")) {
+    throw new HttpsError("invalid-argument", "uid-gecersiz");
+  }
+  const grupId = veri?.grupId ?? null;
+  if (grupId !== null && !gecerliGrupKimligi(grupId)) {
+    throw new HttpsError("invalid-argument", "grup-gecersiz");
+  }
+  const { kurumRef } = await mudurDogrula(uid, token);
+
+  const uyeRef = kurumRef.collection("uyeler").doc(hedef);
+  const ozetRef = kurumRef.collection("ozet").doc(hedef);
+  return db().runTransaction(async (tx) => {
+    const [uyeSnap, ozetSnap, grupSnap] = await Promise.all([
+      tx.get(uyeRef),
+      tx.get(ozetRef),
+      grupId ? tx.get(kurumRef.collection("gruplar").doc(grupId)) : Promise.resolve(null),
+    ]);
+    if (!uyeSnap.exists) throw new HttpsError("not-found", "ogrenci-yok");
+    if (grupId && (!grupSnap.exists || grupSnap.data().silinecek === true)) {
+      throw new HttpsError("not-found", "grup-yok");
+    }
+
+    const onceki = uyeSnap.data().grupId || null;
+    if (onceki === grupId) return { grupId, degisti: false };
+
+    tx.update(uyeRef, { grupId: grupId ?? FieldValue.delete() });
+    if (ozetSnap.exists) {
+      tx.update(ozetRef, { grupId });
+      if (onceki) tx.delete(kurumRef.collection("gruplar").doc(onceki).collection("ozet").doc(hedef));
+      if (grupId) {
+        tx.set(kurumRef.collection("gruplar").doc(grupId).collection("ozet").doc(hedef), {
+          ...ozetSnap.data(),
+          grupId,
+        });
+      }
+    }
+    return { grupId, degisti: true };
+  });
+};
+
+// Müdür bir öğretmenin kapsamını belirler. Girdi: { eposta, kapsam: "tum" | "gruplar", gruplar: [...] }
+const ogretmenKapsamAta = async (uid, token, veri) => {
+  const hedef = hedefEposta(veri);
+  const kapsam = veri?.kapsam;
+  if (kapsam !== "tum" && kapsam !== "gruplar") throw new HttpsError("invalid-argument", "kapsam-gecersiz");
+
+  let istenen = [];
+  if (kapsam === "gruplar") {
+    if (!Array.isArray(veri?.gruplar) || !veri.gruplar.every(gecerliGrupKimligi)) {
+      throw new HttpsError("invalid-argument", "grup-gecersiz");
+    }
+    istenen = [...new Set(veri.gruplar)];
+    if (istenen.length > OGRETMEN_EN_FAZLA_GRUP) throw new HttpsError("invalid-argument", "cok-grup");
+  }
+
+  const { kurumRef } = await mudurDogrula(uid, token);
+  const kayitRef = kurumRef.collection("yoneticiler").doc(hedef);
+  const kayitSnap = await kayitRef.get();
+  if (!kayitSnap.exists) throw new HttpsError("not-found", "ogretmen-yok");
+  if (kayitSnap.data().rol !== "ogretmen") throw new HttpsError("failed-precondition", "kapsam-rol");
+
+  const gecerli = await gecerliGruplar(kurumRef, istenen);
+  if (gecerli.length !== istenen.length) throw new HttpsError("not-found", "grup-yok");
+
+  await kayitRef.update(kapsamAlanlari(kapsam, gecerli));
+  const hesapUid = kayitSnap.data().uid;
+  if (hesapUid) {
+    const auth = getAuth();
+    const kayit = await auth.getUser(hesapUid);
+    await auth.setCustomUserClaims(hesapUid, kapsamClaimleri(kayit.customClaims, kapsam, gecerli));
+  }
+  return { kapsam, gruplar: gecerli };
+};
+
+// ---------------------------------------------------------------------------
 // Lisans bitişi: kurumu kapatır, üyeleri serbest bırakır, yönetici yetkilerini alır
 // ---------------------------------------------------------------------------
 const yoneticiYetkisiniKaldir = async (uid) => {
@@ -345,6 +609,8 @@ const yoneticiYetkisiniKaldir = async (uid) => {
   const claims = { ...(kayit.customClaims || {}) };
   delete claims.kurumId;
   delete claims.kurumRol;
+  delete claims.kapsam;
+  delete claims.gruplar;
   await auth.setCustomUserClaims(uid, Object.keys(claims).length ? claims : null);
 };
 
@@ -434,6 +700,7 @@ const ogretmenDavetEt = async (uid, token, veri) => {
       eposta: hedef,
       rol: "ogretmen",
       durum: "davetli",
+      kapsam: "tum",
       davetZamani: FieldValue.serverTimestamp(),
     });
     return { eposta: hedef, durum: "davetli", zatenVar: false };
@@ -502,6 +769,10 @@ const kurumuKapat = async (kurumId) => {
     await batch.commit();
   }
 
+  // Üyeler çıkarıldı; grupların özet kopyaları da silinir (veri azaltma)
+  const kapananGruplar = await kurumRef.collection("gruplar").get();
+  for (const grup of kapananGruplar.docs) await koleksiyonuBosalt(grup.ref.collection("ozet"));
+
   const yoneticiler = await kurumRef.collection("yoneticiler").get();
   for (const yonetici of yoneticiler.docs) {
     const uid = yonetici.data().uid;
@@ -541,6 +812,11 @@ module.exports = {
   ogrenciCikar,
   kodYenile,
   kurumKoduUret,
+  grupOlustur,
+  grupAdiDegistir,
+  grupSil,
+  ogrenciGrupAta,
+  ogretmenKapsamAta,
   kurumuKapat,
   lisansKontrol,
   girisliUid,

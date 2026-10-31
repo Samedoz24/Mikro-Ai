@@ -44,6 +44,27 @@ exports.kodYenile = onCall(ORTAK, (request) =>
   kurum.kodYenile(kurum.girisliUid(request), request.auth.token)
 );
 
+// Müdür gruplarını (sınıf/şube) ve öğretmen kapsamlarını yönetir
+exports.grupOlustur = onCall(ORTAK, (request) =>
+  kurum.grupOlustur(kurum.girisliUid(request), request.auth.token, request.data)
+);
+
+exports.grupAdiDegistir = onCall(ORTAK, (request) =>
+  kurum.grupAdiDegistir(kurum.girisliUid(request), request.auth.token, request.data)
+);
+
+exports.grupSil = onCall(ORTAK, (request) =>
+  kurum.grupSil(kurum.girisliUid(request), request.auth.token, request.data)
+);
+
+exports.ogrenciGrupAta = onCall(ORTAK, (request) =>
+  kurum.ogrenciGrupAta(kurum.girisliUid(request), request.auth.token, request.data)
+);
+
+exports.ogretmenKapsamAta = onCall(ORTAK, (request) =>
+  kurum.ogretmenKapsamAta(kurum.girisliUid(request), request.auth.token, request.data)
+);
+
 // Her gece süresi dolan lisansları kapatır
 exports.lisansKontrol = onSchedule(
   { region: "europe-west1", schedule: "every day 03:00", timeZone: "Europe/Istanbul", timeoutSeconds: 540 },

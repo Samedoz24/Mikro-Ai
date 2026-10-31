@@ -12,13 +12,15 @@ rules_version = '2';
 //   baglantiKodlari/{KOD}     öğrenci bağlantı kodu -> uid. Kodu bilen tek tek okuyabilir, listelenemez.
 //   cihazHaklari/{cihazId}    günlük soru kotası (cihaz bazlı).
 //   kurumlar/{kurumId}        dershane. Yalnızca sunucu (Admin SDK / Cloud Functions) yazar.
-//     /ozet/{uid}             öğrenci başına istatistik özeti; müdür ve öğretmen okur.
+//     /ozet/{uid}             öğrenci başına istatistik özeti; müdür ve "tum" kapsamlı öğretmen okur.
+//     /gruplar/{grupId}       sınıf/şube; /ozet/{uid} altındaki grup kopyasını yetkili öğretmen okur.
 //     /uyeler/{uid}           öğrenci üyeliği ve onay kaydı; müdür ve öğrencinin kendisi okur.
 //     /yoneticiler/{eposta}   müdür/öğretmen davetleri; yalnızca müdür okur.
 //   diğer her şey (örn. questions)  istemciye kapalı.
 //
 // Kurum yetkisi sunucunun yazdığı kimlik claim'lerinden gelir (request.auth.token):
 //   kurumId  -> yöneticinin kurumu, kurumRol -> 'mudur' ya da 'ogretmen'.
+//   kapsam   -> öğretmenin kapsamı: 'tum' (varsayılan) ya da 'gruplar'; gruplar -> erişebildiği grup kimlikleri.
 // İstemci kurumId, kurumRol, premiumMu alanlarını ve 'yonetici' rolünü yazamaz.
 
 service cloud.firestore {
@@ -56,6 +58,23 @@ service cloud.firestore {
       return girisli()
         && request.auth.token.get('kurumRol', '') in ['mudur', 'ogretmen']
         && request.auth.token.get('kurumId', '') == kurumId;
+    }
+
+    // Öğretmenin kapsamı sunucunun yazdığı claim'den gelir: "tum" (claim yoksa da bu sayılır, bu
+    // özellikten önce eklenmiş öğretmenler çalışmaya devam eder) ya da "gruplar".
+    // Müdür her zaman tüm kurumu görür. İstemci claim yazamaz.
+    function tumKapsamMi(kurumId) {
+      return mudurMu(kurumId)
+        || (kurumYoneticisiMi(kurumId)
+            && request.auth.token.get('kapsam', 'tum') == 'tum');
+    }
+
+    // Bir grubun öğrenci özetlerine erişim: tüm kapsam ya da claim'deki gruplardan biri
+    function grupKapsamiMi(kurumId, grupId) {
+      return tumKapsamMi(kurumId)
+        || (kurumYoneticisiMi(kurumId)
+            && request.auth.token.get('kapsam', 'tum') == 'gruplar'
+            && grupId in request.auth.token.get('gruplar', []));
     }
 
     // Öğrencinin sunucu tarafından atanmış kurumu bu müdürün kurumuysa true
@@ -123,9 +142,22 @@ service cloud.firestore {
       allow get: if kurumYoneticisiMi(kurumId);
       allow list: if false;
 
+      // Kurum geneli öğrenci özetleri: müdür ve "tum" kapsamlı öğretmenler
       match /ozet/{uid} {
+        allow read: if tumKapsamMi(kurumId);
+        allow write: if false;
+      }
+
+      // Gruplar (sınıf/şube): adları tüm yöneticiler okur. Öğrenci özetlerinin grup kopyaları yalnızca
+      // yetkili öğretmene ve müdüre açıktır (yol bazlı kural: sorgu içeriğine bağlı değildir).
+      match /gruplar/{grupId} {
         allow read: if kurumYoneticisiMi(kurumId);
         allow write: if false;
+
+        match /ozet/{uid} {
+          allow read: if grupKapsamiMi(kurumId, grupId);
+          allow write: if false;
+        }
       }
 
       match /uyeler/{uid} {

@@ -20,6 +20,7 @@ import useYoneticiYetkisi, {
 import useKurumOzetleri from "../utils/useKurumOzetleri";
 import EkipKarti from "./EkipKarti";
 import GruplarKarti from "./GruplarKarti";
+import DuyurularKarti from "./DuyurularKarti";
 import { kodYenile, kurumHataMesaji } from "../utils/kurumIstemci";
 import {
   kurumGenelBakis,
@@ -334,6 +335,14 @@ export default function YoneticiAnaEkran() {
           )}
 
           {mudurMu && <GruplarKarti kurumId={yetki.kurumId} tema={tema} />}
+
+          {mudurMu && (
+            <DuyurularKarti
+              kurumId={yetki.kurumId}
+              uyeSayisi={uyeSayisi}
+              tema={tema}
+            />
+          )}
 
           <View style={kutuStili}>
             <Text style={[styles.kutuBaslik, { color: tema.metin }]}>

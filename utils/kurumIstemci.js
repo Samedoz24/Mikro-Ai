@@ -45,7 +45,7 @@ const HATA_MESAJLARI = {
   "kendini-kaldiramaz": "Kendini ekipten kaldıramazsın.",
   "kaldirilamaz-rol": "Müdürler uygulamadan kaldırılamaz.",
   "uid-gecersiz": "Öğrenci bilgisi geçersiz. Listeyi yenileyip tekrar dene.",
-  "cok-sik": "Kod az önce yenilendi. Bir dakika sonra tekrar dene.",
+  "cok-sik": "Çok sık işlem yaptın. Biraz bekleyip tekrar dene.",
   "kod-uretilemedi": "Yeni kod üretilemedi. Lütfen tekrar dene.",
   "grup-adi-gecersiz":
     "Grup adı 1-30 karakter olmalı ve < > gibi özel karakterler içermemeli.",
@@ -59,6 +59,11 @@ const HATA_MESAJLARI = {
   "cok-grup": "Bir öğretmene en fazla 10 grup atanabilir.",
   "ogretmen-yok": "Bu öğretmen artık ekipte değil. Listeyi yenile.",
   "kapsam-rol": "Müdürün kapsamı değiştirilemez.",
+  "baslik-gecersiz":
+    "Başlık 1-60 karakter olmalı ve satır sonu ya da özel karakter içermemeli.",
+  "metin-gecersiz":
+    "Metin 1-500 karakter olmalı ve geçersiz karakter içermemeli.",
+  "duyuru-gecersiz": "Duyuru bilgisi geçersiz. Listeyi yenileyip tekrar dene.",
 };
 
 // Sunucu HttpsError mesajını (örn. "kod-bulunamadi") okunur Türkçe metne çevirir
@@ -97,6 +102,24 @@ export const ogretmenDavetEt = async (eposta) => {
 // Müdür öğrenci kayıt kodunu yeniler ({ kurumKodu } döner); eski kod anında geçersiz olur
 export const kodYenile = async () => {
   const sonuc = await httpsCallable(functions, "kodYenile")({});
+  return sonuc.data;
+};
+
+// Müdür duyuru gönderir (grupId null ise tüm dershane) ve siler
+export const duyuruGonder = async (baslik, metin, grupId = null) => {
+  const sonuc = await httpsCallable(
+    functions,
+    "duyuruGonder"
+  )({
+    baslik,
+    metin,
+    grupId,
+  });
+  return sonuc.data;
+};
+
+export const duyuruSil = async (duyuruId) => {
+  const sonuc = await httpsCallable(functions, "duyuruSil")({ duyuruId });
   return sonuc.data;
 };
 

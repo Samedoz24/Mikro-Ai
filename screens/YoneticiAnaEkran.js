@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import useYoneticiYetkisi, {
 } from "../utils/useYoneticiYetkisi";
 import useKurumOzetleri from "../utils/useKurumOzetleri";
 import EkipKarti from "./EkipKarti";
+import { kodYenile, kurumHataMesaji } from "../utils/kurumIstemci";
 import {
   kurumGenelBakis,
   milisaniye,
@@ -63,6 +64,44 @@ export default function YoneticiAnaEkran() {
     styles.kutu,
     { backgroundColor: tema.kutuArkaplan, borderColor: tema.kutuCerceve },
   ];
+
+  const [kodYenileniyor, setKodYenileniyor] = useState(false);
+  const canli = useRef(true);
+  useEffect(() => {
+    canli.current = true;
+    return () => {
+      canli.current = false;
+    };
+  }, []);
+
+  const kodYenilemeyiOnayla = () => {
+    Alert.alert(
+      "Kodu Yenile",
+      "Yeni bir kayıt kodu oluşturulacak. Eski kod hemen geçersiz olur ve artık kimse onunla katılamaz.\n\nDershaneye zaten bağlı olan öğrenciler etkilenmez. Daha önce paylaştığın katılım mesajlarını yeni kodla yeniden göndermen gerekir.",
+      [
+        { text: "Vazgeç", style: "cancel" },
+        { text: "Yenile", style: "destructive", onPress: kodYenileCalistir },
+      ]
+    );
+  };
+
+  const kodYenileCalistir = async () => {
+    setKodYenileniyor(true);
+    try {
+      const sonuc = await kodYenile();
+      if (canli.current) {
+        Alert.alert(
+          "Yeni Kod Hazır",
+          `Yeni öğrenci kayıt kodu: ${sonuc.kurumKodu}`
+        );
+      }
+    } catch (hata) {
+      console.log("Kod yenileme hatası:", hata?.code, hata?.message);
+      if (canli.current) Alert.alert("Yenilenemedi", kurumHataMesaji(hata));
+    } finally {
+      if (canli.current) setKodYenileniyor(false);
+    }
+  };
 
   const paylas = async (mesaj) => {
     try {
@@ -263,6 +302,21 @@ export default function YoneticiAnaEkran() {
               >
                 <Text style={styles.butonYazi}>Katılım Mesajını Paylaş</Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.ikincilButon, { borderColor: tema.kutuCerceve }]}
+                onPress={kodYenilemeyiOnayla}
+                disabled={kodYenileniyor}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+              >
+                {kodYenileniyor ? (
+                  <ActivityIndicator color={YONETICI_RENGI} />
+                ) : (
+                  <Text style={[styles.ikincilYazi, { color: tema.metin }]}>
+                    Kodu Yenile
+                  </Text>
+                )}
+              </TouchableOpacity>
             </View>
           )}
 
@@ -359,4 +413,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   butonYazi: { color: "#fff", fontSize: 15, fontWeight: "bold" },
+  ikincilButon: {
+    marginTop: 10,
+    paddingVertical: 13,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 46,
+  },
+  ikincilYazi: { fontSize: 14, fontWeight: "600" },
 });

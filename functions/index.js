@@ -39,6 +39,11 @@ exports.ogrenciCikar = onCall(ORTAK, (request) =>
   kurum.ogrenciCikar(kurum.girisliUid(request), request.auth.token, request.data)
 );
 
+// Müdür kurumun öğrenci kayıt kodunu yeniler; eski kod anında geçersiz olur
+exports.kodYenile = onCall(ORTAK, (request) =>
+  kurum.kodYenile(kurum.girisliUid(request), request.auth.token)
+);
+
 // Her gece süresi dolan lisansları kapatır
 exports.lisansKontrol = onSchedule(
   { region: "europe-west1", schedule: "every day 03:00", timeZone: "Europe/Istanbul", timeoutSeconds: 540 },

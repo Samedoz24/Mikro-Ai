@@ -9,6 +9,7 @@
 //   yoneticiDavetleri/{eposta}        { kurumId, rol } davet listesi (istemciye tamamen kapalı)
 //   kurumDenemeleri/{uid}             kod deneme sayacı (istemciye tamamen kapalı)
 
+const crypto = require("node:crypto");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
 const { getAuth } = require("firebase-admin/auth");
 const { HttpsError } = require("firebase-functions/v2/https");
@@ -294,6 +295,48 @@ const yoneticiOl = async (uid, token) => {
 };
 
 // ---------------------------------------------------------------------------
+// Müdür: kayıt kodunu yenileme
+// ---------------------------------------------------------------------------
+// Karışabilecek karakterler (0/O, 1/I) yoktur; öğrenci kodu elle yazar
+const KOD_KARAKTERLERI = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const KOD_UZUNLUGU = 8;
+const KOD_YENILEME_BEKLEME_MS = 60 * 1000;
+const KOD_URETME_DENEMESI = 10;
+
+const kurumKoduUret = () => {
+  let kod = "";
+  for (let i = 0; i < KOD_UZUNLUGU; i++) {
+    kod += KOD_KARAKTERLERI.charAt(crypto.randomInt(KOD_KARAKTERLERI.length));
+  }
+  return kod;
+};
+
+// Müdür kurumun kayıt kodunu yeniler. Eski kod anında geçersiz olur; zaten bağlı öğrenciler
+// etkilenmez. Yeni kod başka bir kurumun kodu olamaz. uretici yalnızca testlerde değiştirilir.
+const kodYenile = async (uid, token, uretici = kurumKoduUret) => {
+  const { kurumRef } = await mudurDogrula(uid, token);
+
+  for (let deneme = 0; deneme < KOD_URETME_DENEMESI; deneme++) {
+    const kod = uretici();
+    const sonuc = await db().runTransaction(async (tx) => {
+      const [kurumSnap, ayniKodSnap] = await Promise.all([
+        tx.get(kurumRef),
+        tx.get(db().collection("kurumlar").where("kurumKodu", "==", kod).limit(1)),
+      ]);
+      const onceki = milisaniye(kurumSnap.data()?.kodYenilenme);
+      if (onceki !== null && Date.now() - onceki < KOD_YENILEME_BEKLEME_MS) {
+        throw new HttpsError("resource-exhausted", "cok-sik");
+      }
+      if (!ayniKodSnap.empty) return null; // çakışma: yeni kod denenir
+      tx.update(kurumRef, { kurumKodu: kod, kodYenilenme: FieldValue.serverTimestamp() });
+      return kod;
+    });
+    if (sonuc) return { kurumKodu: sonuc };
+  }
+  throw new HttpsError("internal", "kod-uretilemedi");
+};
+
+// ---------------------------------------------------------------------------
 // Lisans bitişi: kurumu kapatır, üyeleri serbest bırakır, yönetici yetkilerini alır
 // ---------------------------------------------------------------------------
 const yoneticiYetkisiniKaldir = async (uid) => {
@@ -496,6 +539,8 @@ module.exports = {
   ogretmenDavetEt,
   yoneticiKaldir,
   ogrenciCikar,
+  kodYenile,
+  kurumKoduUret,
   kurumuKapat,
   lisansKontrol,
   girisliUid,

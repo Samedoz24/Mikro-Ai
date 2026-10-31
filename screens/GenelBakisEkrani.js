@@ -16,6 +16,7 @@ import useYoneticiYetkisi, {
 import useKurumOzetleri from "../utils/useKurumOzetleri";
 import useKurum from "../utils/useKurum";
 import useGruplar from "../utils/useGruplar";
+import { kapsamMetni } from "../utils/kurumKapsam";
 import { kurumGenelBakis, ogrenciSatiri } from "../utils/kurumIstatistik";
 import GunlukGrafik from "./GunlukGrafik";
 import DersCubuklari from "./DersCubuklari";
@@ -43,7 +44,11 @@ export default function GenelBakisEkrani() {
   const { tema } = useTheme();
   const insets = useSafeAreaInsets();
   const { yetki, yenile } = useYoneticiYetkisi();
-  const { ozetler, hata } = useKurumOzetleri(yetki?.kurumId);
+  const { ozetler, hata } = useKurumOzetleri(
+    yetki?.kurumId,
+    yetki?.kapsam,
+    yetki?.gruplar
+  );
   const kurum = useKurum(yetki?.kurumId);
   const gruplar = useGruplar(yetki?.kurumId);
 
@@ -65,6 +70,9 @@ export default function GenelBakisEkrani() {
   );
   const secili = satirlar.find((s) => s.id === seciliId) || null;
   const mudurMu = yetki?.kurumRol === "mudur";
+  // Kapsamı seçili gruplarla sınırlı öğretmen: hangi grupları gördüğü ekranda yazar
+  const kapsamliOgretmen = !mudurMu && yetki?.kapsam === "gruplar";
+  const kapsamBos = kapsamliOgretmen && (yetki.gruplar || []).length === 0;
 
   const kutuStili = [
     styles.kutu,
@@ -169,6 +177,11 @@ export default function GenelBakisEkrani() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={[styles.baslik, { color: tema.metin }]}>Genel Bakış</Text>
+        {kapsamliOgretmen && (
+          <Text style={[styles.kapsamYazi, { color: YONETICI_RENGI }]}>
+            Kapsamın: {kapsamMetni(yetki.kapsam, yetki.gruplar, gruplar)}
+          </Text>
+        )}
         <Text style={[styles.aciklama, { color: tema.ikincilMetin }]}>
           Aktif öğrenci: seçilen aralıkta en az bir soru soran öğrenci.
         </Text>
@@ -230,8 +243,11 @@ export default function GenelBakisEkrani() {
         {satirlar.length === 0 ? (
           <View style={kutuStili}>
             <Text style={[styles.bosYazi, { color: tema.ikincilMetin }]}>
-              Henüz dershaneye bağlı öğrenci yok. Öğrenciler dershane kodunu
-              Profil sayfasından girince istatistikler burada görünür.
+              {kapsamBos
+                ? "Sana henüz bir grup atanmadı. Müdürün seni bir gruba atayınca o gruptaki öğrencilerin istatistikleri burada görünür."
+                : kapsamliOgretmen
+                  ? "Gruplarında henüz öğrenci yok. Öğrenciler gruplarına atandığında istatistikleri burada görünür."
+                  : "Henüz dershaneye bağlı öğrenci yok. Öğrenciler dershane kodunu Profil sayfasından girince istatistikler burada görünür."}
             </Text>
           </View>
         ) : (
@@ -369,6 +385,7 @@ const styles = StyleSheet.create({
   },
   baslik: { fontSize: 26, fontWeight: "900" },
   aciklama: { fontSize: 12, marginTop: 4, marginBottom: 12 },
+  kapsamYazi: { fontSize: 13, fontWeight: "600", marginTop: 4 },
   aralikSatiri: { flexDirection: "row", marginBottom: 14 },
   aralik: {
     paddingVertical: 7,

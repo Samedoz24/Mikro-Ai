@@ -20,13 +20,17 @@ import { YONETICI_RENGI } from "../utils/useYoneticiYetkisi";
 import {
   kurumHataMesaji,
   ogretmenDavetEt,
+  ogretmenKapsamAta,
   yoneticiKaldir,
 } from "../utils/kurumIstemci";
 import { ekipSirala } from "../utils/kurumEkip";
+import useGruplar from "../utils/useGruplar";
+import { kapsamMetni } from "../utils/kurumKapsam";
 import { ogretmenDavetMetni } from "../utils/kurumRapor";
 
 const UYARI_RENGI = "#D97706";
 const ROL_ADLARI = { mudur: "Müdür", ogretmen: "Öğretmen" };
+const EN_FAZLA_OGRETMEN_GRUBU = 10;
 
 // Müdürün ekip yönetimi: öğretmen davet etme, davet/yetki kaldırma. Yetki kararları sunucudadır;
 // bu kart yalnızca listeyi okur ve fonksiyonları çağırır.
@@ -37,6 +41,11 @@ export default function EkipKarti({ kurumId, kurumAdi, tema }) {
   const [eposta, setEposta] = useState("");
   const [calisiyor, setCalisiyor] = useState(false);
   const [kaldirilan, setKaldirilan] = useState(null);
+  const gruplar = useGruplar(kurumId);
+  const grupListesi = gruplar || [];
+  // Öğretmenin kapsamını düzenleme penceresi: { eposta, kapsam: "tum" | "gruplar", secili: [grup kimlikleri] }
+  const [kapsamPenceresi, setKapsamPenceresi] = useState(null);
+  const [kapsamKaydediliyor, setKapsamKaydediliyor] = useState(false);
   const canli = useRef(true);
 
   const benimEposta = String(auth.currentUser?.email || "").toLowerCase();
@@ -107,6 +116,59 @@ export default function EkipKarti({ kurumId, kurumAdi, tema }) {
       if (!canli.current) return;
       setCalisiyor(false);
       Alert.alert("Davet Edilemedi", kurumHataMesaji(e));
+    }
+  };
+
+  const kapsamPenceresiniAc = (uye) =>
+    setKapsamPenceresi({
+      eposta: uye.eposta,
+      kapsam: uye.kapsam === "gruplar" ? "gruplar" : "tum",
+      // Silinmiş gruplar seçimden düşer
+      secili: (Array.isArray(uye.gruplar) ? uye.gruplar : []).filter((id) =>
+        grupListesi.some((g) => g.id === id)
+      ),
+    });
+
+  const kapsamPenceresiniKapat = () => {
+    if (kapsamKaydediliyor) return;
+    setKapsamPenceresi(null);
+  };
+
+  const grupIsaretle = (id) => {
+    if (!kapsamPenceresi) return;
+    const isaretli = kapsamPenceresi.secili.includes(id);
+    if (!isaretli && kapsamPenceresi.secili.length >= EN_FAZLA_OGRETMEN_GRUBU) {
+      Alert.alert(
+        "Sınıra Ulaşıldı",
+        `Bir öğretmene en fazla ${EN_FAZLA_OGRETMEN_GRUBU} grup atanabilir.`
+      );
+      return;
+    }
+    setKapsamPenceresi({
+      ...kapsamPenceresi,
+      secili: isaretli
+        ? kapsamPenceresi.secili.filter((g) => g !== id)
+        : [...kapsamPenceresi.secili, id],
+    });
+  };
+
+  const kapsamKaydet = async () => {
+    const { eposta: hedef, kapsam, secili } = kapsamPenceresi;
+    setKapsamKaydediliyor(true);
+    try {
+      await ogretmenKapsamAta(
+        hedef,
+        kapsam,
+        kapsam === "gruplar" ? secili : []
+      );
+      if (!canli.current) return;
+      setKapsamKaydediliyor(false);
+      setKapsamPenceresi(null);
+    } catch (e) {
+      console.log("Kapsam kaydetme hatası:", e?.code, e?.message);
+      if (!canli.current) return;
+      setKapsamKaydediliyor(false);
+      Alert.alert("Kaydedilemedi", kurumHataMesaji(e));
     }
   };
 
@@ -210,7 +272,36 @@ export default function EkipKarti({ kurumId, kurumAdi, tema }) {
                       </Text>
                     </View>
                   </View>
+                  {uye.rol === "ogretmen" && (
+                    <Text
+                      style={[styles.kapsam, { color: tema.ikincilMetin }]}
+                      numberOfLines={2}
+                    >
+                      Kapsam:{" "}
+                      {kapsamMetni(
+                        uye.kapsam === "gruplar" ? "gruplar" : "tum",
+                        uye.gruplar,
+                        grupListesi
+                      )}
+                    </Text>
+                  )}
                 </View>
+                {uye.rol === "ogretmen" && (
+                  <TouchableOpacity
+                    onPress={() => kapsamPenceresiniAc(uye)}
+                    disabled={kaldirilan !== null}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${uye.eposta} kapsamını düzenle`}
+                    style={{ paddingHorizontal: 10 }}
+                  >
+                    <Ionicons
+                      name="options-outline"
+                      size={22}
+                      color={tema.ikincilMetin}
+                    />
+                  </TouchableOpacity>
+                )}
                 {kaldirilabilir &&
                   (kaldirilan === uye.eposta ? (
                     <ActivityIndicator color={tema.hataKirmizi} />
@@ -325,6 +416,154 @@ export default function EkipKarti({ kurumId, kurumAdi, tema }) {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <Modal
+        visible={kapsamPenceresi !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={kapsamPenceresiniKapat}
+      >
+        <View style={styles.modalArkaplan}>
+          <View
+            style={[styles.modalKutu, { backgroundColor: tema.kutuArkaplan }]}
+          >
+            <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
+              <Text style={[styles.modalBaslik, { color: tema.metin }]}>
+                Öğretmenin Kapsamı
+              </Text>
+              <Text
+                style={[
+                  styles.bilgi,
+                  { color: tema.ikincilMetin, marginBottom: 14 },
+                ]}
+                numberOfLines={1}
+              >
+                {kapsamPenceresi?.eposta}
+              </Text>
+
+              {[
+                { id: "tum", etiket: "Tüm öğrenciler" },
+                { id: "gruplar", etiket: "Yalnızca seçili gruplar" },
+              ].map((secenek) => {
+                const secili = kapsamPenceresi?.kapsam === secenek.id;
+                return (
+                  <TouchableOpacity
+                    key={secenek.id}
+                    onPress={() =>
+                      setKapsamPenceresi((o) =>
+                        o ? { ...o, kapsam: secenek.id } : o
+                      )
+                    }
+                    disabled={kapsamKaydediliyor}
+                    activeOpacity={0.7}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: secili }}
+                    style={styles.secenek}
+                  >
+                    <Ionicons
+                      name={secili ? "radio-button-on" : "radio-button-off"}
+                      size={22}
+                      color={secili ? YONETICI_RENGI : tema.ikincilMetin}
+                    />
+                    <Text style={[styles.secenekYazi, { color: tema.metin }]}>
+                      {secenek.etiket}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+
+              {kapsamPenceresi?.kapsam === "gruplar" && (
+                <View style={{ marginTop: 6 }}>
+                  {grupListesi.length === 0 ? (
+                    <Text style={[styles.bilgi, { color: tema.ikincilMetin }]}>
+                      Henüz grup yok. Önce Gruplar bölümünden grup oluştur.
+                    </Text>
+                  ) : (
+                    grupListesi.map((g) => {
+                      const isaretli = kapsamPenceresi.secili.includes(g.id);
+                      return (
+                        <TouchableOpacity
+                          key={g.id}
+                          onPress={() => grupIsaretle(g.id)}
+                          disabled={kapsamKaydediliyor}
+                          activeOpacity={0.7}
+                          accessibilityRole="checkbox"
+                          accessibilityState={{ checked: isaretli }}
+                          style={[styles.secenek, styles.grupSecenegi]}
+                        >
+                          <Ionicons
+                            name={isaretli ? "checkbox" : "square-outline"}
+                            size={22}
+                            color={
+                              isaretli ? YONETICI_RENGI : tema.ikincilMetin
+                            }
+                          />
+                          <Text
+                            style={[styles.secenekYazi, { color: tema.metin }]}
+                          >
+                            {g.ad}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })
+                  )}
+                  {kapsamPenceresi.secili.length === 0 && (
+                    <Text
+                      style={[
+                        styles.bilgi,
+                        { color: tema.hataKirmizi, marginTop: 8 },
+                      ]}
+                    >
+                      Hiç grup seçmezsen bu öğretmen hiçbir öğrenciyi göremez.
+                    </Text>
+                  )}
+                </View>
+              )}
+
+              <Text
+                style={[
+                  styles.bilgi,
+                  { color: tema.ikincilMetin, marginTop: 14 },
+                ]}
+              >
+                Kapsam, öğretmenin göreceği öğrenci istatistiklerini belirler.
+                Öğretmen hiçbir zaman öğrencilerin sorularını göremez.
+                Değişiklik, öğretmen uygulamayı bir sonraki açtığında geçerli
+                olur.
+              </Text>
+
+              <TouchableOpacity
+                style={[
+                  styles.anaButon,
+                  {
+                    backgroundColor: YONETICI_RENGI,
+                    opacity: kapsamKaydediliyor ? 0.6 : 1,
+                  },
+                ]}
+                onPress={kapsamKaydet}
+                disabled={kapsamKaydediliyor}
+                activeOpacity={0.8}
+              >
+                {kapsamKaydediliyor ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.anaButonYazi}>Kaydet</Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.vazgec}
+                onPress={kapsamPenceresiniKapat}
+                disabled={kapsamKaydediliyor}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.vazgecYazi, { color: tema.ikincilMetin }]}>
+                  Vazgeç
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -344,6 +583,10 @@ const styles = StyleSheet.create({
   eposta: { fontSize: 14, fontWeight: "600" },
   etiketSatiri: { flexDirection: "row", alignItems: "center", marginTop: 4 },
   rol: { fontSize: 12, marginRight: 8 },
+  kapsam: { fontSize: 12, marginTop: 4 },
+  secenek: { flexDirection: "row", alignItems: "center", paddingVertical: 10 },
+  secenekYazi: { fontSize: 15, marginLeft: 10, flex: 1 },
+  grupSecenegi: { paddingLeft: 30 },
   durum: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
   anaButon: {
     flexDirection: "row",

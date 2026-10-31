@@ -17,6 +17,7 @@ import useYoneticiYetkisi, {
 import useKurumOzetleri from "../utils/useKurumOzetleri";
 import useKurum from "../utils/useKurum";
 import useGruplar from "../utils/useGruplar";
+import { kapsamMetni } from "../utils/kurumKapsam";
 import {
   DURUM_FILTRELERI,
   GRUPSUZ,
@@ -38,7 +39,11 @@ export default function OgrenciListesiEkrani() {
   const { tema } = useTheme();
   const insets = useSafeAreaInsets();
   const { yetki, yenile } = useYoneticiYetkisi();
-  const { ozetler, hata } = useKurumOzetleri(yetki?.kurumId);
+  const { ozetler, hata } = useKurumOzetleri(
+    yetki?.kurumId,
+    yetki?.kapsam,
+    yetki?.gruplar
+  );
   const kurum = useKurum(yetki?.kurumId);
   const gruplar = useGruplar(yetki?.kurumId);
 
@@ -89,6 +94,8 @@ export default function OgrenciListesiEkrani() {
   // Seçili öğrenci özet güncellenince canlı kalır; öğrenci ayrılırsa pencere kapanır
   const secili = satirlar.find((s) => s.id === seciliId) || null;
   const mudurMu = yetki?.kurumRol === "mudur";
+  const kapsamliOgretmen = !mudurMu && yetki?.kapsam === "gruplar";
+  const kapsamBos = kapsamliOgretmen && (yetki.gruplar || []).length === 0;
 
   const ortala = (icerik) => (
     <View
@@ -145,6 +152,11 @@ export default function OgrenciListesiEkrani() {
   const baslik = (
     <View>
       <Text style={[styles.baslik, { color: tema.metin }]}>Öğrenciler</Text>
+      {kapsamliOgretmen && (
+        <Text style={[styles.kapsamYazi, { color: YONETICI_RENGI }]}>
+          Kapsamın: {kapsamMetni(yetki.kapsam, yetki.gruplar, grupListesi)}
+        </Text>
+      )}
       <Text style={[styles.aciklama, { color: tema.ikincilMetin }]}>
         {liste.length === satirlar.length
           ? `${satirlar.length} öğrenci`
@@ -331,7 +343,11 @@ export default function OgrenciListesiEkrani() {
     <View style={styles.listeBos}>
       <Text style={[styles.bosYazi, { color: tema.ikincilMetin }]}>
         {satirlar.length === 0
-          ? "Henüz dershaneye bağlı öğrenci yok. Öğrenciler dershane kodunu Profil sayfasından girince burada görünür."
+          ? kapsamBos
+            ? "Sana henüz bir grup atanmadı. Müdürün seni bir gruba atayınca o gruptaki öğrenciler burada görünür."
+            : kapsamliOgretmen
+              ? "Gruplarında henüz öğrenci yok. Öğrenciler gruplarına atandığında burada görünür."
+              : "Henüz dershaneye bağlı öğrenci yok. Öğrenciler dershane kodunu Profil sayfasından girince burada görünür."
           : "Seçtiğin süzgeçlere ve aramana uyan öğrenci bulunamadı."}
       </Text>
     </View>
@@ -425,6 +441,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 30,
   },
   baslik: { fontSize: 26, fontWeight: "900" },
+  kapsamYazi: { fontSize: 13, fontWeight: "600", marginTop: 4 },
   aciklama: { fontSize: 13, marginTop: 2, marginBottom: 16 },
   aramaKutusu: {
     flexDirection: "row",

@@ -43,7 +43,11 @@ export default function YoneticiAnaEkran() {
   const { tema } = useTheme();
   const insets = useSafeAreaInsets();
   const { yetki, yenile: yetkiyiOku } = useYoneticiYetkisi();
-  const { ozetler } = useKurumOzetleri(yetki?.kurumId);
+  const { ozetler } = useKurumOzetleri(
+    yetki?.kurumId,
+    yetki?.kapsam,
+    yetki?.gruplar
+  );
   const [kurum, setKurum] = useState(null);
 
   useEffect(() => {

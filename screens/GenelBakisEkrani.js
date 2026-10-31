@@ -20,6 +20,7 @@ import DersCubuklari from "./DersCubuklari";
 import KonuListesi from "./KonuListesi";
 import OgrenciPenceresi from "./OgrenciPenceresi";
 
+const ARALIKLAR = [7, 14, 30];
 const DIKKAT_SINIRI = 6;
 const EN_AKTIF_SINIRI = 5;
 
@@ -43,6 +44,8 @@ export default function GenelBakisEkrani() {
   const { ozetler, hata } = useKurumOzetleri(yetki?.kurumId);
 
   const [seciliId, setSeciliId] = useState(null);
+  // Seçilen zaman aralığı (gün): grafik, aktif öğrenci, en aktif ve dikkat gerektirenler buna göre hesaplanır
+  const [gun, setGun] = useState(7);
   const [simdi, setSimdi] = useState(Date.now());
   useEffect(() => {
     setSimdi(Date.now());
@@ -53,8 +56,8 @@ export default function GenelBakisEkrani() {
     [ozetler, simdi]
   );
   const bakis = useMemo(
-    () => kurumGenelBakis(satirlar, simdi),
-    [satirlar, simdi]
+    () => kurumGenelBakis(satirlar, simdi, gun, gun),
+    [satirlar, simdi, gun]
   );
   const secili = satirlar.find((s) => s.id === seciliId) || null;
   const mudurMu = yetki?.kurumRol === "mudur";
@@ -116,12 +119,12 @@ export default function GenelBakisEkrani() {
     return ortala(<ActivityIndicator size="large" color={YONETICI_RENGI} />);
   }
 
-  const { toplamlar } = bakis;
+  const { toplamlar, donem } = bakis;
   const ozetKartlari = [
     { etiket: "Öğrenci", deger: toplamlar.ogrenci },
     { etiket: "Bugün soru", deger: toplamlar.bugun },
-    { etiket: "7 gün soru", deger: toplamlar.son7 },
-    { etiket: "Aktif öğrenci", deger: toplamlar.aktifOgrenci },
+    { etiket: `${gun} gün soru`, deger: donem.soru },
+    { etiket: "Aktif öğrenci", deger: donem.aktifOgrenci },
   ];
 
   const ogrenciSatiriGoster = (ogrenci, sag, alt) => (
@@ -163,8 +166,40 @@ export default function GenelBakisEkrani() {
       >
         <Text style={[styles.baslik, { color: tema.metin }]}>Genel Bakış</Text>
         <Text style={[styles.aciklama, { color: tema.ikincilMetin }]}>
-          Aktif öğrenci: son 7 günde en az bir soru soran öğrenci.
+          Aktif öğrenci: seçilen aralıkta en az bir soru soran öğrenci.
         </Text>
+
+        <View style={styles.aralikSatiri}>
+          {ARALIKLAR.map((n) => {
+            const secilen = n === gun;
+            return (
+              <TouchableOpacity
+                key={n}
+                onPress={() => setGun(n)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityState={{ selected: secilen }}
+                style={[
+                  styles.aralik,
+                  {
+                    backgroundColor: secilen ? YONETICI_RENGI : "transparent",
+                    borderColor: secilen ? YONETICI_RENGI : tema.kutuCerceve,
+                  },
+                ]}
+              >
+                <Text
+                  style={{
+                    color: secilen ? "#fff" : tema.ikincilMetin,
+                    fontSize: 13,
+                    fontWeight: "600",
+                  }}
+                >
+                  Son {n} gün
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
         <View style={styles.ozetSatiri}>
           {ozetKartlari.map((kart) => (
@@ -199,7 +234,7 @@ export default function GenelBakisEkrani() {
           <>
             <View style={kutuStili}>
               <Text style={[styles.kutuBaslik, { color: tema.metin }]}>
-                Son 14 Gün
+                Son {gun} Gün
               </Text>
               <Text style={[styles.kutuAlt, { color: tema.ikincilMetin }]}>
                 Tüm öğrencilerin sorduğu soru sayısı
@@ -212,7 +247,7 @@ export default function GenelBakisEkrani() {
                 Dikkat Gerektirenler
               </Text>
               <Text style={[styles.kutuAlt, { color: tema.ikincilMetin }]}>
-                Son 7 günde hiç soru sormayan öğrenciler
+                Son {gun} günde hiç soru sormayan öğrenciler
               </Text>
               {bakis.dikkat.length === 0 ? (
                 <Text
@@ -222,7 +257,7 @@ export default function GenelBakisEkrani() {
                     { color: tema.ikincilMetin },
                   ]}
                 >
-                  Harika! Tüm öğrenciler son 7 günde soru sordu.
+                  Harika! Tüm öğrenciler son {gun} günde soru sordu.
                 </Text>
               ) : (
                 <>
@@ -249,7 +284,7 @@ export default function GenelBakisEkrani() {
                 Bu Hafta En Aktif
               </Text>
               <Text style={[styles.kutuAlt, { color: tema.ikincilMetin }]}>
-                Son 7 günde en çok soru soranlar
+                Son {gun} günde en çok soru soranlar
               </Text>
               {bakis.enAktif.length === 0 ? (
                 <Text
@@ -268,7 +303,7 @@ export default function GenelBakisEkrani() {
                     ogrenciSatiriGoster(
                       s,
                       <Text style={[styles.sag, { color: YONETICI_RENGI }]}>
-                        {s.son7}
+                        {s.donemSoru}
                       </Text>,
                       `${i + 1}. sıra`
                     )
@@ -281,7 +316,7 @@ export default function GenelBakisEkrani() {
                 En Çok Sorulan Konular
               </Text>
               <Text style={[styles.kutuAlt, { color: tema.ikincilMetin }]}>
-                Öğrencilerin en çok takıldığı konular
+                Öğrencilerin en çok takıldığı konular (tüm zamanlar)
               </Text>
               <KonuListesi
                 konular={bakis.konular}
@@ -295,7 +330,9 @@ export default function GenelBakisEkrani() {
               <Text style={[styles.kutuBaslik, { color: tema.metin }]}>
                 Ders Dağılımı
               </Text>
-              <View style={{ height: 12 }} />
+              <Text style={[styles.kutuAlt, { color: tema.ikincilMetin }]}>
+                Tüm zamanlar
+              </Text>
               <DersCubuklari
                 dersler={bakis.dersler.slice(0, 6)}
                 tema={tema}
@@ -325,7 +362,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 30,
   },
   baslik: { fontSize: 26, fontWeight: "900" },
-  aciklama: { fontSize: 12, marginTop: 4, marginBottom: 16 },
+  aciklama: { fontSize: 12, marginTop: 4, marginBottom: 12 },
+  aralikSatiri: { flexDirection: "row", marginBottom: 14 },
+  aralik: {
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginRight: 8,
+  },
   ozetSatiri: {
     flexDirection: "row",
     justifyContent: "space-between",

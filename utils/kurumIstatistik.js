@@ -151,15 +151,22 @@ const YENI_KATILAN_GUN = 7;
  * Müdür ve öğretmenin "Genel Bakış" ekranı için kurum geneli sayılar.
  *  - gunler: son gunSayisi günün tüm öğrencilerce sorulan toplam soru sayısı (eskiden yeniye)
  *  - dersler: ders dağılımı, konular: en çok sorulan konular (hepsi öğrenciler toplamı)
- *  - dikkat: son 7 günde hiç soru sormamış öğrenciler, en uzun süredir pasif olan başta.
+ *  - dikkat: son aktiflikGunu günde hiç soru sormamış öğrenciler, en uzun süredir pasif olan başta.
  *    Son 7 günde katılanlar henüz ısınmamış sayılır ve listeye alınmaz.
- *  - enAktif: bu hafta en çok soru soran öğrenciler
+ *  - enAktif: son aktiflikGunu günde en çok soru soran öğrenciler (donemSoru alanıyla)
+ *  - donem: seçilen aralığın özeti { gun, soru, aktifOgrenci }
+ * Ders ve konu dağılımı tüm zamanları kapsar (özette günlük ders verisi tutulmaz).
  */
 export const kurumGenelBakis = (
   satirlar,
   simdi = Date.now(),
-  gunSayisi = 14
+  gunSayisi = 14,
+  aktiflikGunu = 7
 ) => {
+  // Her öğrencinin seçilen aralıktaki soru sayısı
+  const donemSorulari = new Map(
+    satirlar.map((s) => [s.id, sonGunlerToplami(s.gunler, aktiflikGunu, simdi)])
+  );
   const gunler = gunDizisi({}, gunSayisi, simdi).map((g) => ({
     anahtar: g.anahtar,
     adet: satirlar.reduce((t, s) => t + sayi(s.gunler?.[g.anahtar]), 0),
@@ -185,7 +192,7 @@ export const kurumGenelBakis = (
 
   const dikkat = satirlar
     .filter((s) => {
-      if (s.aktif) return false;
+      if (donemSorulari.get(s.id) > 0) return false;
       const yeni =
         s.katilmaMs !== null &&
         takvimGunFarki(s.katilmaMs, simdi) < YENI_KATILAN_GUN;
@@ -207,15 +214,73 @@ export const kurumGenelBakis = (
     );
 
   const enAktif = satirlar
-    .filter((s) => s.son7 > 0)
-    .sort((a, b) => b.son7 - a.son7 || a.isim.localeCompare(b.isim, "tr"));
+    .filter((s) => donemSorulari.get(s.id) > 0)
+    .map((s) => ({ ...s, donemSoru: donemSorulari.get(s.id) }))
+    .sort(
+      (a, b) => b.donemSoru - a.donemSoru || a.isim.localeCompare(b.isim, "tr")
+    );
 
   return {
     toplamlar: kurumToplamlari(satirlar),
+    donem: {
+      gun: aktiflikGunu,
+      soru: [...donemSorulari.values()].reduce((t, n) => t + n, 0),
+      aktifOgrenci: enAktif.length,
+    },
     gunler,
     dersler: dersListesi(dersToplam),
     konular,
     dikkat,
     enAktif,
   };
+};
+
+// Öğrenciler ekranındaki hızlı süzgeçler
+export const DURUM_FILTRELERI = [
+  { id: "hepsi", etiket: "Tümü" },
+  { id: "aktif", etiket: "Aktif" },
+  { id: "pasif", etiket: "Pasif" },
+  { id: "baslamayan", etiket: "Hiç başlamayan" },
+];
+
+const durumUygun = (s, durum) => {
+  if (durum === "aktif") return s.aktif; // son 7 günde soru sordu
+  if (durum === "pasif") return !s.aktif && s.sonAktiflikMs !== null; // sordu ama son 7 günde sormadı
+  if (durum === "baslamayan") return s.sonAktiflikMs === null; // hiç soru sormadı
+  return true;
+};
+
+/**
+ * Öğrenci satırlarını durum ve derse göre süzer (girdi dizisini değiştirmez).
+ * @param secenek { durum: "hepsi"|"aktif"|"pasif"|"baslamayan", ders: null | "Matematik" }
+ */
+export const ogrenciFiltrele = (
+  satirlar,
+  { durum = "hepsi", ders = null } = {}
+) =>
+  satirlar.filter(
+    (s) =>
+      durumUygun(s, durum) && (!ders || s.dersler.some((d) => d.ders === ders))
+  );
+
+// Durum süzgeçlerinin yanında gösterilecek sayılar (seçili ders süzgeci dikkate alınır)
+export const durumSayilari = (satirlar, ders = null) =>
+  Object.fromEntries(
+    DURUM_FILTRELERI.map((f) => [
+      f.id,
+      ogrenciFiltrele(satirlar, { durum: f.id, ders }).length,
+    ])
+  );
+
+// Öğrencilerin sorduğu dersler, çok soru soranlar önde: [{ ders, ogrenci }]
+export const dersSecenekleri = (satirlar) => {
+  const sayac = new Map();
+  satirlar.forEach((s) =>
+    s.dersler.forEach((d) => sayac.set(d.ders, (sayac.get(d.ders) || 0) + 1))
+  );
+  return [...sayac.entries()]
+    .map(([ders, ogrenci]) => ({ ders, ogrenci }))
+    .sort(
+      (a, b) => b.ogrenci - a.ogrenci || a.ders.localeCompare(b.ders, "tr")
+    );
 };

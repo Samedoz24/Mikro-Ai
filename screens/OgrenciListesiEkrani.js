@@ -16,8 +16,12 @@ import useYoneticiYetkisi, {
 } from "../utils/useYoneticiYetkisi";
 import useKurumOzetleri from "../utils/useKurumOzetleri";
 import {
+  DURUM_FILTRELERI,
   SIRALAMALAR,
   aktiflikMetni,
+  dersSecenekleri,
+  durumSayilari,
+  ogrenciFiltrele,
   ogrenciSatiri,
   ogrenciSirala,
 } from "../utils/kurumIstatistik";
@@ -32,6 +36,8 @@ export default function OgrenciListesiEkrani() {
   const { ozetler, hata } = useKurumOzetleri(yetki?.kurumId);
 
   const [olcut, setOlcut] = useState("aktiflik");
+  const [durum, setDurum] = useState("hepsi");
+  const [ders, setDers] = useState(null);
   const [aranan, setAranan] = useState("");
   const [seciliId, setSeciliId] = useState(null);
   // "Bugün" ve "dün" gibi ifadeler özet her değiştiğinde yeniden hesaplanır
@@ -44,9 +50,21 @@ export default function OgrenciListesiEkrani() {
     () => (ozetler || []).map((o) => ogrenciSatiri(o.id, o, simdi)),
     [ozetler, simdi]
   );
+  const dersler = useMemo(() => dersSecenekleri(satirlar), [satirlar]);
+  // Seçili ders artık hiçbir öğrencide yoksa (öğrenci ayrıldı vb.) süzgeç kendiliğinden kalkar
+  const gecerliDers = dersler.some((d) => d.ders === ders) ? ders : null;
+  const sayilar = useMemo(
+    () => durumSayilari(satirlar, gecerliDers),
+    [satirlar, gecerliDers]
+  );
   const liste = useMemo(
-    () => ogrenciSirala(satirlar, olcut, aranan),
-    [satirlar, olcut, aranan]
+    () =>
+      ogrenciSirala(
+        ogrenciFiltrele(satirlar, { durum, ders: gecerliDers }),
+        olcut,
+        aranan
+      ),
+    [satirlar, durum, gecerliDers, olcut, aranan]
   );
   // Seçili öğrenci özet güncellenince canlı kalır; öğrenci ayrılırsa pencere kapanır
   const secili = satirlar.find((s) => s.id === seciliId) || null;
@@ -108,7 +126,9 @@ export default function OgrenciListesiEkrani() {
     <View>
       <Text style={[styles.baslik, { color: tema.metin }]}>Öğrenciler</Text>
       <Text style={[styles.aciklama, { color: tema.ikincilMetin }]}>
-        {satirlar.length} öğrenci
+        {liste.length === satirlar.length
+          ? `${satirlar.length} öğrenci`
+          : `${liste.length} / ${satirlar.length} öğrenci`}
       </Text>
 
       <View
@@ -130,6 +150,83 @@ export default function OgrenciListesiEkrani() {
         />
       </View>
 
+      <Text style={[styles.grupEtiket, { color: tema.ikincilMetin }]}>
+        Durum (son 7 gün)
+      </Text>
+      <View style={styles.sirala}>
+        {DURUM_FILTRELERI.map((f) => {
+          const secilen = f.id === durum;
+          return (
+            <TouchableOpacity
+              key={f.id}
+              onPress={() => setDurum(f.id)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityState={{ selected: secilen }}
+              style={[
+                styles.siraSecenek,
+                {
+                  backgroundColor: secilen ? YONETICI_RENGI : "transparent",
+                  borderColor: secilen ? YONETICI_RENGI : tema.kutuCerceve,
+                },
+              ]}
+            >
+              <Text
+                style={{
+                  color: secilen ? "#fff" : tema.ikincilMetin,
+                  fontSize: 13,
+                  fontWeight: "600",
+                }}
+              >
+                {f.etiket} ({sayilar[f.id]})
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {dersler.length > 1 && (
+        <>
+          <Text style={[styles.grupEtiket, { color: tema.ikincilMetin }]}>
+            Ders
+          </Text>
+          <View style={styles.sirala}>
+            {[{ ders: null, etiket: "Tüm dersler" }, ...dersler].map((d) => {
+              const secilen = d.ders === gecerliDers;
+              return (
+                <TouchableOpacity
+                  key={d.ders ?? "hepsi"}
+                  onPress={() => setDers(d.ders)}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: secilen }}
+                  style={[
+                    styles.siraSecenek,
+                    {
+                      backgroundColor: secilen ? YONETICI_RENGI : "transparent",
+                      borderColor: secilen ? YONETICI_RENGI : tema.kutuCerceve,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={{
+                      color: secilen ? "#fff" : tema.ikincilMetin,
+                      fontSize: 13,
+                      fontWeight: "600",
+                    }}
+                  >
+                    {d.etiket ?? d.ders}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </>
+      )}
+
+      <Text style={[styles.grupEtiket, { color: tema.ikincilMetin }]}>
+        Sıralama
+      </Text>
       <View style={styles.sirala}>
         {SIRALAMALAR.map((s) => {
           const secilen = s.id === olcut;
@@ -169,7 +266,7 @@ export default function OgrenciListesiEkrani() {
       <Text style={[styles.bosYazi, { color: tema.ikincilMetin }]}>
         {satirlar.length === 0
           ? "Henüz dershaneye bağlı öğrenci yok. Öğrenciler dershane kodunu Profil sayfasından girince burada görünür."
-          : "Aramana uyan öğrenci bulunamadı."}
+          : "Seçtiğin süzgeçlere ve aramana uyan öğrenci bulunamadı."}
       </Text>
     </View>
   );
@@ -272,7 +369,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     fontSize: 15,
   },
-  sirala: { flexDirection: "row", flexWrap: "wrap", marginBottom: 14 },
+  grupEtiket: { fontSize: 12, fontWeight: "600", marginBottom: 6 },
+  sirala: { flexDirection: "row", flexWrap: "wrap", marginBottom: 8 },
   siraSecenek: {
     paddingVertical: 7,
     paddingHorizontal: 12,

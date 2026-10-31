@@ -7,13 +7,15 @@ const YUKSEKLIK = 90;
 // Günlük soru sayısı sütun grafiği. gunler: [{ anahtar: "YYYY-MM-DD", adet }], eskiden yeniye.
 export default function GunlukGrafik({ gunler, tema }) {
   const enYuksek = Math.max(1, ...gunler.map((g) => g.adet));
+  // 30 gün gibi çok sütunlu görünümde sayılar ve gün etiketleri sığmaz: seyrekleştirilir
+  const yogun = gunler.length > 16;
 
   return (
     <View style={styles.grafik}>
-      {gunler.map((gun) => (
+      {gunler.map((gun, i) => (
         <View key={gun.anahtar} style={styles.sutun}>
           <Text style={[styles.sayi, { color: tema.ikincilMetin }]}>
-            {gun.adet > 0 ? gun.adet : ""}
+            {!yogun && gun.adet > 0 ? gun.adet : ""}
           </Text>
           <View
             style={[
@@ -28,8 +30,13 @@ export default function GunlukGrafik({ gunler, tema }) {
               },
             ]}
           />
-          <Text style={[styles.gun, { color: tema.ikincilMetin }]}>
-            {Number(gun.anahtar.slice(8))}
+          <Text
+            numberOfLines={1}
+            style={[styles.gun, { color: tema.ikincilMetin }]}
+          >
+            {!yogun || (gunler.length - 1 - i) % 5 === 0
+              ? Number(gun.anahtar.slice(8))
+              : ""}
           </Text>
         </View>
       ))}
@@ -45,7 +52,14 @@ const styles = StyleSheet.create({
     height: YUKSEKLIK + 40,
   },
   sutun: { flex: 1, alignItems: "center", justifyContent: "flex-end" },
-  sayi: { fontSize: 10, marginBottom: 2, height: 14 },
-  cubuk: { width: "60%", borderRadius: 3 },
-  gun: { fontSize: 10, marginTop: 4 },
+  sayi: {
+    fontSize: 10,
+    marginBottom: 2,
+    height: 14,
+    width: 28,
+    textAlign: "center",
+  },
+  cubuk: { width: "60%", borderRadius: 3, minWidth: 2 },
+  // Etiket dar sütundan geniştir; ortalanıp iki yana taşar, alt satıra kırılmaz
+  gun: { fontSize: 10, marginTop: 4, width: 28, textAlign: "center" },
 });

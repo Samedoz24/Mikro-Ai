@@ -35,6 +35,25 @@ const HATA_MESAJLARI = {
   "hesap-kullaniliyor":
     "Bu hesap öğrenci ya da veli olarak kullanılıyor. Yönetici girişi için farklı bir e-posta adresi kullan.",
   "eposta-dogrulanmadi": "E-posta adresini doğrulaman gerekiyor.",
+  "ad-gecersiz": "Dershane adı 2-80 karakter olmalı.",
+  "koltuk-gecersiz": "Koltuk sayısı 1 ile 5000 arasında bir tam sayı olmalı.",
+  "tarih-gecersiz": "Lisans bitiş tarihi geçerli değil.",
+  "tarih-gecmis": "Lisans bitiş tarihi bugünden sonra olmalı.",
+  "tarih-cok-uzak": "Lisans bitiş tarihi en fazla 5 yıl sonrası olabilir.",
+  "istek-gecersiz": "İstek geçersiz. Formu kapatıp yeniden aç.",
+  "istek-cakisti":
+    "Bu istek farklı bilgilerle daha önce gönderilmiş. Formu kapatıp yeniden aç.",
+  "davet-var": "Bu e-posta adresi zaten bir dershanede yönetici ya da davetli.",
+  "kurum-gecersiz": "Dershane seçimi geçersiz. Listeyi yenileyip tekrar dene.",
+  "kurum-yok": "Bu dershane bulunamadı. Listeyi yenile.",
+  "durum-uygun-degil":
+    "Dershanenin şu anki durumunda bu işlem yapılamaz. Listeyi yenile.",
+  "ad-eslesmedi": "Yazdığın ad dershane adıyla aynı değil.",
+  "kapatma-yarim":
+    "Kapatma tamamlanamadı. İşlem bu gece otomatik devam edecek ya da tekrar deneyebilirsin.",
+  "yetki-kaldirilamadi":
+    "Yöneticilerin yetkisi kaldırılamadı. Lütfen tekrar dene.",
+  "kod-uretilemedi": "Kayıt kodu üretilemedi. Lütfen tekrar dene.",
   "ogrenci-yok": "Bu öğrenci artık dershanede kayıtlı değil.",
   "soru-yok": "Bu soru bulunamadı.",
   "eposta-yok": "Hesabında e-posta adresi bulunamadı.",
@@ -141,6 +160,40 @@ export const soruFotografiGetir = async (soruId) => {
 
 export const raporKaydi = async (uid) => {
   const sonuc = await httpsCallable(functions, "raporKaydi")({ uid });
+  return sonuc.data;
+};
+
+// Platform yöneticisi: dershane ekleme aracı (yetki sunucuda platformYoneticileri belgesiyle verilir)
+export const platformYetkisi = async () => {
+  const sonuc = await httpsCallable(functions, "platformYetkisi")({});
+  return sonuc.data?.yetkili === true;
+};
+
+export const kurumOlustur = async (istek) => {
+  const sonuc = await httpsCallable(functions, "kurumOlustur")(istek);
+  return sonuc.data;
+};
+
+export const kurumListele = async () => {
+  const sonuc = await httpsCallable(functions, "kurumListele")({});
+  return sonuc.data;
+};
+
+export const kurumAskiyaAl = async (kurumId) => {
+  const sonuc = await httpsCallable(functions, "kurumAskiyaAl")({ kurumId });
+  return sonuc.data;
+};
+
+export const kurumYenidenAc = async (kurumId) => {
+  const sonuc = await httpsCallable(functions, "kurumYenidenAc")({ kurumId });
+  return sonuc.data;
+};
+
+// Kapatma çok üyeli dershanelerde uzun sürebilir; sunucu süresi 9 dakikadır
+export const kurumKapat = async (kurumId, onayAdi) => {
+  const sonuc = await httpsCallable(functions, "kurumKapat", {
+    timeout: 9 * 60 * 1000,
+  })({ kurumId, onayAdi });
   return sonuc.data;
 };
 

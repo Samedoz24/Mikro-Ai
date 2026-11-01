@@ -750,6 +750,8 @@ const kurumuKapat = async (kurumId) => {
   const kurumRef = db().doc(`kurumlar/${kurumId}`);
   // Yarıda kalırsa bir sonraki çalışmada devam edilebilsin diye önce durum işaretlenir
   await kurumRef.update({ durum: "kapatiliyor" });
+  // Platform yöneticisi kapattıysa nihai durum "kapatildi", lisans süresi dolduysa "suresi-doldu"
+  const nihaiDurum = (await kurumRef.get()).data()?.kapanisNedeni === "platform" ? "kapatildi" : "suresi-doldu";
 
   for (;;) {
     const uyeler = await kurumRef.collection("uyeler").limit(TOPLU_BOYUT).get();
@@ -787,12 +789,12 @@ const kurumuKapat = async (kurumId) => {
     if ((await userRef.get()).exists) await userRef.update({ kurumId: FieldValue.delete() });
   }
 
-  await kurumRef.update({ durum: "suresi-doldu", uyeSayisi: 0, kapanis: FieldValue.serverTimestamp() });
+  await kurumRef.update({ durum: nihaiDurum, uyeSayisi: 0, kapanis: FieldValue.serverTimestamp() });
 };
 
 // Süresi dolmuş ya da kapatılması yarım kalmış kurumları kapatır; kapatılan kurum id'lerini döndürür
 const lisansKontrol = async (simdi = Date.now()) => {
-  const adaylar = await db().collection("kurumlar").where("durum", "in", ["aktif", "kapatiliyor"]).get();
+  const adaylar = await db().collection("kurumlar").where("durum", "in", ["aktif", "askida", "kapatiliyor"]).get();
   const kapatilan = [];
   for (const kurum of adaylar.docs) {
     const veri = kurum.data();
@@ -820,6 +822,7 @@ module.exports = {
   ogrenciGrupAta,
   ogretmenKapsamAta,
   mudurDogrula,
+  yoneticiYetkisiniKaldir,
   koleksiyonuBosalt,
   gecerliGrupKimligi,
   kurumuKapat,

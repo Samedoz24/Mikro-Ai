@@ -29,6 +29,9 @@ export const turkceTarih = (ms) => {
  *         "bitti", "bilinmiyor"
  */
 export const lisansDurumu = (lisansBitis, durum, simdi = Date.now()) => {
+  if (durum === "askida") {
+    return { seviye: "bitti", kalanGun: 0, metin: "Dershane askıya alındı" };
+  }
   if (durum && durum !== "aktif") {
     return { seviye: "bitti", kalanGun: 0, metin: "Kullanım süresi sona erdi" };
   }

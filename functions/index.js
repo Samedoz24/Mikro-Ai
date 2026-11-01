@@ -6,6 +6,7 @@ const kurum = require("./kurum");
 const ozet = require("./ozet");
 const duyuru = require("./duyuru");
 const erisim = require("./erisim");
+const platform = require("./platform");
 
 initializeApp();
 
@@ -74,6 +75,32 @@ exports.duyuruGonder = onCall(ORTAK, (request) =>
 
 exports.duyuruSil = onCall(ORTAK, (request) =>
   duyuru.duyuruSil(kurum.girisliUid(request), request.auth.token, request.data)
+);
+
+// Platform yöneticisi (yalnızca platformYoneticileri/{eposta} belgesi olan, e-postası doğrulanmış hesap)
+exports.platformYetkisi = onCall(ORTAK, (request) =>
+  platform.platformYetkisi(kurum.girisliUid(request), request.auth.token)
+);
+
+exports.kurumOlustur = onCall(ORTAK, (request) =>
+  platform.kurumOlustur(kurum.girisliUid(request), request.auth.token, request.data)
+);
+
+exports.kurumListele = onCall(ORTAK, (request) =>
+  platform.kurumListele(kurum.girisliUid(request), request.auth.token)
+);
+
+// Dershane yaşam döngüsü (yalnızca platform yöneticisi). Kapatma çok üyeli kurumlarda uzun sürebilir.
+exports.kurumAskiyaAl = onCall(ORTAK, (request) =>
+  platform.kurumAskiyaAl(kurum.girisliUid(request), request.auth.token, request.data)
+);
+
+exports.kurumYenidenAc = onCall(ORTAK, (request) =>
+  platform.kurumYenidenAc(kurum.girisliUid(request), request.auth.token, request.data)
+);
+
+exports.kurumKapat = onCall({ ...ORTAK, timeoutSeconds: 540 }, (request) =>
+  platform.kurumKapat(kurum.girisliUid(request), request.auth.token, request.data)
 );
 
 // Müdür öğrenci verisine yalnızca bu fonksiyonlarla ulaşır; her erişim önce kaydedilir (KVKK)

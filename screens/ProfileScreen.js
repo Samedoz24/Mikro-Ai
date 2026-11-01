@@ -28,6 +28,7 @@ import { auth, db, storage } from "../firebaseConfig";
 import { signOut } from "firebase/auth";
 import { baglantiKoduGaranti } from "../utils/baglanti";
 import KurumKarti from "./KurumKarti";
+import PlatformKarti from "./PlatformKarti";
 import {
   ROZETLER,
   kazanilanRozetIdleri,
@@ -1168,6 +1169,8 @@ export default function ProfileScreen() {
               {rol === "ogrenci" && user?.uid && (
                 <KurumKarti uid={user.uid} tema={tema} />
               )}
+
+              {user?.uid && <PlatformKarti uid={user.uid} tema={tema} />}
 
               {rol === "ogrenci" && (
                 <View

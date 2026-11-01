@@ -49,17 +49,32 @@ service cloud.firestore {
          soru.kullaniciEposta == request.auth.token.email);
     }
 
-    // Sunucunun verdiği kurum claim'leri
-    function mudurMu(kurumId) {
+    // Kurum etkin mi? Askıya alınan ya da kapatılan kurumun yöneticileri, claim'leri belirteçte kalsa bile
+    // hiçbir kurum verisini okuyamaz. Kurum belgesi yoksa get() hata verir ve kural reddeder.
+    function kurumAktif(kurumId) {
+      return get(/databases/$(database)/documents/kurumlar/$(kurumId)).data.get('durum', '') == 'aktif';
+    }
+
+    // Sunucunun verdiği kurum claim'leri (kurumun durumuna bakmaz; yalnızca kurum belgesinin kendisi için)
+    function mudurClaim(kurumId) {
       return girisli()
         && request.auth.token.get('kurumRol', '') == 'mudur'
         && request.auth.token.get('kurumId', '') == kurumId;
     }
 
-    function kurumYoneticisiMi(kurumId) {
+    function yoneticiClaim(kurumId) {
       return girisli()
         && request.auth.token.get('kurumRol', '') in ['mudur', 'ogretmen']
         && request.auth.token.get('kurumId', '') == kurumId;
+    }
+
+    // Kurum verisine erişim: claim VE kurum aktif
+    function mudurMu(kurumId) {
+      return mudurClaim(kurumId) && kurumAktif(kurumId);
+    }
+
+    function kurumYoneticisiMi(kurumId) {
+      return yoneticiClaim(kurumId) && kurumAktif(kurumId);
     }
 
     // Öğretmenin kapsamı sunucunun yazdığı claim'den gelir: "tum" (claim yoksa da bu sayılır, bu
@@ -145,7 +160,8 @@ service cloud.firestore {
     // ---------------------------------------------------------------- kurumlar
     // Tüm yazmalar sunucuya aittir (varsayılan: istemci yazamaz).
     match /kurumlar/{kurumId} {
-      allow get: if kurumYoneticisiMi(kurumId);
+      // Kurum belgesi (ad, durum, lisans) askıdayken de okunur; böylece yönetici ekranı durumu gösterebilir
+      allow get: if yoneticiClaim(kurumId);
       allow list: if false;
 
       // Kurum geneli öğrenci özetleri: müdür ve "tum" kapsamlı öğretmenler
@@ -194,6 +210,12 @@ service cloud.firestore {
         allow read: if mudurMu(kurumId);
         allow write: if false;
       }
+    }
+
+    // ---------------------------------------------------------------- platformYoneticileri
+    // Platform yöneticisi listesi yalnızca Console'dan yazılır ve yalnızca sunucu okur; istemciye tamamen kapalı.
+    match /platformYoneticileri/{eposta} {
+      allow read, write: if false;
     }
 
     // ---------------------------------------------------------------- baglantiKodlari

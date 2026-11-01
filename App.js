@@ -19,7 +19,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { Ionicons } from "@expo/vector-icons";
 
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -43,6 +42,8 @@ import OgrenciListesiEkrani from "./screens/OgrenciListesiEkrani";
 import GenelBakisEkrani from "./screens/GenelBakisEkrani";
 import useDuyuruKutusu from "./utils/useDuyuruKutusu";
 import { DuyuruContext } from "./utils/DuyuruContext";
+import AltMenu from "./screens/AltMenu";
+import { rozetDegeri, sekmeEtiketi } from "./utils/sekmeAyarlari";
 import { yoneticiOl, kurumHataMesaji } from "./utils/kurumIstemci";
 import { YAS_ONAYI_SURUMU } from "./utils/yasalMetinler";
 import { PremiumProvider } from "./PremiumContext";
@@ -51,6 +52,14 @@ import { dersBul, dersBilgisiVar } from "./utils/ders";
 import ErrorBoundary from "./ErrorBoundary";
 
 const Tab = createBottomTabNavigator();
+
+// Tüm rozetler (okunmamış sayısı) aynı görünümde
+const ROZET_STILI = {
+  backgroundColor: "#EF4444",
+  color: "#FFFFFF",
+  fontSize: 12,
+  fontWeight: "bold",
+};
 
 const ROL_ETIKETLERI = {
   ogrenci: "Öğrenci",
@@ -325,38 +334,15 @@ function MainApp() {
     <PremiumProvider premiumMu={premiumMu} rol={kullaniciRolu}>
       <DuyuruContext.Provider value={duyuruKutusu}>
       <Tab.Navigator
-        screenOptions={({ route }) => ({
-          tabBarIcon: ({ focused, color, size }) => {
-            let iconName;
-
-            if (route.name === "Ana Sayfa") {
-              iconName = focused ? "camera" : "camera-outline";
-            } else if (route.name === "Hata Defteri") {
-              iconName = focused ? "book" : "book-outline";
-            } else if (route.name === "Profil") {
-              iconName = focused ? "person" : "person-outline";
-            } else if (route.name === "Yönetim") {
-              iconName = focused ? "business" : "business-outline";
-            } else if (route.name === "Genel Bakış") {
-              iconName = focused ? "stats-chart" : "stats-chart-outline";
-            } else if (route.name === "Öğrenciler") {
-              iconName = focused ? "people" : "people-outline";
-            } else if (route.name === "Veli Paneli") {
-              iconName = focused
-                ? "shield-checkmark"
-                : "shield-checkmark-outline";
-            }
-
-            return <Ionicons name={iconName} size={size} color={color} />;
-          },
+        // Sayfalar anında değişir; yalnızca alt menüdeki gösterge kayar (AltMenu)
+        tabBar={(props) => (
+          <AltMenu {...props} tema={tema} rozetStili={ROZET_STILI} />
+        )}
+        screenOptions={{
+          animation: "none",
           headerShown: false,
-          tabBarActiveTintColor: tema.anaButon,
-          tabBarInactiveTintColor: tema.ikincilMetin,
-          tabBarStyle: {
-            backgroundColor: tema.kutuArkaplan,
-            borderTopColor: tema.kutuCerceve,
-          },
-        })}
+          tabBarHideOnKeyboard: true,
+        }}
       >
         {kullaniciRolu === "ogrenci" ? (
           <>
@@ -370,13 +356,11 @@ function MainApp() {
               component={HistoryScreen}
               options={{
                 title: "Geçmiş Sorular",
-                tabBarBadge: okunmamisSayisi > 0 ? okunmamisSayisi : null,
-                tabBarBadgeStyle: {
-                  backgroundColor: "#EF4444",
-                  color: "#FFFFFF",
-                  fontSize: 12,
-                  fontWeight: "bold",
-                },
+                tabBarBadge: rozetDegeri(okunmamisSayisi),
+                tabBarAccessibilityLabel: sekmeEtiketi(
+                  "Geçmiş Sorular",
+                  okunmamisSayisi
+                ),
               }}
             />
             <Tab.Screen
@@ -384,14 +368,12 @@ function MainApp() {
               component={ProfileScreen}
               options={{
                 title: "Hesabım",
-                tabBarBadge:
-                  duyuruKutusu.okunmamis > 0 ? duyuruKutusu.okunmamis : null,
-                tabBarBadgeStyle: {
-                  backgroundColor: "#EF4444",
-                  color: "#FFFFFF",
-                  fontSize: 12,
-                  fontWeight: "bold",
-                },
+                tabBarBadge: rozetDegeri(duyuruKutusu.okunmamis),
+                tabBarAccessibilityLabel: sekmeEtiketi(
+                  "Hesabım",
+                  duyuruKutusu.okunmamis,
+                  "yeni duyuru"
+                ),
               }}
             />
           </>

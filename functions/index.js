@@ -100,7 +100,21 @@ exports.raporKaydi = onCall(ORTAK, (request) =>
 exports.erisimKayitlariniTemizle = onSchedule(
   { region: "europe-west1", schedule: "every day 03:30", timeZone: "Europe/Istanbul", timeoutSeconds: 540 },
   async () => {
-    console.log("Silinen erişim kaydı:", await erisim.eskiKayitlariSil());
+    // Sırayla çalışır (aynı belgelere eş zamanlı dokunmasın); biri hata verse diğeri yine denenir
+    const sonuc = { anonim: null, silinen: null };
+    let ilkHata = null;
+    try {
+      sonuc.anonim = await erisim.silinenOgrencileriAnonimlestir();
+    } catch (hata) {
+      ilkHata = hata;
+    }
+    try {
+      sonuc.silinen = await erisim.eskiKayitlariSil();
+    } catch (hata) {
+      ilkHata = ilkHata || hata;
+    }
+    console.log("Anonimleştirilen:", sonuc.anonim, "Silinen:", sonuc.silinen);
+    if (ilkHata) throw ilkHata;
   }
 );
 

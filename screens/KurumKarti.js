@@ -170,8 +170,9 @@ export default function KurumKarti({ uid, tema }) {
           </Text>
           <Text style={[styles.aciklama, { color: tema.ikincilMetin }]}>
             Dershane müdürün sorularını ve çözümlerini, öğretmenlerin ise soru
-            sayın ve ders dağılımın gibi istatistiklerini görebilir. İstediğin
-            zaman ayrılabilirsin.
+            sayın ve ders dağılımın gibi istatistiklerini görebilir. Müdürün
+            sorularına her erişimi kaydedilir ve kayıtlar 12 ay saklanır.
+            İstediğin zaman ayrılabilirsin.
           </Text>
           {sonErisim !== null && (
             <Text style={[styles.sonErisim, { color: tema.ikincilMetin }]}>

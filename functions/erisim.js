@@ -9,7 +9,7 @@
 // İstemci bu yollara yazamaz (güvenlik kuralları); müdür kayıtları okur, öğrenci yalnızca kendi üye
 // belgesindeki son erişim zamanını okur.
 
-const { getFirestore, Timestamp } = require("firebase-admin/firestore");
+const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
 const { getStorage } = require("firebase-admin/storage");
 const { HttpsError } = require("firebase-functions/v2/https");
 const { mudurDogrula } = require("./kurum");
@@ -294,15 +294,20 @@ const raporKaydi = async (uid, token, veri) => {
 };
 
 // ---------------------------------------------------------------------------
-// 12 aylık saklama: eski kayıtlar silinir (kurum başına sorgu; otomatik indeks yeterli)
+// KVKK: saklama ve anonimleştirme (her gece çalışır)
+//   1) 12 aydan eski erişim kayıtları silinir.
+//   2) Hesabı silinen öğrencinin kayıtlarından kimliği (ogrenciUid) kaldırılır; kayıt, yöneticinin
+//      ne zaman erişim yaptığının denetim izi olarak saklama süresi dolana kadar kalır ama artık kimseyle eşleşmez.
+// Kurumlar listDocuments ile gezilir: belgesi silinmiş olsa bile altındaki kayıtlar yetim kalmaz.
 // ---------------------------------------------------------------------------
+const kurumReferanslari = async () => db().collection("kurumlar").listDocuments();
+
 const eskiKayitlariSil = async (simdi = Date.now()) => {
   const sinir = Timestamp.fromMillis(simdi - SAKLAMA_MS);
-  const kurumlar = await db().collection("kurumlar").select().get();
   let silinen = 0;
-  for (const kurum of kurumlar.docs) {
+  for (const kurumRef of await kurumReferanslari()) {
     for (;;) {
-      const eski = await kurum.ref
+      const eski = await kurumRef
         .collection("erisimKayitlari")
         .where("zaman", "<", sinir)
         .limit(TOPLU_BOYUT)
@@ -317,12 +322,48 @@ const eskiKayitlariSil = async (simdi = Date.now()) => {
   return silinen;
 };
 
+const silinenOgrencileriAnonimlestir = async () => {
+  let anonim = 0;
+  for (const kurumRef of await kurumReferanslari()) {
+    const koleksiyon = kurumRef.collection("erisimKayitlari");
+    let imlec = null;
+    for (;;) {
+      let sorgu = koleksiyon.orderBy("__name__").limit(TOPLU_BOYUT);
+      if (imlec) sorgu = sorgu.startAfter(imlec);
+      const sayfa = await sorgu.get();
+      if (sayfa.empty) break;
+      imlec = sayfa.docs[sayfa.docs.length - 1];
+
+      const uidler = [
+        ...new Set(sayfa.docs.map((d) => d.data().ogrenciUid).filter((u) => typeof u === "string" && u)),
+      ];
+      if (uidler.length > 0) {
+        const profiller = await db().getAll(...uidler.map((u) => db().doc(`kullanicilar/${u}`)));
+        const silinenler = new Set(uidler.filter((_, i) => !profiller[i].exists));
+        const batch = db().batch();
+        let sayac = 0;
+        for (const d of sayfa.docs) {
+          if (silinenler.has(d.data().ogrenciUid)) {
+            batch.update(d.ref, { ogrenciUid: FieldValue.delete() });
+            sayac++;
+          }
+        }
+        if (sayac > 0) await batch.commit();
+        anonim += sayac;
+      }
+      if (sayfa.size < TOPLU_BOYUT) break;
+    }
+  }
+  return anonim;
+};
+
 module.exports = {
   ogrenciSorulariGetir,
   soruCozumuGetir,
   soruFotografiGetir,
   raporKaydi,
   eskiKayitlariSil,
+  silinenOgrencileriAnonimlestir,
   erisimiKaydet,
   fotoYolu,
 };

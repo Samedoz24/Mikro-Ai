@@ -10,7 +10,8 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "../theme";
-import { cozumYukle } from "../utils/cozumYukleyici";
+import { cozumuDuzenle } from "../utils/cozumYukleyici";
+import { soruCozumuGetir } from "../utils/kurumIstemci";
 import { YONETICI_RENGI } from "../utils/useYoneticiYetkisi";
 import { tarihSaatMetni } from "../utils/kurumSorular";
 
@@ -21,6 +22,7 @@ export default function SoruIncelemesi({ soru, tema, onGeri }) {
   const [yukleniyor, setYukleniyor] = useState(true);
   const [cozum, setCozum] = useState(null);
   const [kartLinki, setKartLinki] = useState(null);
+  const [foto, setFoto] = useState(null);
   const [hata, setHata] = useState(false);
   const [tamEkran, setTamEkran] = useState(false);
   const canli = useRef(true);
@@ -36,13 +38,13 @@ export default function SoruIncelemesi({ soru, tema, onGeri }) {
     setYukleniyor(true);
     setHata(false);
     try {
-      const sonuc = await cozumYukle(soru, soru.kullaniciEposta, {
-        onbellek: false,
-      });
+      const sonuc = await soruCozumuGetir(soru.id);
       if (!canli.current) return;
-      setCozum(sonuc.cozumDetayi || null);
-      setKartLinki(sonuc.cozumKartiLink || null);
-      setHata(!sonuc.cozumDetayi && !!sonuc.hata);
+      const duzgun = sonuc?.cozum ? cozumuDuzenle(sonuc.cozum) : null;
+      setCozum(duzgun);
+      setKartLinki(sonuc?.kartResmi || null);
+      setFoto(sonuc?.fotograf || null);
+      setHata(!duzgun && !!sonuc?.hata);
     } catch (e) {
       console.log("Çözüm yüklenemedi:", e?.code || e?.message);
       if (canli.current) setHata(true);
@@ -65,7 +67,7 @@ export default function SoruIncelemesi({ soru, tema, onGeri }) {
       "Sonuç bulunamadı"
   );
 
-  if (tamEkran && soru.fotoLink) {
+  if (tamEkran && foto) {
     return (
       <View style={styles.tamEkran}>
         <TouchableOpacity
@@ -77,7 +79,7 @@ export default function SoruIncelemesi({ soru, tema, onGeri }) {
           <Ionicons name="close-circle" size={36} color="#fff" />
         </TouchableOpacity>
         <Image
-          source={{ uri: soru.fotoLink }}
+          source={{ uri: foto }}
           style={styles.tamEkranResim}
           resizeMode="contain"
         />
@@ -114,7 +116,7 @@ export default function SoruIncelemesi({ soru, tema, onGeri }) {
         contentContainerStyle={{ padding: 20, paddingBottom: 50 }}
         showsVerticalScrollIndicator={false}
       >
-        {soru.fotoLink ? (
+        {foto ? (
           <TouchableOpacity
             activeOpacity={0.85}
             onPress={() => setTamEkran(true)}
@@ -122,7 +124,7 @@ export default function SoruIncelemesi({ soru, tema, onGeri }) {
             accessibilityLabel="Fotoğrafı tam ekran aç"
           >
             <Image
-              source={{ uri: soru.fotoLink }}
+              source={{ uri: foto }}
               style={[styles.foto, { backgroundColor: tema.kutuCerceve }]}
               resizeMode="contain"
             />

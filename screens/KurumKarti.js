@@ -17,6 +17,8 @@ import { doc, onSnapshot } from "firebase/firestore";
 import { useOgrenciDuyurulari } from "../utils/DuyuruContext";
 import { duyuruZamanMetni } from "../utils/kurumDuyuru";
 import { yeniMi } from "../utils/ogrenciDuyuru";
+import { milisaniye } from "../utils/kurumIstatistik";
+import { tarihSaatMetni } from "../utils/kurumSorular";
 import { db } from "../firebaseConfig";
 import {
   kurumaKatil,
@@ -29,6 +31,7 @@ import {
 export default function KurumKarti({ uid, tema }) {
   const [kurumId, setKurumId] = useState(null);
   const [kurumAdi, setKurumAdi] = useState(null);
+  const [sonErisim, setSonErisim] = useState(null);
   const [modalGorunur, setModalGorunur] = useState(false);
   const [kod, setKod] = useState("");
   const [onayli, setOnayli] = useState(false);
@@ -67,12 +70,19 @@ export default function KurumKarti({ uid, tema }) {
   useEffect(() => {
     if (!uid || !kurumId) {
       setKurumAdi(null);
+      setSonErisim(null);
       return;
     }
     return onSnapshot(
       doc(db, "kurumlar", kurumId, "uyeler", uid),
-      (snap) => setKurumAdi(snap.data()?.kurumAdi || null),
-      () => setKurumAdi(null)
+      (snap) => {
+        setKurumAdi(snap.data()?.kurumAdi || null);
+        setSonErisim(milisaniye(snap.data()?.sonYonetimErisimi));
+      },
+      () => {
+        setKurumAdi(null);
+        setSonErisim(null);
+      }
     );
   }, [uid, kurumId]);
 
@@ -163,6 +173,12 @@ export default function KurumKarti({ uid, tema }) {
             sayın ve ders dağılımın gibi istatistiklerini görebilir. İstediğin
             zaman ayrılabilirsin.
           </Text>
+          {sonErisim !== null && (
+            <Text style={[styles.sonErisim, { color: tema.ikincilMetin }]}>
+              🔎 Dershane yönetimi son olarak {tarihSaatMetni(sonErisim)}{" "}
+              tarihinde sorularına baktı.
+            </Text>
+          )}
           <TouchableOpacity
             style={[styles.duyuruSatiri, { borderColor: tema.kutuCerceve }]}
             onPress={duyurulariAc}
@@ -445,6 +461,7 @@ const styles = StyleSheet.create({
   baslik: { fontSize: 15, fontWeight: "bold" },
   ikon: { fontSize: 20 },
   kurumAdi: { fontSize: 18, fontWeight: "bold", marginBottom: 8 },
+  sonErisim: { fontSize: 13, lineHeight: 18, marginBottom: 12 },
   aciklama: { fontSize: 13, lineHeight: 19, marginBottom: 14 },
   anaButon: {
     paddingVertical: 14,

@@ -5,6 +5,7 @@ const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const kurum = require("./kurum");
 const ozet = require("./ozet");
 const duyuru = require("./duyuru");
+const erisim = require("./erisim");
 
 initializeApp();
 
@@ -73,6 +74,34 @@ exports.duyuruGonder = onCall(ORTAK, (request) =>
 
 exports.duyuruSil = onCall(ORTAK, (request) =>
   duyuru.duyuruSil(kurum.girisliUid(request), request.auth.token, request.data)
+);
+
+// Müdür öğrenci verisine yalnızca bu fonksiyonlarla ulaşır; her erişim önce kaydedilir (KVKK)
+// Yanıtlar büyük olabileceğinden bellek/süre payı artırılmıştır.
+const ERISIM = { ...ORTAK, memory: "512MiB", timeoutSeconds: 60 };
+
+exports.ogrenciSorulariGetir = onCall(ERISIM, (request) =>
+  erisim.ogrenciSorulariGetir(kurum.girisliUid(request), request.auth.token, request.data)
+);
+
+exports.soruCozumuGetir = onCall(ERISIM, (request) =>
+  erisim.soruCozumuGetir(kurum.girisliUid(request), request.auth.token, request.data)
+);
+
+exports.soruFotografiGetir = onCall(ERISIM, (request) =>
+  erisim.soruFotografiGetir(kurum.girisliUid(request), request.auth.token, request.data)
+);
+
+exports.raporKaydi = onCall(ORTAK, (request) =>
+  erisim.raporKaydi(kurum.girisliUid(request), request.auth.token, request.data)
+);
+
+// Erişim kayıtları 12 ay saklanır, sonra silinir
+exports.erisimKayitlariniTemizle = onSchedule(
+  { region: "europe-west1", schedule: "every day 03:30", timeZone: "Europe/Istanbul", timeoutSeconds: 540 },
+  async () => {
+    console.log("Silinen erişim kaydı:", await erisim.eskiKayitlariSil());
+  }
 );
 
 // Her gece süresi dolan lisansları kapatır

@@ -9,15 +9,50 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { collection, getDocs, query, where } from "firebase/firestore";
-import { db } from "../firebaseConfig";
+import {
+  ogrenciSorulariGetir,
+  soruFotografiGetir,
+} from "../utils/kurumIstemci";
 import { YONETICI_RENGI } from "../utils/useYoneticiYetkisi";
 import { sorulariHazirla, tarihSaatMetni } from "../utils/kurumSorular";
 
 const SAYFA_BOYUTU = 30;
 
-// Bir öğrencinin gönderdiği soruların listesi. Yalnızca müdür bu ekrana ulaşır; güvenlik kuralları
-// da soru belgelerini yalnızca öğrencinin kurumunun müdürüne açar.
+// Küçük resimler sunucudan istenir (kalıcı fotoğraf bağlantısı istemciye verilmez). Yalnızca bellekte tutulur,
+// ekrandan çıkınca silinir; cihaza kaydedilmez.
+const fotoBellegi = new Map();
+const FOTO_BELLEK_SINIRI = 40;
+
+function KucukFoto({ soruId, style }) {
+  const [adres, setAdres] = useState(fotoBellegi.get(soruId) || null);
+  useEffect(() => {
+    if (adres) return undefined;
+    let canliMi = true;
+    soruFotografiGetir(soruId)
+      .then((sonuc) => {
+        if (!canliMi || !sonuc?.fotograf) return;
+        if (fotoBellegi.size >= FOTO_BELLEK_SINIRI) {
+          fotoBellegi.delete(fotoBellegi.keys().next().value);
+        }
+        fotoBellegi.set(soruId, sonuc.fotograf);
+        setAdres(sonuc.fotograf);
+      })
+      .catch((e) =>
+        console.log("Küçük resim alınamadı:", e?.code || e?.message)
+      );
+    return () => {
+      canliMi = false;
+    };
+  }, [soruId, adres]);
+  return adres ? (
+    <Image source={{ uri: adres }} style={style} />
+  ) : (
+    <View style={style} />
+  );
+}
+
+// Bir öğrencinin gönderdiği soruların listesi. Yalnızca müdür bu ekrana ulaşır; veri yalnızca
+// sunucu fonksiyonuyla alınır ve her erişim kaydedilir.
 export default function OgrenciSorulari({
   ogrenciId,
   isim,
@@ -34,6 +69,7 @@ export default function OgrenciSorulari({
     canli.current = true;
     return () => {
       canli.current = false;
+      fotoBellegi.clear();
     };
   }, []);
 
@@ -41,15 +77,11 @@ export default function OgrenciSorulari({
     setHata(false);
     setSorular(null);
     try {
-      const snap = await getDocs(
-        query(collection(db, "sorular"), where("kullaniciUid", "==", ogrenciId))
-      );
+      const { sorular: ham } = await ogrenciSorulariGetir(ogrenciId);
       if (!canli.current) return;
-      setSorular(
-        sorulariHazirla(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-      );
+      setSorular(sorulariHazirla(Array.isArray(ham) ? ham : []));
     } catch (e) {
-      console.log("Öğrenci soruları okunamadı:", e?.code);
+      console.log("Öğrenci soruları okunamadı:", e?.code || e?.message);
       if (canli.current) setHata(true);
     }
   }, [ogrenciId]);
@@ -135,9 +167,9 @@ export default function OgrenciSorulari({
         { backgroundColor: tema.kutuArkaplan, borderColor: tema.kutuCerceve },
       ]}
     >
-      {item.fotoLink ? (
-        <Image
-          source={{ uri: item.fotoLink }}
+      {item.fotoVar ? (
+        <KucukFoto
+          soruId={item.id}
           style={[styles.kucukFoto, { backgroundColor: tema.kutuCerceve }]}
         />
       ) : (

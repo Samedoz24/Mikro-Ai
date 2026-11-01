@@ -21,6 +21,7 @@ import useKurumOzetleri from "../utils/useKurumOzetleri";
 import EkipKarti from "./EkipKarti";
 import GruplarKarti from "./GruplarKarti";
 import DuyurularKarti from "./DuyurularKarti";
+import ErisimKayitlariKarti from "./ErisimKayitlariKarti";
 import { kodYenile, kurumHataMesaji } from "../utils/kurumIstemci";
 import {
   kurumGenelBakis,
@@ -342,6 +343,10 @@ export default function YoneticiAnaEkran() {
               uyeSayisi={uyeSayisi}
               tema={tema}
             />
+          )}
+
+          {mudurMu && (
+            <ErisimKayitlariKarti kurumId={yetki.kurumId} tema={tema} />
           )}
 
           <View style={kutuStili}>

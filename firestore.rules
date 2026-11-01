@@ -193,6 +193,12 @@ service cloud.firestore {
         allow read: if mudurMu(kurumId);
         allow write: if false;
       }
+
+      // KVKK erişim kayıtları: yalnızca müdür okur, yalnızca sunucu yazar (12 ay sonra silinir)
+      match /erisimKayitlari/{kayitId} {
+        allow read: if mudurMu(kurumId);
+        allow write: if false;
+      }
     }
 
     // ---------------------------------------------------------------- baglantiKodlari

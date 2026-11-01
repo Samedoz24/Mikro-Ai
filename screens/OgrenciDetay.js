@@ -15,6 +15,7 @@ import {
   kurumHataMesaji,
   ogrenciCikar,
   ogrenciGrupAta,
+  raporKaydi,
 } from "../utils/kurumIstemci";
 import { grupAdiBul } from "../utils/kurumIstatistik";
 import { ogrenciRaporuHtml, raporDosyaAdi } from "../utils/ogrenciRaporu";
@@ -81,6 +82,8 @@ export default function OgrenciDetay({
     setRaporHazirlaniyor(true);
     try {
       const an = Date.now();
+      // Erişim önce kaydedilir; kayıt yazılamazsa rapor hazırlanmaz (KVKK)
+      await raporKaydi(satir.id);
       const sonuc = await raporuPaylas({
         html: ogrenciRaporuHtml({ kurumAdi, satir, simdi: an }),
         dosyaAdi: raporDosyaAdi(satir.isim, an),
@@ -90,11 +93,13 @@ export default function OgrenciDetay({
         Alert.alert("Bilgi", "Cihazınızda paylaşım özelliği desteklenmiyor.");
       }
     } catch (e) {
-      console.log("Rapor hazırlama hatası:", e?.message);
+      console.log("Rapor hazırlama hatası:", e?.code || e?.message);
       if (canli.current) {
         Alert.alert(
           "Rapor Hazırlanamadı",
-          "Rapor oluşturulurken bir sorun yaşandı. Lütfen tekrar dene."
+          e?.code?.startsWith("functions/")
+            ? kurumHataMesaji(e)
+            : "Rapor oluşturulurken bir sorun yaşandı. Lütfen tekrar dene."
         );
       }
     } finally {

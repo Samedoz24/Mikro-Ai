@@ -35,6 +35,8 @@ const HATA_MESAJLARI = {
   "hesap-kullaniliyor":
     "Bu hesap öğrenci ya da veli olarak kullanılıyor. Yönetici girişi için farklı bir e-posta adresi kullan.",
   "eposta-dogrulanmadi": "E-posta adresini doğrulaman gerekiyor.",
+  "ogrenci-yok": "Bu öğrenci artık dershanede kayıtlı değil.",
+  "soru-yok": "Bu soru bulunamadı.",
   "eposta-yok": "Hesabında e-posta adresi bulunamadı.",
   "eposta-gecersiz": "Geçerli bir e-posta adresi yaz.",
   "zaten-yonetici": "Bu adres zaten dershanenin yöneticisi.",
@@ -115,6 +117,30 @@ export const duyuruGonder = async (baslik, metin, grupId = null) => {
     metin,
     grupId,
   });
+  return sonuc.data;
+};
+
+// Müdür öğrenci verisine yalnızca sunucu üzerinden ulaşır; her erişim sunucuda kaydedilir (KVKK)
+export const ogrenciSorulariGetir = async (uid) => {
+  const sonuc = await httpsCallable(functions, "ogrenciSorulariGetir")({ uid });
+  return sonuc.data;
+};
+
+export const soruCozumuGetir = async (soruId) => {
+  const sonuc = await httpsCallable(functions, "soruCozumuGetir")({ soruId });
+  return sonuc.data;
+};
+
+export const soruFotografiGetir = async (soruId) => {
+  const sonuc = await httpsCallable(
+    functions,
+    "soruFotografiGetir"
+  )({ soruId });
+  return sonuc.data;
+};
+
+export const raporKaydi = async (uid) => {
+  const sonuc = await httpsCallable(functions, "raporKaydi")({ uid });
   return sonuc.data;
 };
 

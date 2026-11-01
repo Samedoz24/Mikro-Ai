@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "../theme";
-import { cozumuDuzenle } from "../utils/cozumYukleyici";
+import { cozumuDuzenle, kesinSonuc } from "../utils/cozumYukleyici";
 import { soruCozumuGetir } from "../utils/kurumIstemci";
 import { YONETICI_RENGI } from "../utils/useYoneticiYetkisi";
 import { tarihSaatMetni } from "../utils/kurumSorular";
@@ -60,12 +60,7 @@ export default function SoruIncelemesi({ soru, tema, onGeri }) {
   const acikKutu = karanlik ? "#1A1A1A" : "#F9FAFB";
   const adimKutusu = karanlik ? "#1E293B" : "#EFF6FF";
   const adimlar = Array.isArray(cozum?.cardSteps) ? cozum.cardSteps : [];
-  const sonuc = String(
-    cozum?.cardAnswer ||
-      cozum?.correct_answer ||
-      cozum?.solution ||
-      "Sonuç bulunamadı"
-  );
+  const sonuc = kesinSonuc(cozum);
 
   if (tamEkran && foto) {
     return (

@@ -51,6 +51,7 @@ import {
   cozumYukle,
   cozumOnbellekSil,
   cozumYollari,
+  kesinSonuc,
 } from "../utils/cozumYukleyici";
 import { soruBlokHtml, belgeHtml } from "../utils/pdfIcerik";
 import { DERSLER, dersBul } from "../utils/ders";
@@ -831,15 +832,7 @@ export default function HistoryScreen() {
                           },
                         ]}
                       >
-                        {String(
-                          seciliSoru.cozumDetayi.cardAnswer ||
-                            seciliSoru.cozumDetayi.correct_answer ||
-                            seciliSoru.cozumDetayi.solution ||
-                            seciliSoru.cozumDetayi.answer ||
-                            seciliSoru.cozumDetayi.sonuc ||
-                            seciliSoru.cozumDetayi.result ||
-                            "Sonuç bulunamadı"
-                        )}
+                        {kesinSonuc(seciliSoru.cozumDetayi)}
                       </Text>
                     </View>
 

@@ -179,6 +179,19 @@ const pratikSorulariTopla = (cozum) => {
   );
 };
 
+// Çözümün "kesin sonuç" metni: n8n biçimine göre farklı alanlarda gelebilir. Tüm ekranlar (öğrenci, veli,
+// müdür) aynı sırayı kullanır; hiçbiri doluysa "Sonuç bulunamadı" döner.
+export const kesinSonuc = (cozum) =>
+  String(
+    cozum?.cardAnswer ||
+      cozum?.correct_answer ||
+      cozum?.solution ||
+      cozum?.answer ||
+      cozum?.sonuc ||
+      cozum?.result ||
+      "Sonuç bulunamadı"
+  );
+
 // Eski ve yeni n8n biçimlerini ekranın beklediği tek biçime getirir:
 // metin alanları gerçekten metin, adımlar metin dizisi, ders ("lesson" dahil) tek alanda,
 // benzer sorular tek listede (pratikSorular) olur.

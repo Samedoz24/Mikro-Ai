@@ -40,7 +40,7 @@ import {
 import { useTheme } from "../ThemeContext";
 // 🚀 YENİ: Gerçek karanlık mod kontrolü için
 import { colors } from "../theme";
-import { cozumYukle } from "../utils/cozumYukleyici";
+import { cozumYukle, kesinSonuc } from "../utils/cozumYukleyici";
 import { dersBul } from "../utils/ders";
 import { kodlaOgrenciBul } from "../utils/baglanti";
 
@@ -1042,12 +1042,7 @@ export default function ParentDashboard() {
                           },
                         ]}
                       >
-                        {String(
-                          seciliSoru.cozumDetayi.cardAnswer ||
-                            seciliSoru.cozumDetayi.correct_answer ||
-                            seciliSoru.cozumDetayi.solution ||
-                            "Sonuç bulunamadı"
-                        )}
+                        {kesinSonuc(seciliSoru.cozumDetayi)}
                       </Text>
                     </View>
 

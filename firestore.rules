@@ -88,12 +88,6 @@ service cloud.firestore {
             || get(/databases/$(database)/documents/kurumlar/$(kurumId)/uyeler/$(request.auth.uid)).data.get('grupId', '') == kutuId);
     }
 
-    // Öğrencinin sunucu tarafından atanmış kurumu bu müdürün kurumuysa true
-    function kurumMuduruOgrenciyi(ogrenciUid) {
-      let kurum = get(/databases/$(database)/documents/kullanicilar/$(ogrenciUid)).data.get('kurumId', '');
-      return kurum != '' && mudurMu(kurum);
-    }
-
     // Kullanıcı yalnızca kendi seçebileceği rolleri yazabilir
     function istemciRolleri() {
       return ['ogrenci', 'veli'];
@@ -105,7 +99,8 @@ service cloud.firestore {
 
     // ---------------------------------------------------------------- kullanicilar
     match /kullanicilar/{uid} {
-      allow get: if ben(uid) || veliMi(uid) || (girisli() && kurumMuduruOgrenciyi(uid));
+      // Müdür öğrenci profilini doğrudan okuyamaz; yönetici verisi yalnızca sunucu üzerinden (erişim kaydıyla) verilir
+      allow get: if ben(uid) || veliMi(uid);
       allow list: if false;
 
       allow create: if ben(uid)
@@ -124,8 +119,8 @@ service cloud.firestore {
     // ---------------------------------------------------------------- sorular
     match /sorular/{soruId} {
       allow read: if soruSahibi(resource.data)
-        || veliMi(resource.data.kullaniciUid)
-        || (girisli() && 'kullaniciUid' in resource.data && kurumMuduruOgrenciyi(resource.data.kullaniciUid));
+        || veliMi(resource.data.kullaniciUid);
+      // Müdür soruları doğrudan okuyamaz: yalnızca sunucu fonksiyonları (erişim kaydı tutarak) verir
 
       allow create: if girisli()
         && request.resource.data.kullaniciUid == request.auth.uid

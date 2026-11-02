@@ -12,6 +12,19 @@ initializeApp();
 
 const ORTAK = { region: "europe-west1", maxInstances: 10 };
 
+// Gece görevleri: Cloud Run bazen soğuk başlatmada örnek bulamayıp isteği reddeder ("aborted after waiting too long
+// for an available instance"). Görev kodumuza hiç ulaşmadan başarısız olur; bu yüzden hata alırsa 5 kez denenir.
+// Görevlerin ikisi de tekrar çalıştırılabilir (idempotent) yazılmıştır.
+const GECE_GOREVI = {
+  region: "europe-west1",
+  timeZone: "Europe/Istanbul",
+  timeoutSeconds: 540,
+  retryCount: 5,
+  minBackoffSeconds: 60,
+  maxBackoffSeconds: 600,
+  maxRetrySeconds: 3600,
+};
+
 // Öğrenci kurum koduyla katılır. Girdi: { kod, onay: true }
 exports.kurumaKatil = onCall(ORTAK, (request) =>
   kurum.kurumaKatil(kurum.girisliUid(request), request.data)
@@ -125,7 +138,7 @@ exports.raporKaydi = onCall(ORTAK, (request) =>
 
 // Erişim kayıtları 12 ay saklanır, sonra silinir
 exports.erisimKayitlariniTemizle = onSchedule(
-  { region: "europe-west1", schedule: "every day 03:30", timeZone: "Europe/Istanbul", timeoutSeconds: 540 },
+  { ...GECE_GOREVI, schedule: "every day 03:30" },
   async () => {
     // Sırayla çalışır (aynı belgelere eş zamanlı dokunmasın); biri hata verse diğeri yine denenir
     const sonuc = { anonim: null, silinen: null };
@@ -147,7 +160,7 @@ exports.erisimKayitlariniTemizle = onSchedule(
 
 // Her gece süresi dolan lisansları kapatır
 exports.lisansKontrol = onSchedule(
-  { region: "europe-west1", schedule: "every day 03:00", timeZone: "Europe/Istanbul", timeoutSeconds: 540 },
+  { ...GECE_GOREVI, schedule: "every day 03:00" },
   async () => {
     const kapatilan = await kurum.lisansKontrol();
     console.log("Kapatılan kurumlar:", kapatilan.join(", ") || "yok");

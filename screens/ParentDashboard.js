@@ -38,6 +38,7 @@ import {
 } from "firebase/firestore";
 
 import { useTheme } from "../ThemeContext";
+import YapayZekaBilgi from "./YapayZekaBilgi";
 // 🚀 YENİ: Gerçek karanlık mod kontrolü için
 import { colors } from "../theme";
 import { cozumYukle, kesinSonuc } from "../utils/cozumYukleyici";
@@ -919,8 +920,15 @@ export default function ParentDashboard() {
                   </View>
                 ) : seciliSoru?.cozumDetayi ? (
                   <View style={styles.jsonArayuzKonteyner}>
-                    <View style={styles.aiEtiketKutusu}>
-                      <Text style={styles.aiEtiketYazi}>AI Çözüm</Text>
+                    <View style={styles.aiEtiketSatiri}>
+                      <View style={styles.aiEtiketKutusu}>
+                        <Text style={styles.aiEtiketYazi}>AI Çözüm</Text>
+                      </View>
+                      <YapayZekaBilgi
+                        tema={tema}
+                        kitle="inceleyen"
+                        style={styles.aiBilgiDugmesi}
+                      />
                     </View>
                     <Text
                       style={[styles.cozumAnaBaslik, { color: tema.metin }]}
@@ -1341,6 +1349,12 @@ const styles = StyleSheet.create({
     resizeMode: "cover",
   },
   jsonArayuzKonteyner: { marginTop: 10 },
+  aiEtiketSatiri: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  aiBilgiDugmesi: { marginBottom: 15 },
   aiEtiketKutusu: {
     backgroundColor: "#1E293B",
     alignSelf: "flex-start",

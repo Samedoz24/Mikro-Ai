@@ -42,6 +42,14 @@ import { colors } from "../theme";
 import { usePremium } from "../PremiumContext";
 import { kotaYenilenmeHatirlatmasiKur } from "../utils/notificationManager";
 import { takvimGunFarki, yerelTarih } from "../utils/tarih";
+import YapayZekaBilgi from "./YapayZekaBilgi";
+import {
+  SIK_SECENEKLERI,
+  BILINMIYOR,
+  secimGecerliMi,
+  gonderilebilirMi,
+  secimEtiketi,
+} from "../utils/sikSecimi";
 import { kotaDurumu, maksimumKota } from "../utils/kota";
 
 const screenWidth = Dimensions.get("window").width;
@@ -49,6 +57,8 @@ const screenWidth = Dimensions.get("window").width;
 export default function HomeScreen() {
   const [yukleniyor, setYukleniyor] = useState(false);
   const [image, setImage] = useState(null);
+  // Öğrencinin işaretlediği cevap (A-E ya da "Bilinmiyor"); seçilmeden Gönder açılmaz
+  const [secim, setSecim] = useState(null);
 
   const [seriModalGorunur, setSeriModalGorunur] = useState(false);
   const [guncelSeriSayisi, setGuncelSeriSayisi] = useState(0);
@@ -159,6 +169,7 @@ export default function HomeScreen() {
 
       if (!result.canceled) {
         setImage(result.assets[0].uri);
+        setSecim(null);
       }
     } catch (error) {
       console.log("Kamera hatası:", error);
@@ -169,7 +180,10 @@ export default function HomeScreen() {
     }
   };
 
-  const fotografiIptalEt = () => setImage(null);
+  const fotografiIptalEt = () => {
+    setImage(null);
+    setSecim(null);
+  };
 
   // Gerçekten ihtiyaç duyduğumuz sunucuya (Firebase Storage) ulaşılabiliyor mu?
   // Herhangi bir HTTP yanıtı "ulaşılabilir" demektir; üçüncü taraf bir siteye istek atılmaz.
@@ -199,6 +213,15 @@ export default function HomeScreen() {
 
   const fotografiGonder = async () => {
     if (!image) return;
+    // Seçim yapılmadan gönderilemez (düğme de kapalıdır; bu, kapalı düğmeyi atlatan bir yolu önler)
+    const gonderilenSecim = secim;
+    if (!secimGecerliMi(gonderilenSecim)) {
+      Alert.alert(
+        "Cevabını İşaretle",
+        "Göndermeden önce sorunun cevabını (A-E) ya da Bilinmiyor'u seçmelisin."
+      );
+      return;
+    }
     try {
       setYukleniyor(true);
       const baglanti = await internetVarMi();
@@ -275,6 +298,7 @@ export default function HomeScreen() {
         fotoLink: downloadURL,
         tarih: new Date().toISOString(),
         durum: "Bekliyor",
+        ogrenciSecimi: gonderilenSecim,
       });
 
       // Soru zaten gönderildi; kota güncellemesi başarısız olsa bile kullanıcıya "hata" gösterip
@@ -312,6 +336,12 @@ export default function HomeScreen() {
       setYukleniyor(false);
     }
   };
+
+  const gonderilebilir = gonderilebilirMi({
+    fotograf: image,
+    secim,
+    yukleniyor,
+  });
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: tema.arkaplan }]}>
@@ -360,6 +390,7 @@ export default function HomeScreen() {
         </Modal>
 
         <View style={styles.header}>
+          <YapayZekaBilgi tema={tema} style={styles.bilgiDugmesi} />
           <Text style={[styles.baslik, { color: tema.metin }]}>
             Soru Tarayıcı
           </Text>
@@ -398,6 +429,85 @@ export default function HomeScreen() {
           )}
         </TouchableOpacity>
 
+        {image && (
+          <View
+            style={styles.secimAlani}
+            accessibilityRole="radiogroup"
+            accessibilityLabel="Sorunun cevabı"
+          >
+            <Text style={[styles.secimBaslik, { color: tema.metin }]}>
+              Sorunun cevabı ne?
+            </Text>
+            <Text style={[styles.secimAciklama, { color: tema.ikincilMetin }]}>
+              Cevabı biliyorsan işaretle, bilmiyorsan Bilinmiyor'u seç.
+            </Text>
+            <View style={styles.sikSatiri}>
+              {SIK_SECENEKLERI.map((sik, i) => {
+                const secili = secim === sik;
+                return (
+                  <TouchableOpacity
+                    key={sik}
+                    onPress={() => setSecim(sik)}
+                    disabled={yukleniyor}
+                    activeOpacity={0.7}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: secili, disabled: yukleniyor }}
+                    accessibilityLabel={secimEtiketi(sik, secili)}
+                    style={[
+                      styles.sik,
+                      i > 0 && { marginLeft: 8 },
+                      {
+                        backgroundColor: secili ? tema.anaButon : "transparent",
+                        borderColor: secili ? tema.anaButon : tema.kutuCerceve,
+                        opacity: yukleniyor ? 0.5 : 1,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.sikYazi,
+                        { color: secili ? "#FFFFFF" : tema.metin },
+                      ]}
+                    >
+                      {sik}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <TouchableOpacity
+              onPress={() => setSecim(BILINMIYOR)}
+              disabled={yukleniyor}
+              activeOpacity={0.7}
+              accessibilityRole="radio"
+              accessibilityState={{
+                selected: secim === BILINMIYOR,
+                disabled: yukleniyor,
+              }}
+              accessibilityLabel={secimEtiketi(BILINMIYOR, secim === BILINMIYOR)}
+              style={[
+                styles.bilinmiyor,
+                {
+                  backgroundColor:
+                    secim === BILINMIYOR ? tema.anaButon : "transparent",
+                  borderColor:
+                    secim === BILINMIYOR ? tema.anaButon : tema.kutuCerceve,
+                  opacity: yukleniyor ? 0.5 : 1,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.sikYazi,
+                  { color: secim === BILINMIYOR ? "#FFFFFF" : tema.metin },
+                ]}
+              >
+                Bilinmiyor
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         <View style={styles.butonAlani}>
           {!image ? (
             <TouchableOpacity
@@ -424,13 +534,22 @@ export default function HomeScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={fotografiGonder}
-                disabled={yukleniyor}
+                disabled={!gonderilebilir}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !gonderilebilir }}
+                accessibilityLabel={
+                  secimGecerliMi(secim)
+                    ? "Gönder"
+                    : "Gönder, önce cevabı ya da Bilinmiyor'u seçmelisin"
+                }
                 style={[
                   styles.ikiliButon,
                   {
                     backgroundColor: yukleniyor
                       ? tema.ikincilMetin
                       : tema.anaButon,
+                    // Seçim yapılmadıysa soluk; seçince eski rengine döner
+                    opacity: !yukleniyor && !gonderilebilir ? 0.35 : 1,
                   },
                 ]}
               >
@@ -460,6 +579,8 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   header: { marginBottom: 35, alignItems: "center" },
+  // Başlığın sağ üstünde; başlığın ortalanmasını bozmaz
+  bilgiDugmesi: { position: "absolute", right: 0, top: 4, zIndex: 1 },
   baslik: {
     fontSize: 28,
     fontWeight: "bold",
@@ -479,12 +600,33 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     overflow: "hidden",
-    marginBottom: 35,
+    marginBottom: 18,
   },
   bosDurum: { alignItems: "center", padding: 20 },
   ikon: { marginBottom: 15, opacity: 0.8 },
   bosDurumYazi: { fontSize: 16, textAlign: "center", fontWeight: "500" },
   foto: { width: "100%", height: "100%", resizeMode: "cover" },
+  secimAlani: { marginBottom: 16 },
+  secimBaslik: { fontSize: 16, fontWeight: "bold", marginBottom: 2 },
+  secimAciklama: { fontSize: 13, lineHeight: 18, marginBottom: 10 },
+  sikSatiri: { flexDirection: "row" },
+  sik: {
+    flex: 1,
+    height: 46,
+    borderWidth: 1.5,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sikYazi: { fontSize: 16, fontWeight: "700" },
+  bilinmiyor: {
+    marginTop: 8,
+    height: 44,
+    borderWidth: 1.5,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   butonAlani: { paddingBottom: Platform.OS === "ios" ? 10 : 20 },
   tekliButon: {
     paddingVertical: 18,

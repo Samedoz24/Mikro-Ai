@@ -14,6 +14,7 @@ import { cozumuDuzenle, kesinSonuc } from "../utils/cozumYukleyici";
 import { soruCozumuGetir } from "../utils/kurumIstemci";
 import { YONETICI_RENGI } from "../utils/useYoneticiYetkisi";
 import { tarihSaatMetni } from "../utils/kurumSorular";
+import YapayZekaBilgi from "./YapayZekaBilgi";
 
 // Tek bir sorunun fotoğrafı ve yapay zekâ çözümü (müdür için salt okunur).
 // Çözüm dosyaları cihaza kaydedilmez: başkasının verisi yönetici telefonunda kalıcı olarak durmasın.
@@ -135,21 +136,28 @@ export default function SoruIncelemesi({ soru, tema, onGeri }) {
           </View>
         ) : cozum ? (
           <View>
-            <View
-              style={[
-                styles.etiket,
-                { backgroundColor: YONETICI_RENGI + "22" },
-              ]}
-            >
-              <Text
-                style={{
-                  color: YONETICI_RENGI,
-                  fontWeight: "800",
-                  fontSize: 12,
-                }}
+            <View style={styles.etiketSatiri}>
+              <View
+                style={[
+                  styles.etiket,
+                  { backgroundColor: YONETICI_RENGI + "22" },
+                ]}
               >
-                AI Çözüm
-              </Text>
+                <Text
+                  style={{
+                    color: YONETICI_RENGI,
+                    fontWeight: "800",
+                    fontSize: 12,
+                  }}
+                >
+                  AI Çözüm
+                </Text>
+              </View>
+              <YapayZekaBilgi
+                tema={tema}
+                kitle="inceleyen"
+                style={styles.bilgiDugmesi}
+              />
             </View>
             <Text style={[styles.cozumBaslik, { color: tema.metin }]}>
               {cozum.cardTitle || "Soru Çözümü"}
@@ -296,6 +304,12 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 14,
   },
+  etiketSatiri: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  bilgiDugmesi: { marginBottom: 10 },
   etiket: {
     alignSelf: "flex-start",
     paddingHorizontal: 10,

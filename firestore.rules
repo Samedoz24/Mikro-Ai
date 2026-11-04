@@ -143,7 +143,11 @@ service cloud.firestore {
         && request.resource.data.durum == 'Bekliyor'
         && request.resource.data.fotoLink is string
         && request.resource.data.keys().hasOnly(
-             ['kullaniciUid', 'kullaniciEposta', 'fotoLink', 'tarih', 'durum']);
+             ['kullaniciUid', 'kullaniciEposta', 'fotoLink', 'tarih', 'durum', 'ogrenciSecimi'])
+        // Öğrencinin işaretlediği cevap (çözümü doğrulamak için kullanılır). Alan, eski uygulama sürümleri
+        // gönderemediği için isteğe bağlıdır; varsa yalnızca bu altı değerden biri olabilir.
+        && (!('ogrenciSecimi' in request.resource.data)
+            || request.resource.data.ogrenciSecimi in ['A', 'B', 'C', 'D', 'E', 'Bilinmiyor']);
 
       // Sahibi yalnızca okundu damgası ve ders alanını değiştirebilir
       allow update: if soruSahibi(resource.data)

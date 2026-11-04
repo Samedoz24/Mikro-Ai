@@ -45,6 +45,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as MediaLibrary from "expo-media-library";
 
 import { useTheme } from "../ThemeContext";
+import YapayZekaBilgi from "./YapayZekaBilgi";
 import { colors } from "../theme";
 import { usePremium } from "../PremiumContext";
 import {
@@ -684,8 +685,15 @@ export default function HistoryScreen() {
                   </View>
                 ) : seciliSoru?.cozumDetayi ? (
                   <View style={styles.jsonArayuzKonteyner}>
-                    <View style={styles.aiEtiketKutusu}>
-                      <Text style={styles.aiEtiketYazi}>AI Çözüm</Text>
+                    <View style={styles.aiEtiketSatiri}>
+                      <View style={styles.aiEtiketKutusu}>
+                        <Text style={styles.aiEtiketYazi}>AI Çözüm</Text>
+                      </View>
+                      <YapayZekaBilgi
+                        tema={tema}
+                        kitle="ogrenci"
+                        style={styles.aiBilgiDugmesi}
+                      />
                     </View>
                     <Text
                       style={[styles.cozumAnaBaslik, { color: tema.metin }]}
@@ -1436,6 +1444,12 @@ const styles = StyleSheet.create({
     resizeMode: "cover",
   },
   jsonArayuzKonteyner: { marginTop: 10 },
+  aiEtiketSatiri: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  aiBilgiDugmesi: { marginBottom: 15 },
   aiEtiketKutusu: {
     backgroundColor: "#1E293B",
     alignSelf: "flex-start",

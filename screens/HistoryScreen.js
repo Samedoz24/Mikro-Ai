@@ -46,6 +46,7 @@ import * as MediaLibrary from "expo-media-library";
 
 import { useTheme } from "../ThemeContext";
 import YapayZekaBilgi from "./YapayZekaBilgi";
+import useAltMenuBoslugu from "../utils/altMenu";
 import { colors } from "../theme";
 import { usePremium } from "../PremiumContext";
 import {
@@ -89,6 +90,8 @@ const PRATIK_SEVIYELERI = {
 export default function HistoryScreen() {
   const { tema, temaModu } = useTheme();
   const insets = useSafeAreaInsets();
+  // Yüzen alt menünün altında kalmamak için
+  const altMenuBoslugu = useAltMenuBoslugu();
   const { premiumMu, premiumAc } = usePremium();
 
   // 🚀 EKLENDİ: Sayfa odakta mı kontrolü
@@ -396,6 +399,7 @@ export default function HistoryScreen() {
   if (yukleniyor) {
     return (
       <SafeAreaView
+        edges={["top", "left", "right"]}
         style={[
           styles.safeArea,
           { backgroundColor: tema.arkaplan, justifyContent: "center" },
@@ -407,7 +411,10 @@ export default function HistoryScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: tema.arkaplan }]}>
+    <SafeAreaView
+      edges={["top", "left", "right"]}
+      style={[styles.safeArea, { backgroundColor: tema.arkaplan }]}
+    >
       {/* 🚀 DÜZELTME: Sadece sayfa odaktaysa StatusBar çalışır ve gerçek karanlık rengi alır */}
       {isFocused && (
         <StatusBar
@@ -490,7 +497,7 @@ export default function HistoryScreen() {
                 data={filtrelenmisSorular}
                 keyExtractor={(item) => item.id}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 100 }}
+                contentContainerStyle={{ paddingBottom: altMenuBoslugu + 90 }}
                 renderItem={({ item }) => (
                   <TouchableOpacity
                     style={[
@@ -550,7 +557,7 @@ export default function HistoryScreen() {
         <TouchableOpacity
           style={[
             styles.fabButon,
-            { backgroundColor: tema.anaButon, bottom: 20 },
+            { backgroundColor: tema.anaButon, bottom: altMenuBoslugu + 12 },
           ]}
           onPress={pdfOlarakIndir}
           disabled={indirmeBasladi}

@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import useAltMenuBoslugu from "../utils/altMenu";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../ThemeContext";
 import useYoneticiYetkisi, {
@@ -38,6 +39,8 @@ import OgrenciPenceresi from "./OgrenciPenceresi";
 export default function OgrenciListesiEkrani() {
   const { tema } = useTheme();
   const insets = useSafeAreaInsets();
+  // Yüzen alt menünün altında kalmamak için
+  const altMenuBoslugu = useAltMenuBoslugu(24);
   const { yetki, yenile } = useYoneticiYetkisi();
   const { ozetler, hata } = useKurumOzetleri(
     yetki?.kurumId,
@@ -414,7 +417,7 @@ export default function OgrenciListesiEkrani() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
           paddingTop: insets.top + 20,
-          paddingBottom: 40,
+          paddingBottom: altMenuBoslugu,
           paddingHorizontal: 20,
         }}
         showsVerticalScrollIndicator={false}

@@ -13,8 +13,9 @@ import { CommonActions } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { gostergeKonumu, ikonAdi } from "../utils/sekmeAyarlari";
+import { ALT_MENU_KAPSUL, altMenuAltBoslugu } from "../utils/altMenu";
 
-const KAPSUL_YUKSEKLIGI = 64;
+const KAPSUL_YUKSEKLIGI = ALT_MENU_KAPSUL;
 const IC_BOSLUK = 6; // kapsülün iç kenar boşluğu
 const HAP_YAN_BOSLUK = 4; // hapın sekme genişliğinden payı
 
@@ -92,13 +93,9 @@ export default function AltMenu({
 
   return (
     <View
-      style={[
-        styles.dis,
-        {
-          backgroundColor: tema.arkaplan,
-          paddingBottom: Math.max(insets.bottom - 4, 10),
-        },
-      ]}
+      // Dış alan şeffaftır ve dokunmayı arkadaki içeriğe geçirir; yalnızca kapsül dokunmayı yakalar
+      pointerEvents="box-none"
+      style={[styles.dis, { paddingBottom: altMenuAltBoslugu(insets.bottom) }]}
     >
       <View
         style={[
@@ -205,8 +202,14 @@ export default function AltMenu({
 
 const styles = StyleSheet.create({
   dis: {
+    // Sayfanın üstünde yüzer: içerik kapsülün arkasından akar (opak şerit yok)
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
     paddingTop: 8,
     paddingHorizontal: 16,
+    backgroundColor: "transparent",
   },
   kapsul: {
     height: KAPSUL_YUKSEKLIGI,

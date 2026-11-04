@@ -10,6 +10,7 @@ import {
   Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import useAltMenuBoslugu from "../utils/altMenu";
 import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import { useTheme } from "../ThemeContext";
@@ -44,6 +45,8 @@ const UYARI_RENGI = "#D97706";
 export default function YoneticiAnaEkran() {
   const { tema } = useTheme();
   const insets = useSafeAreaInsets();
+  // Yüzen alt menünün altında kalmamak için
+  const altMenuBoslugu = useAltMenuBoslugu(24);
   const { yetki, yenile: yetkiyiOku } = useYoneticiYetkisi();
   const { ozetler } = useKurumOzetleri(
     yetki?.kurumId,
@@ -186,7 +189,7 @@ export default function YoneticiAnaEkran() {
       style={{ backgroundColor: tema.arkaplan }}
       contentContainerStyle={{
         paddingTop: insets.top + 20,
-        paddingBottom: 40,
+        paddingBottom: altMenuBoslugu,
         paddingHorizontal: 20,
       }}
       showsVerticalScrollIndicator={false}

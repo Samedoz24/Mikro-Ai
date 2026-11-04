@@ -29,6 +29,7 @@ import { signOut } from "firebase/auth";
 import { baglantiKoduGaranti } from "../utils/baglanti";
 import KurumKarti from "./KurumKarti";
 import PlatformKarti from "./PlatformKarti";
+import useAltMenuBoslugu from "../utils/altMenu";
 import {
   ROZETLER,
   kazanilanRozetIdleri,
@@ -92,6 +93,8 @@ const SINIFLAR = [
 export default function ProfileScreen() {
   const user = auth.currentUser;
   const insets = useSafeAreaInsets();
+  // Yüzen alt menünün altında kalmamak için
+  const altMenuBoslugu = useAltMenuBoslugu(20);
   const { premiumMu: premiumAktif, premiumAc } = usePremium();
   const isFocused = useIsFocused();
 
@@ -825,7 +828,7 @@ export default function ProfileScreen() {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) }}
+        contentContainerStyle={{ paddingBottom: altMenuBoslugu }}
       >
         <View
           style={[

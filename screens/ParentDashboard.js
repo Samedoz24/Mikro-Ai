@@ -39,6 +39,7 @@ import {
 
 import { useTheme } from "../ThemeContext";
 import YapayZekaBilgi from "./YapayZekaBilgi";
+import useAltMenuBoslugu from "../utils/altMenu";
 // 🚀 YENİ: Gerçek karanlık mod kontrolü için
 import { colors } from "../theme";
 import { cozumYukle, kesinSonuc } from "../utils/cozumYukleyici";
@@ -51,6 +52,8 @@ const ekranYuksekligi = Dimensions.get("window").height;
 export default function ParentDashboard() {
   const { tema, temaModu } = useTheme();
   const insets = useSafeAreaInsets();
+  // Yüzen alt menünün altında kalmamak için
+  const altMenuBoslugu = useAltMenuBoslugu(24);
 
   // 🚀 YENİ: Sayfa odakta mı ve gerçekten karanlık mı kontrolleri
   const isFocused = useIsFocused();
@@ -402,7 +405,10 @@ export default function ParentDashboard() {
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: tema.arkaplan }]}>
+    <SafeAreaView
+      edges={["top", "left", "right"]}
+      style={[styles.safeArea, { backgroundColor: tema.arkaplan }]}
+    >
       {/* 🚀 DÜZELTME: Sadece bu sayfadaysak StatusBar çalışır ve çakışma yapmaz */}
       {isFocused && (
         <StatusBar
@@ -411,7 +417,10 @@ export default function ParentDashboard() {
         />
       )}
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: altMenuBoslugu }}
+      >
         <View style={styles.innerContainer}>
           <View style={styles.header}>
             <Text style={[styles.baslik, { color: tema.metin }]}>

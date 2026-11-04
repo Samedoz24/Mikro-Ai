@@ -43,6 +43,7 @@ import { usePremium } from "../PremiumContext";
 import { kotaYenilenmeHatirlatmasiKur } from "../utils/notificationManager";
 import { takvimGunFarki, yerelTarih } from "../utils/tarih";
 import YapayZekaBilgi from "./YapayZekaBilgi";
+import useAltMenuBoslugu from "../utils/altMenu";
 import {
   SIK_SECENEKLERI,
   BILINMIYOR,
@@ -59,6 +60,8 @@ export default function HomeScreen() {
   const [image, setImage] = useState(null);
   // Öğrencinin işaretlediği cevap (A-E ya da "Bilinmiyor"); seçilmeden Gönder açılmaz
   const [secim, setSecim] = useState(null);
+  // Yüzen alt menünün altında kalmamak için en altta bırakılan boşluk
+  const altMenuBoslugu = useAltMenuBoslugu(8);
 
   const [seriModalGorunur, setSeriModalGorunur] = useState(false);
   const [guncelSeriSayisi, setGuncelSeriSayisi] = useState(0);
@@ -344,7 +347,10 @@ export default function HomeScreen() {
   });
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: tema.arkaplan }]}>
+    <SafeAreaView
+      edges={["top", "left", "right"]}
+      style={[styles.safeArea, { backgroundColor: tema.arkaplan }]}
+    >
       {/* 🚀 DÜZELTME: Sadece bu sayfadaysak StatusBar çalışır ve çakışma yapmaz */}
       {isFocused && (
         <StatusBar
@@ -353,7 +359,7 @@ export default function HomeScreen() {
         />
       )}
 
-      <View style={styles.innerContainer}>
+      <View style={[styles.innerContainer, { paddingBottom: altMenuBoslugu }]}>
         <Modal visible={seriModalGorunur} transparent animationType="fade">
           <View style={styles.modalOverlay}>
             {seriModalGorunur && (

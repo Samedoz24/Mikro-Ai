@@ -3,15 +3,13 @@
 
 import React from "react";
 import {
-  Modal,
-  Pressable,
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   useColorScheme,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AltPencere from "./AltPencere";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../ThemeContext";
 import { colors } from "../theme";
@@ -62,8 +60,6 @@ const Onizleme = ({ mod }) => {
 export default function GorunumSecici({ gorunur, kapat }) {
   const { tema, temaModu, temaDegistir } = useTheme();
   const sistemTemasi = useColorScheme();
-  const insets = useSafeAreaInsets();
-  const karanlik = tema.arkaplan === colors.dark.arkaplan;
 
   const sistemAciklamasi =
     temaModu === "system"
@@ -71,34 +67,12 @@ export default function GorunumSecici({ gorunur, kapat }) {
       : "Sistem seçilirse uygulama telefonunun ayarını izler.";
 
   return (
-    <Modal
-      visible={gorunur}
-      animationType="slide"
-      transparent
-      onRequestClose={kapat}
-      statusBarTranslucent
+    <AltPencere
+      gorunur={gorunur}
+      kapat={kapat}
+      baslik="Görünüm"
+      aciklama="Uygulamanın nasıl görüneceğini seç."
     >
-      <Pressable style={stiller.arkaplan} onPress={kapat} accessibilityLabel="Kapat">
-        <Pressable
-          style={[
-            stiller.kutu,
-            {
-              backgroundColor: karanlik ? "#1C1C1E" : "#FFFFFF",
-              paddingBottom: Math.max(insets.bottom, 16) + 8,
-            },
-          ]}
-          onPress={() => {}}
-          accessible={false}
-        >
-          <View style={[stiller.tutamac, { backgroundColor: tema.kutuCerceve }]} />
-
-          <Text style={[stiller.baslik, { color: tema.metin }]} accessibilityRole="header">
-            Görünüm
-          </Text>
-          <Text style={[stiller.altBaslik, { color: tema.ikincilMetin }]}>
-            Uygulamanın nasıl görüneceğini seç.
-          </Text>
-
           <View style={stiller.secenekSirasi} accessibilityRole="radiogroup">
             {SECENEKLER.map(({ mod, baslik, ikon }) => {
               const secili = temaModu === mod;
@@ -168,33 +142,11 @@ export default function GorunumSecici({ gorunur, kapat }) {
           >
             <Text style={stiller.tamamYazi}>Tamam</Text>
           </TouchableOpacity>
-        </Pressable>
-      </Pressable>
-    </Modal>
+    </AltPencere>
   );
 }
 
 const stiller = StyleSheet.create({
-  arkaplan: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "flex-end",
-  },
-  kutu: {
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 20,
-    paddingTop: 10,
-  },
-  tutamac: {
-    alignSelf: "center",
-    width: 40,
-    height: 5,
-    borderRadius: 3,
-    marginBottom: 16,
-  },
-  baslik: { fontSize: 20, fontWeight: "800", textAlign: "center" },
-  altBaslik: { fontSize: 14, textAlign: "center", marginTop: 6, marginBottom: 22 },
   secenekSirasi: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
   secenek: { flex: 1, alignItems: "center" },
   onizlemeKap: {

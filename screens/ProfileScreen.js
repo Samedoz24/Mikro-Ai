@@ -79,6 +79,7 @@ import { dersBul } from "../utils/ders";
 import { kotaDurumuGetir } from "../utils/kotaIstemci";
 import { colors } from "../theme";
 import GorunumSecici from "./GorunumSecici";
+import SinifSecici from "./SinifSecici";
 import {
   AD_SOYAD_EN_FAZLA,
   adSoyadTemizle,
@@ -338,6 +339,20 @@ export default function ProfileScreen() {
       ]);
       return true;
     } catch (error) {
+      return false;
+    }
+  };
+
+  // Sınıf yalnızca listeden seçilir; önce sunucuya yazılır, başarılı olursa ekranda ve cihazda güncellenir
+  const sinifKaydet = async (sinif) => {
+    if (!SINIFLAR.includes(sinif) || !user) return false;
+    try {
+      await updateDoc(doc(db, "kullanicilar", user.uid), { sinif });
+      setSeciliSinif(sinif);
+      await AsyncStorage.setItem("seciliSinif", sinif);
+      return true;
+    } catch (e) {
+      console.log("Sınıf kaydedilemedi:", e?.code);
       return false;
     }
   };
@@ -1488,68 +1503,13 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        <Modal
-          visible={sinifModalGorunur}
-          animationType="slide"
-          transparent={true}
-        >
-          <Pressable
-            style={styles.modalArkaplan}
-            onPress={() => setSinifModalGorunur(false)}
-          >
-            <Pressable
-              style={[styles.modalKutu, { backgroundColor: tema.kutuArkaplan }]}
-              onPress={(e) => e.stopPropagation()}
-            >
-              <Text style={[styles.modalBaslik, { color: tema.metin }]}>
-                Sınıfını Güncelle
-              </Text>
-              <ScrollView
-                style={{ maxHeight: 350 }}
-                showsVerticalScrollIndicator={false}
-              >
-                {SINIFLAR.map((sinif, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={[
-                      styles.modalSecenek,
-                      { borderBottomColor: tema.kutuCerceve },
-                    ]}
-                    onPress={async () => {
-                      setSeciliSinif(sinif);
-                      setSinifModalGorunur(false);
-                      await AsyncStorage.setItem("seciliSinif", sinif);
-                      if (user) {
-                        const kullaniciRef = doc(db, "kullanicilar", user.uid);
-                        await updateDoc(kullaniciRef, { sinif: sinif });
-                      }
-                    }}
-                  >
-                    <Text
-                      style={[styles.modalSecenekYazi, { color: tema.metin }]}
-                    >
-                      {sinif}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-              <TouchableOpacity
-                onPress={() => setSinifModalGorunur(false)}
-                style={styles.modalKapatButon}
-              >
-                <Text
-                  style={{
-                    color: tema.hataKirmizi,
-                    fontWeight: "bold",
-                    fontSize: 16,
-                  }}
-                >
-                  Kapat
-                </Text>
-              </TouchableOpacity>
-            </Pressable>
-          </Pressable>
-        </Modal>
+        <SinifSecici
+          gorunur={sinifModalGorunur}
+          kapat={() => setSinifModalGorunur(false)}
+          siniflar={SINIFLAR}
+          seciliSinif={seciliSinif}
+          sec={sinifKaydet}
+        />
 
         <GorunumSecici
           gorunur={temaModalGorunur}
@@ -1961,9 +1921,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 15,
   },
-  modalSecenek: { paddingVertical: 16, borderBottomWidth: 0.5 },
-  modalSecenekYazi: { fontSize: 16, textAlign: "center" },
-  modalKapatButon: { marginTop: 25, padding: 10, alignItems: "center" },
 
   silInput: {
     borderWidth: 2,

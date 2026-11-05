@@ -30,6 +30,11 @@ import {
   isErrorWithCode,
   statusCodes,
 } from "@react-native-google-signin/google-signin";
+import {
+  appleKullanilabilirMi,
+  appleKimligiAl,
+  APPLE_IPTAL,
+} from "../utils/appleGiris";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import LottieView from "lottie-react-native";
@@ -42,6 +47,7 @@ import {
   kayitHatasiMesaji,
   sifreSifirlamaHatasiMesaji,
   googleGirisHatasiMesaji,
+  appleGirisHatasiMesaji,
 } from "../utils/authHatalari";
 
 // 🚀 DÜZELTME: useIsFocused tamamen silindi! (Hatanın kaynağı burasıydı)
@@ -89,6 +95,8 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
 
   const [yukleniyor, setYukleniyor] = useState(false);
   const [googleYukleniyor, setGoogleYukleniyor] = useState(false);
+  const [appleYukleniyor, setAppleYukleniyor] = useState(false);
+  const [appleVar, setAppleVar] = useState(false);
   const [sifreGoster, setSifreGoster] = useState(false);
   const sifreRef = useRef(null);
 
@@ -99,7 +107,16 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
   useEffect(() => {
     setYukleniyor(false);
     setGoogleYukleniyor(false);
+    setAppleYukleniyor(false);
   }, [girisReddi]);
+
+  useEffect(() => {
+    let etkin = true;
+    appleKullanilabilirMi().then((var_) => etkin && setAppleVar(var_));
+    return () => {
+      etkin = false;
+    };
+  }, []);
 
   const isGercektenKaranlik = tema.arkaplan === colors.dark.arkaplan;
 
@@ -214,6 +231,26 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
       );
     }
   };
+
+  const handleAppleGiris = async () => {
+    setAppleYukleniyor(true);
+    try {
+      await AsyncStorage.setItem("hedefRol", seciliRol);
+      const { kimlik } = await appleKimligiAl();
+      await signInWithCredential(auth, kimlik);
+    } catch (error) {
+      setAppleYukleniyor(false);
+      if (error?.code === APPLE_IPTAL) return;
+      console.log("APPLE GİRİŞ HATASI:", error?.code);
+      Alert.alert("Apple Giriş Hatası", appleGirisHatasiMesaji(error));
+    }
+  };
+
+  // Apple düğmesi: koyu modda beyaz zemin + siyah logo/yazı, açık modda siyah zemin + beyaz logo/yazı
+  const appleArkaplan = isGercektenKaranlik ? "#FFFFFF" : "#000000";
+  const appleYazi = isGercektenKaranlik ? "#000000" : "#FFFFFF";
+
+  const islemSuruyor = yukleniyor || googleYukleniyor || appleYukleniyor;
 
   const anaIslem = gosterilenSayfa === "giris" ? handleGirisYap : handleKayitOl;
 
@@ -420,7 +457,7 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
           },
         ]}
         onPress={() => setSeciliRol("ogrenci")}
-        disabled={yukleniyor || googleYukleniyor}
+        disabled={islemSuruyor}
       >
         <Text
           style={[
@@ -440,7 +477,7 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
           },
         ]}
         onPress={() => setSeciliRol("veli")}
-        disabled={yukleniyor || googleYukleniyor}
+        disabled={islemSuruyor}
       >
         <Text
           style={[
@@ -460,7 +497,7 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
           },
         ]}
         onPress={() => setSeciliRol("yonetici")}
-        disabled={yukleniyor || googleYukleniyor}
+        disabled={islemSuruyor}
       >
         <Text
           style={[
@@ -574,7 +611,7 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
           {gosterilenSayfa === "giris" && (
             <TouchableOpacity
               onPress={handleSifremiUnuttum}
-              disabled={yukleniyor || googleYukleniyor}
+              disabled={islemSuruyor}
               style={dinamikStil.sifremiUnuttum}
               accessibilityRole="button"
             >
@@ -585,7 +622,7 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
           <TouchableOpacity
             style={[dinamikStil.butonAna, yukleniyor && { opacity: 0.7 }]}
             onPress={anaIslem}
-            disabled={yukleniyor || googleYukleniyor}
+            disabled={islemSuruyor}
           >
             {yukleniyor ? (
               <ActivityIndicator color="#ffffff" size="small" />
@@ -608,7 +645,7 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
               googleYukleniyor && { opacity: 0.7 },
             ]}
             onPress={handleGoogleGiris}
-            disabled={yukleniyor || googleYukleniyor}
+            disabled={islemSuruyor}
           >
             {googleYukleniyor ? (
               <ActivityIndicator color={tema.metin} size="small" />
@@ -626,6 +663,53 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
             )}
           </TouchableOpacity>
 
+          {appleVar && (
+            <TouchableOpacity
+              style={[
+                dinamikStil.butonGoogle,
+                {
+                  backgroundColor: appleArkaplan,
+                  borderColor: appleArkaplan,
+                },
+                appleYukleniyor && { opacity: 0.7 },
+              ]}
+              onPress={handleAppleGiris}
+              disabled={islemSuruyor}
+              accessibilityRole="button"
+              accessibilityLabel={
+                gosterilenSayfa === "giris"
+                  ? "Apple ile Giriş Yap"
+                  : "Apple ile Kayıt Ol"
+              }
+            >
+              {appleYukleniyor ? (
+                <ActivityIndicator color={appleYazi} size="small" />
+              ) : (
+                <>
+                  <Ionicons
+                    name="logo-apple"
+                    size={28}
+                    color={appleYazi}
+                    style={[
+                      dinamikStil.googleLogo,
+                      // Apple simgesinin çevresinde boşluk olduğu için 28 punto, Google "G" (22) ile görsel olarak eşit durur
+                      { width: 28, height: 28, marginRight: 9, textAlign: "center" },
+                    ]}
+                    accessibilityElementsHidden
+                    importantForAccessibility="no-hide-descendants"
+                  />
+                  <Text
+                    style={[dinamikStil.butonGoogleYazisi, { color: appleYazi }]}
+                  >
+                    {gosterilenSayfa === "giris"
+                      ? "Apple ile Giriş Yap"
+                      : "Apple ile Kayıt Ol"}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
             style={dinamikStil.hesapGecisKarti}
             activeOpacity={0.6}
@@ -634,7 +718,7 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
                 gosterilenSayfa === "giris" ? "kayit" : "giris"
               )
             }
-            disabled={yukleniyor || googleYukleniyor}
+            disabled={islemSuruyor}
           >
             <Text style={dinamikStil.hesapGecisSoru}>
               {gosterilenSayfa === "giris"
@@ -650,3 +734,4 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
     </SafeAreaView>
   );
 }
+

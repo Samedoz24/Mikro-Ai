@@ -10,6 +10,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { colors } from "./theme";
 
 const ThemeContext = createContext();
+const GECERLI_MODLAR = ["light", "dark", "system"];
 
 export const ThemeProvider = ({ children }) => {
   const sistemTemasi = useColorScheme(); // Telefonun kendi ayarı
@@ -18,18 +19,24 @@ export const ThemeProvider = ({ children }) => {
   // Uygulama açıldığında kaydedilen tercihi yükle
   useEffect(() => {
     const tercihiYukle = async () => {
-      const kaydedilenMod = await AsyncStorage.getItem("kullaniciTemaTercihi");
-      if (kaydedilenMod) {
-        setTemaModu(kaydedilenMod);
-      }
+      try {
+        const kaydedilenMod = await AsyncStorage.getItem("kullaniciTemaTercihi");
+        // Yalnızca geçerli değerler kabul edilir; bozuk kayıt "system"e düşer
+        if (GECERLI_MODLAR.includes(kaydedilenMod)) {
+          setTemaModu(kaydedilenMod);
+        }
+      } catch {}
     };
     tercihiYukle();
   }, []);
 
   // Tercihi değiştir ve kaydet
   const temaDegistir = async (yeniMod) => {
+    if (!GECERLI_MODLAR.includes(yeniMod)) return;
     setTemaModu(yeniMod);
-    await AsyncStorage.setItem("kullaniciTemaTercihi", yeniMod);
+    try {
+      await AsyncStorage.setItem("kullaniciTemaTercihi", yeniMod);
+    } catch {}
   };
 
   // ⚡ HATANIN ÇÖZÜMÜ: useMemo ile temayı React'ın hafızasına sabitleyip anında tetiklemek

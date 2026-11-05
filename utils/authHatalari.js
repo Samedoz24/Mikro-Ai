@@ -47,3 +47,12 @@ export const googleGirisHatasiMesaji = (hata) => {
     return "Bu e-posta başka bir yöntemle kayıtlı. E-posta ve şifrenle giriş yapmayı dene.";
   return ORTAK[kod] || "Google ile giriş yapılamadı. Lütfen tekrar dene.";
 };
+
+export const appleGirisHatasiMesaji = (hata) => {
+  const kod = hata?.code;
+  if (kod === "auth/account-exists-with-different-credential")
+    return "Bu e-posta başka bir yöntemle kayıtlı. O yöntemle giriş yapmayı dene.";
+  if (kod === "auth/operation-not-allowed")
+    return "Apple ile giriş şu an kullanılamıyor. Lütfen daha sonra tekrar dene.";
+  return ORTAK[kod] || "Apple ile giriş yapılamadı. Lütfen tekrar dene.";
+};

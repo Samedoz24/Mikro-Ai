@@ -25,8 +25,11 @@
         ],
         "NSCameraUsageDescription": "Fotoğraf çekmek için kamera izni gerekli",
         "CFBundleAllowMixedLocalizations": true,
-        "CFBundleLocalizations": ["tr"]
-      }
+        "CFBundleLocalizations": [
+          "tr"
+        ]
+      },
+      "usesAppleSignIn": true
     },
     "android": {
       "package": "com.samedoz.mikroai",
@@ -47,6 +50,7 @@
     },
     "plugins": [
       "@react-native-google-signin/google-signin",
+      "expo-apple-authentication",
       [
         "expo-image-picker",
         {
@@ -59,11 +63,13 @@
         {
           "photosPermission": "Çözüm kartlarını galeriye kaydetmek için izninize ihtiyacımız var.",
           "savePhotosPermission": "Çözüm kartını galeriye kaydetmek için izin verin.",
-          "granularPermissions": ["photo"]
+          "granularPermissions": [
+            "photo"
+          ]
         }
       ],
       "expo-sharing",
-      "./withDisableForceDark.js" 
+      "./withDisableForceDark.js"
     ],
     "extra": {
       "eas": {

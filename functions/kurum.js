@@ -10,6 +10,7 @@
 //   kurumDenemeleri/{uid}             kod deneme sayacı (istemciye tamamen kapalı)
 
 const crypto = require("node:crypto");
+const { guvenliIsim } = require("./isim");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
 const { getAuth } = require("firebase-admin/auth");
 const { HttpsError } = require("firebase-functions/v2/https");
@@ -77,7 +78,7 @@ const denemeHakkiKullan = async (uid) => {
 };
 
 const ozetBaslangic = (kullanici) => ({
-  isim: kullanici.adSoyad || String(kullanici.eposta || "").split("@")[0] || "Öğrenci",
+  isim: guvenliIsim(kullanici.adSoyad) || String(kullanici.eposta || "").split("@")[0] || "Öğrenci",
   toplamSoru: 0,
   okunanCozum: 0,
   dersDagilimi: {},
@@ -131,7 +132,7 @@ const kurumaKatil = async (uid, veri) => {
       uid,
       kurumAdi: kurum.ad || null,
       eposta: kullanici.eposta || null,
-      adSoyad: kullanici.adSoyad || null,
+      adSoyad: guvenliIsim(kullanici.adSoyad) || null,
       katilma: FieldValue.serverTimestamp(),
       onay: { onaylandi: true, surum: ONAY_SURUMU, tarih: FieldValue.serverTimestamp() },
       // Ayrılırken kurumun verdiği premium'u geri almak, kişinin kendi premium'unu korumak için

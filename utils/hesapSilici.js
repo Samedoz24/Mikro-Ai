@@ -8,6 +8,7 @@ import {
   reauthenticateWithCredential,
   EmailAuthProvider,
   GoogleAuthProvider,
+  revokeAccessToken,
 } from "firebase/auth";
 import {
   collection,
@@ -15,12 +16,12 @@ import {
   where,
   getDocs,
   getDoc,
-  deleteDoc,
   writeBatch,
   doc,
 } from "firebase/firestore";
 import { ref, listAll, deleteObject } from "firebase/storage";
-import { db, storage } from "../firebaseConfig";
+import { auth, db, storage } from "../firebaseConfig";
+import { appleKimligiAl, APPLE_IPTAL } from "./appleGiris";
 import { cozumOnbelleginiTemizle } from "./cozumYukleyici";
 import { kurumdanAyril } from "./kurumIstemci";
 
@@ -37,16 +38,18 @@ const YEREL_ANAHTARLAR = [
   "hedefRol",
 ];
 
-// Hesabın giriş yöntemi: şifre gerektirir mi, Google mı?
+// Hesabın giriş yöntemi: şifre mi, Google mı, Apple mı?
 export const girisYonteminiBul = (user) => {
   const saglayicilar = (user?.providerData || []).map((p) => p.providerId);
   if (saglayicilar.includes("password")) return "password";
   if (saglayicilar.includes("google.com")) return "google";
+  if (saglayicilar.includes("apple.com")) return "apple";
   return null;
 };
 
 // Firebase, hesap silmeden önce yakın zamanda giriş yapılmasını şart koşar.
 // Bunu işin en başında yaparız; başarısız olursa hiçbir veriye dokunulmamış olur.
+// Apple hesaplarında, Apple bağlantısını iptal etmek için tek kullanımlık yetki kodunu döndürür.
 export const yenidenDogrula = async (user, sifre) => {
   const yontem = girisYonteminiBul(user);
 
@@ -74,6 +77,27 @@ export const yenidenDogrula = async (user, sifre) => {
     const kimlik = GoogleAuthProvider.credential(idToken);
     await reauthenticateWithCredential(user, kimlik);
     return;
+  }
+
+  if (yontem === "apple") {
+    let sonuc;
+    try {
+      sonuc = await appleKimligiAl();
+    } catch (e) {
+      if (e?.code === APPLE_IPTAL) {
+        const hata = new Error("Doğrulama iptal edildi.");
+        hata.code = SILME_IPTAL;
+        throw hata;
+      }
+      throw e;
+    }
+    if (!sonuc.yetkiKodu) {
+      const hata = new Error("Apple yetki kodu alınamadı.");
+      hata.code = "hesap-silme/apple-kod-yok";
+      throw hata;
+    }
+    await reauthenticateWithCredential(user, sonuc.kimlik);
+    return { appleYetkiKodu: sonuc.yetkiKodu };
   }
 
   const hata = new Error("Bu giriş yöntemi için yeniden doğrulama desteklenmiyor.");
@@ -110,18 +134,6 @@ const belgeleriSil = async (belgeler) => {
     belgeler.slice(i, i + 400).forEach((d) => grup.delete(d.ref));
     await grup.commit();
   }
-};
-
-// Öğrencinin bağlantı kodu kaydı (baglantiKodlari/{KOD}). Güvenlik kuralları olmayan bir belgenin
-// silinmesini reddettiği için önce var olup olmadığına bakılır; yalnızca kendi kaydı silinir.
-const baglantiKodunuSil = async (uid) => {
-  const kullanici = await getDoc(doc(db, "kullanicilar", uid));
-  const kod = kullanici.exists() ? kullanici.data().baglantiKodu : null;
-  if (!kod) return;
-
-  const kayit = doc(db, "baglantiKodlari", kod);
-  const snap = await getDoc(kayit);
-  if (snap.exists() && snap.data().uid === uid) await deleteDoc(kayit);
 };
 
 // Kullanıcıya ait tüm sunucu verisini siler. Tekrar çalıştırılabilir (idempotent):
@@ -177,9 +189,9 @@ export const kullaniciVerileriniSil = async (user) => {
   }
   await nesneSil(ref(storage, `profil_fotograflari/${uid}.jpg`));
 
-  // 3) Soru belgeleri, bağlantı kodu kaydı, en son kullanıcı belgesi
+  // 3) Soru belgeleri, en son kullanıcı belgesi. Bağlantı kodu kaydını ve veli bağlantılarını,
+  //    kullanıcı belgesi silinince sunucu temizler (veliBaglantilariniTemizle).
   await belgeleriSil(soruBelgeleri);
-  await baglantiKodunuSil(uid);
   const grup = writeBatch(db);
   grup.delete(doc(db, "kullanicilar", uid));
   await grup.commit();
@@ -194,7 +206,19 @@ export const yerelVeriyiTemizle = async () => {
 // Tam akış: doğrula → sunucu verisini sil → giriş hesabını sil → yerel temizlik.
 // Hesap en son silinir; bir adım hata verirse hesap durur ve işlem tekrarlanabilir.
 export const hesabiTamamenSil = async (user, sifre) => {
-  await yenidenDogrula(user, sifre);
+  const dogrulama = await yenidenDogrula(user, sifre);
+
+  // Apple kuralı: hesap silinirken "Apple ile Giriş" bağlantısı da iptal edilmeli.
+  // Veriye dokunmadan önce yapılır; başarısız olursa hiçbir şey silinmemiş olur.
+  if (dogrulama?.appleYetkiKodu) {
+    try {
+      await revokeAccessToken(auth, dogrulama.appleYetkiKodu);
+    } catch (e) {
+      e.asama = "apple";
+      throw e;
+    }
+  }
+
   await kullaniciVerileriniSil(user);
   try {
     await deleteUser(user);

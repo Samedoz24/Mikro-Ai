@@ -1,60 +1,38 @@
-import { doc, getDoc, setDoc } from "firebase/firestore";
-import { db } from "../firebaseConfig";
+import { httpsCallable } from "firebase/functions";
+import { functions } from "../firebaseConfig";
 
-// Öğrenci bağlantı kodları: baglantiKodlari/{KOD} -> { uid }.
-// Veli kodu girince belge doğrudan okunur; kullanıcı listesi hiç sorgulanmaz (güvenlik kuralları
-// kullanicilar ve baglantiKodlari koleksiyonlarını listelemeye izin vermez).
+// Veli–öğrenci bağlantısı yalnızca sunucuda kurulur (functions/veliBaglanti.js).
+// Uygulama bağlantı kodlarını okuyamaz, veli listesini kendisi yazamaz; güvenlik kuralları bunu engeller.
 
-const KARAKTERLER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-const KOD_BICIMI = /^[A-Z0-9]{6}$/;
-const EN_FAZLA_DENEME = 10;
-
-export const rastgeleKodUret = () => {
-  let kod = "";
-  for (let i = 0; i < 6; i++) {
-    kod += KARAKTERLER.charAt(Math.floor(Math.random() * KARAKTERLER.length));
-  }
-  return kod;
+// Öğrenci: kendi bağlantı kodunu alır (yoksa sunucu oluşturur). Dönüş: kod (metin)
+export const baglantiKoduAl = async () => {
+  const sonuc = await httpsCallable(functions, "baglantiKoduAl")();
+  return sonuc.data?.kod || null;
 };
 
-// Kodun kaydı bu kullanıcıya aitse true. Kayıt yoksa oluşturur; başkasına aitse false döner.
-const kodKaydiniGaranti = async (kod, uid) => {
-  const kayit = doc(db, "baglantiKodlari", kod);
-  const mevcut = await getDoc(kayit);
-  if (mevcut.exists()) return mevcut.data().uid === uid;
-
-  try {
-    await setDoc(kayit, { uid, olusturma: new Date().toISOString() });
-    return true;
-  } catch (hata) {
-    // Aynı anda başka biri aynı kodu aldıysa kurallar yazmayı reddeder; yeni kod denenir
-    if (hata?.code === "permission-denied") return false;
-    throw hata;
-  }
+// Veli: kodla öğrenciye bağlanır. Dönüş: { ogrenci: { id, isim }, zatenVar }
+export const veliBagla = async (kod) => {
+  const sonuc = await httpsCallable(functions, "veliBagla")({ kod });
+  return sonuc.data;
 };
 
-/**
- * Kullanıcının kayıtlı ve kendisine ait bir bağlantı kodu olmasını sağlar, kodu döndürür.
- * @param mevcutKod  kullanicilar belgesindeki kod (yoksa null)
- */
-export const baglantiKoduGaranti = async (uid, mevcutKod) => {
-  if (
-    mevcutKod &&
-    KOD_BICIMI.test(mevcutKod) &&
-    (await kodKaydiniGaranti(mevcutKod, uid))
-  ) {
-    return mevcutKod;
-  }
-
-  for (let i = 0; i < EN_FAZLA_DENEME; i++) {
-    const kod = rastgeleKodUret();
-    if (await kodKaydiniGaranti(kod, uid)) return kod;
-  }
-  throw new Error("Bağlantı kodu üretilemedi");
+// Veli: bir öğrencinin bağlantısını kaldırır
+export const veliBaglantisiKaldir = async (ogrenciId) => {
+  const sonuc = await httpsCallable(functions, "veliBaglantisiKaldir")({ ogrenciId });
+  return sonuc.data;
 };
 
-// Veli tarafı: koda karşılık gelen öğrencinin UID'si (yoksa null)
-export const kodlaOgrenciBul = async (kod) => {
-  const snap = await getDoc(doc(db, "baglantiKodlari", kod));
-  return snap.exists() ? snap.data().uid || null : null;
+// Sunucu hatasını kullanıcıya gösterilecek Türkçe mesaja çevirir
+export const veliBaglaHataMesaji = (hata) => {
+  const kod = hata?.code || "";
+  const mesaj = hata?.message || "";
+  if (kod === "functions/not-found" || mesaj === "kod-bulunamadi")
+    return "Bu koda sahip bir öğrenci bulunamadı. Lütfen kodu kontrol edin.";
+  if (mesaj === "kod-gecersiz") return "Lütfen 6 haneli bağlantı kodunu eksiksiz girin.";
+  if (mesaj === "kendi-hesabi") return "Kendi hesabınızı öğrenci olarak ekleyemezsiniz.";
+  if (mesaj === "cok-fazla-deneme")
+    return "Çok fazla hatalı kod denendi. Güvenliğiniz için lütfen bir süre sonra tekrar deneyin.";
+  if (mesaj === "ogrenci-siniri") return "En fazla 10 öğrenci bağlayabilirsiniz.";
+  if (mesaj === "rol-uygun-degil") return "Öğrenci bağlamak için veli hesabıyla giriş yapmalısınız.";
+  return "Öğrenci bağlanamadı. İnternet bağlantını kontrol edip tekrar dene.";
 };

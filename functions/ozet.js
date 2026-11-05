@@ -4,6 +4,7 @@
 // güncellenen sorular sayıyı bozmaz.
 
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
+const { guvenliIsim } = require("./isim");
 const { dersBul } = require("./ders");
 
 const db = () => getFirestore();
@@ -72,7 +73,7 @@ const ozetHesapla = (sorular, simdi = Date.now()) => {
 };
 
 const gorunenIsim = (kullanici) =>
-  kullanici?.adSoyad || String(kullanici?.eposta || "").split("@")[0] || "Öğrenci";
+  guvenliIsim(kullanici?.adSoyad) || String(kullanici?.eposta || "").split("@")[0] || "Öğrenci";
 
 // Öğrenci bir kurumun üyesiyse özetini yeniden hesaplar. Üye değilse hiçbir şey yazmaz.
 // Öğrencinin özetinin grup kopyasının yolu. Öğretmenler yalnızca yetkili oldukları grupların bu

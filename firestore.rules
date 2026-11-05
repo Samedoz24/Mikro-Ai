@@ -23,7 +23,7 @@ rules_version = '2';
 // Kurum yetkisi sunucunun yazdığı kimlik claim'lerinden gelir (request.auth.token):
 //   kurumId  -> yöneticinin kurumu, kurumRol -> 'mudur' ya da 'ogretmen'.
 //   kapsam   -> öğretmenin kapsamı: 'tum' (varsayılan) ya da 'gruplar'; gruplar -> erişebildiği grup kimlikleri.
-// İstemci kurumId, kurumRol, premiumMu alanlarını ve 'yonetici' rolünü yazamaz.
+// İstemci kurumId, kurumRol, premiumMu, veli bağlantı alanlarını, bağlantı kodunu ve 'yonetici' rolünü yazamaz.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -112,6 +112,40 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys();
     }
 
+    // Profil fotoğrafı yalnızca kullanıcının kendi Storage dosyasının indirme bağlantısı olabilir.
+    // (Başka bir adres yazılırsa veli ekranı o siteye bağlanırdı: IP/zaman sızıntısı.)
+    function profilFotoGecerli(uid, deger) {
+      return deger is string && deger.size() < 300 &&
+        deger.matches('https://firebasestorage[.]googleapis[.]com/v0/b/project-21-3e377[.]firebasestorage[.]app/o/profil_fotograflari%2F' + uid + '[.]jpg[?]alt=media&token=[0-9a-fA-F-]{36}');
+    }
+
+    // Ad soyad velide ve dershane raporlarında görünür: metin ve en fazla 60 karakter (uygulama 40'ta keser)
+    function adSoyadGecerli(deger) {
+      return deger is string && deger.size() >= 1 && deger.size() <= 60;
+    }
+
+    // Veli–öğrenci bağlantısı ve bağlantı kodu yalnızca sunucuda (veliBagla / baglantiKoduAl) yazılır.
+    // Bu alanları istemci yazabilseydi, veliMi() kod bilmeden herhangi bir öğrenciye erişim verirdi.
+    function sunucuAlanlari() {
+      return ['premiumMu', 'kurumId', 'kurumRol', 'bagliOgrenciIdleri', 'bagliOgrenciler', 'baglantiKodu'];
+    }
+
+    // Yeni belge: alan varsa geçerli olmalı
+    function profilAlanlariGecerliYeni(uid, veri) {
+      return (!('profilFoto' in veri) || profilFotoGecerli(uid, veri.profilFoto))
+        && (!('adSoyad' in veri) || adSoyadGecerli(veri.adSoyad));
+    }
+
+    // Güncelleme: yalnızca değişen alan denetlenir (silinmesi serbest), eski kayıtlar kilitlenmez
+    function profilAlanlariGecerliGuncelleme(uid) {
+      return (!degisenAnahtarlar().hasAny(['profilFoto'])
+              || !('profilFoto' in request.resource.data)
+              || profilFotoGecerli(uid, request.resource.data.profilFoto))
+        && (!degisenAnahtarlar().hasAny(['adSoyad'])
+              || !('adSoyad' in request.resource.data)
+              || adSoyadGecerli(request.resource.data.adSoyad));
+    }
+
     // ---------------------------------------------------------------- kullanicilar
     match /kullanicilar/{uid} {
       // Müdür öğrenci profilini doğrudan okuyamaz; yönetici verisi yalnızca sunucu üzerinden (erişim kaydıyla) verilir
@@ -119,11 +153,13 @@ service cloud.firestore {
       allow list: if false;
 
       allow create: if ben(uid)
-        && !request.resource.data.keys().hasAny(['premiumMu', 'kurumId', 'kurumRol'])
-        && request.resource.data.get('rol', 'ogrenci') in istemciRolleri();
+        && !request.resource.data.keys().hasAny(sunucuAlanlari())
+        && request.resource.data.get('rol', 'ogrenci') in istemciRolleri()
+        && profilAlanlariGecerliYeni(uid, request.resource.data);
 
       allow update: if ben(uid)
-        && !degisenAnahtarlar().hasAny(['premiumMu', 'kurumId', 'kurumRol'])
+        && !degisenAnahtarlar().hasAny(sunucuAlanlari())
+        && profilAlanlariGecerliGuncelleme(uid)
         && (!degisenAnahtarlar().hasAny(['rol'])
             || (request.resource.data.rol in istemciRolleri()
                 && resource.data.get('rol', 'ogrenci') in istemciRolleri()));
@@ -215,21 +251,15 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------------- baglantiKodlari
+    // Kod → öğrenci eşlemesi istemciye tamamen kapalı: kodlar sunucuda üretilir, veli bağlantısı sunucuda kurulur
+    // (yanlış deneme sınırıyla). İstemci okuyabilseydi kodları tarayıp öğrenci kimliklerini bulabilirdi.
     match /baglantiKodlari/{kod} {
-      allow get: if girisli();
-      allow list: if false;
+      allow read, write: if false;
+    }
 
-      allow create: if girisli()
-        && kod.matches('^[A-Z0-9]{6}$')
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.keys().hasOnly(['uid', 'olusturma']);
-
-      allow update: if girisli()
-        && resource.data.uid == request.auth.uid
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.keys().hasOnly(['uid', 'olusturma']);
-
-      allow delete: if girisli() && resource.data.uid == request.auth.uid;
+    // Veli kod deneme sayaçları: yalnızca sunucu
+    match /veliDenemeleri/{uid} {
+      allow read, write: if false;
     }
 
     // ---------------------------------------------------------------- cihazHaklari

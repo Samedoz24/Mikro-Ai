@@ -26,7 +26,7 @@ import { useIsFocused } from "@react-navigation/native";
 // Firebase Kütüphaneleri
 import { auth, db, storage } from "../firebaseConfig";
 import { signOut } from "firebase/auth";
-import { baglantiKoduGaranti } from "../utils/baglanti";
+import { baglantiKoduAl } from "../utils/baglanti";
 import KurumKarti from "./KurumKarti";
 import PlatformKarti from "./PlatformKarti";
 import useAltMenuBoslugu from "../utils/altMenu";
@@ -78,6 +78,12 @@ import { yerelTarih } from "../utils/tarih";
 import { dersBul } from "../utils/ders";
 import { kotaDurumuGetir } from "../utils/kotaIstemci";
 import { colors } from "../theme";
+import GorunumSecici from "./GorunumSecici";
+import {
+  AD_SOYAD_EN_FAZLA,
+  adSoyadTemizle,
+  profilFotoGecerliMi,
+} from "../utils/profilDogrulama";
 
 // 13 yaş şartı nedeniyle liste 8. sınıftan başlar
 const SINIFLAR = [
@@ -97,7 +103,7 @@ export default function ProfileScreen() {
   const { premiumMu: premiumAktif, premiumAc } = usePremium();
   const isFocused = useIsFocused();
 
-  const { tema, temaModu, temaDegistir } = useTheme();
+  const { tema, temaModu } = useTheme();
   const isGercektenKaranlik = tema.arkaplan === colors.dark.arkaplan;
 
   const [rol, setRol] = useState("ogrenci");
@@ -173,10 +179,10 @@ export default function ProfileScreen() {
       if (SINIFLAR.includes(kayitliSinif)) setSeciliSinif(kayitliSinif);
 
       const kayitliAdSoyad = await AsyncStorage.getItem("adSoyad");
-      if (kayitliAdSoyad) setAdSoyad(kayitliAdSoyad);
+      if (kayitliAdSoyad) setAdSoyad(adSoyadTemizle(kayitliAdSoyad));
 
       const kayitliFoto = await AsyncStorage.getItem("profilFoto");
-      if (kayitliFoto) setProfilFoto(kayitliFoto);
+      if (profilFotoGecerliMi(user.uid, kayitliFoto)) setProfilFoto(kayitliFoto);
 
       const kayitliSeri = await AsyncStorage.getItem("seriGunu");
       if (kayitliSeri) setSeriGunu(parseInt(kayitliSeri));
@@ -194,7 +200,8 @@ export default function ProfileScreen() {
             const data = kullaniciSnap.data();
 
             if (SINIFLAR.includes(data.sinif)) setSeciliSinif(data.sinif);
-            if (data.adSoyad) setAdSoyad(data.adSoyad);
+            if (typeof data.adSoyad === "string" && data.adSoyad)
+              setAdSoyad(adSoyadTemizle(data.adSoyad));
             if (data.bildirimAktif !== undefined)
               setBildirimAktif(data.bildirimAktif);
             setRozetKaydi(Array.isArray(data.rozetler) ? data.rozetler : null);
@@ -204,21 +211,16 @@ export default function ProfileScreen() {
               setPremiumMu(data.premiumMu === true);
             }
 
-            if (data.baglantiKodu) {
+            if (typeof data.baglantiKodu === "string") {
               setBaglantiKodu(data.baglantiKodu);
             }
-            if (!kodKontrolEdildi.current) {
+            // Kod sunucuda üretilir ve kaydı sunucuda doğrulanır (eski hesaplar da burada taşınır)
+            const ogrenciMi = (data.rol ?? "ogrenci") === "ogrenci";
+            if (ogrenciMi && !kodKontrolEdildi.current) {
               kodKontrolEdildi.current = true;
               try {
-                // Kodun baglantiKodlari kaydı yoksa oluşturulur (eski hesaplar için taşıma)
-                const kod = await baglantiKoduGaranti(
-                  user.uid,
-                  data.baglantiKodu
-                );
-                if (kod !== data.baglantiKodu) {
-                  setBaglantiKodu(kod);
-                  await updateDoc(kullaniciRef, { baglantiKodu: kod });
-                }
+                const kod = await baglantiKoduAl();
+                if (kod) setBaglantiKodu(kod);
               } catch (e) {
                 kodKontrolEdildi.current = false;
                 console.log("Kod ekleme hatası", e?.code || e?.message);
@@ -237,7 +239,7 @@ export default function ProfileScreen() {
               }
             }
 
-            if (data.profilFoto) {
+            if (profilFotoGecerliMi(user.uid, data.profilFoto)) {
               setProfilFoto(data.profilFoto);
               await AsyncStorage.setItem("profilFoto", data.profilFoto);
             }
@@ -245,14 +247,10 @@ export default function ProfileScreen() {
             if (silmeSurecte.current) return;
 
             try {
-              const yeniKod = await baglantiKoduGaranti(user.uid, null);
-              setBaglantiKodu(yeniKod);
-              if (silmeSurecte.current) return;
-              kodKontrolEdildi.current = true;
+              // Profil oluşturulur; bağlantı kodunu belge dinleyicisi sunucudan alır
               await setDoc(kullaniciRef, {
                 eposta: user.email,
-                rol: kayitliRol || "ogrenci",
-                baglantiKodu: yeniKod,
+                rol: kayitliRol === "veli" ? "veli" : "ogrenci",
                 kayitTarihi: new Date().toISOString(),
                 bildirimAktif: true,
                 seriGunu: 1,
@@ -344,15 +342,37 @@ export default function ProfileScreen() {
     }
   };
 
+  // Düzenlemeye başlarken kayıtlı isim saklanır; kaydedilemezse ona dönülür
+  const kayitliIsim = useRef("");
+
+  const isimDuzenlemeyiAc = () => {
+    kayitliIsim.current = adSoyad;
+    setIsimDuzenleniyor(true);
+  };
+
   const isimKaydet = async () => {
-    if (adSoyad !== "") {
-      await AsyncStorage.setItem("adSoyad", adSoyad);
-      if (user) {
-        const kullaniciRef = doc(db, "kullanicilar", user.uid);
-        await updateDoc(kullaniciRef, { adSoyad: adSoyad });
-      }
+    const temiz = adSoyadTemizle(adSoyad);
+    if (!temiz) {
+      setAdSoyad(kayitliIsim.current);
+      setIsimDuzenleniyor(false);
+      return;
     }
+    setAdSoyad(temiz);
     setIsimDuzenleniyor(false);
+    if (temiz === kayitliIsim.current) return;
+    try {
+      if (user) {
+        await updateDoc(doc(db, "kullanicilar", user.uid), { adSoyad: temiz });
+      }
+      await AsyncStorage.setItem("adSoyad", temiz);
+    } catch (e) {
+      console.log("İsim kaydedilemedi:", e?.code);
+      setAdSoyad(kayitliIsim.current);
+      Alert.alert(
+        "İsim Kaydedilemedi",
+        "İnternet bağlantınızı kontrol edip tekrar deneyin."
+      );
+    }
   };
 
   const fotoAksiyonMenusu = () => {
@@ -465,7 +485,13 @@ export default function ProfileScreen() {
           }
 
           const data = JSON.parse(uploadResult.body);
-          const indirmeURL = `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodedYol}?alt=media&token=${data.downloadTokens}`;
+          const erisimAnahtari = String(data?.downloadTokens || "")
+            .split(",")[0]
+            .trim();
+          const indirmeURL = `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodedYol}?alt=media&token=${erisimAnahtari}`;
+          if (!profilFotoGecerliMi(user.uid, indirmeURL)) {
+            throw new Error("Beklenmeyen yükleme yanıtı.");
+          }
 
           const kullaniciRef = doc(db, "kullanicilar", user.uid);
           await updateDoc(kullaniciRef, { profilFoto: indirmeURL });
@@ -555,6 +581,25 @@ export default function ProfileScreen() {
     );
   };
 
+  // Bağlantı kodu öğrenciyi takip etmeyi sağlar: ekranda sürekli açık durmaz, istenince gösterilir
+  const baglantiKodunuGoster = () => {
+    if (!baglantiKodu) return;
+    Alert.alert(
+      "Veli Bağlantı Kodun",
+      `${baglantiKodu}\n\nBu kodu yalnızca veline ver. Kodu bilen kişi soru geçmişini ve çalışma istatistiklerini görebilir.`,
+      [
+        { text: "Kapat", style: "cancel" },
+        {
+          text: "Veline Gönder",
+          onPress: () =>
+            Share.share({
+              message: `Mikro veli bağlantı kodum: ${baglantiKodu}\nMikro veli hesabında öğrenci eklerken bu kodu girebilirsin.`,
+            }).catch(() => {}),
+        },
+      ]
+    );
+  };
+
   const bizeUlasin = () => {
     Linking.openURL(
       "mailto:destek@mikroai.com?subject=Mikro AI Destek Talebi&body=Merhaba, şöyle bir konu hakkında yardıma ihtiyacım var: "
@@ -614,7 +659,13 @@ export default function ProfileScreen() {
       ) {
         mesaj = "Şifre yanlış. Lütfen tekrar deneyin.";
       } else if (kod === "auth/user-mismatch") {
-        mesaj = "Farklı bir Google hesabı seçtiniz. Hesabınızla aynı hesabı seçin.";
+        mesaj =
+          girisYonteminiBul(user) === "apple"
+            ? "Farklı bir Apple hesabıyla doğrulama yapıldı. Bu hesaba ait Apple kimliğini kullanın."
+            : "Farklı bir Google hesabı seçtiniz. Hesabınızla aynı hesabı seçin.";
+      } else if (error?.asama === "apple") {
+        mesaj =
+          "Apple bağlantısı iptal edilemediği için hesap silinmedi; hiçbir veriniz silinmedi. Lütfen biraz sonra tekrar deneyin.";
       } else if (kod === "auth/too-many-requests") {
         mesaj = "Çok fazla deneme yapıldı. Lütfen biraz bekleyip tekrar deneyin.";
       } else if (kod === "auth/network-request-failed") {
@@ -758,22 +809,6 @@ export default function ProfileScreen() {
     kazanilanAnahtar,
   ]);
 
-  const getModalButonStil = (mod) => {
-    const isSelected = temaModu === mod;
-
-    if (mod === "light") {
-      const bgColor = isSelected ? tema.anaButon : "transparent";
-      const textColor = isSelected ? "#fff" : tema.metin;
-      const borderColor = isSelected ? "transparent" : tema.kutuCerceve;
-      return { bgColor, textColor, borderColor, isSelected };
-    }
-
-    const bgColor = isSelected ? tema.metin : "transparent";
-    const textColor = isSelected ? tema.arkaplan : tema.metin;
-    const borderColor = isSelected ? "transparent" : tema.kutuCerceve;
-    return { bgColor, textColor, borderColor, isSelected };
-  };
-
   return (
     <View style={[styles.container, { backgroundColor: tema.arkaplan }]}>
       {isFocused && (
@@ -840,6 +875,8 @@ export default function ProfileScreen() {
                   onChangeText={setAdSoyad}
                   autoFocus={true}
                   placeholder="İsminiz"
+                  maxLength={AD_SOYAD_EN_FAZLA}
+                  autoCorrect={false}
                   placeholderTextColor="rgba(255,255,255,0.6)"
                   onSubmitEditing={isimKaydet}
                   returnKeyType="done"
@@ -859,7 +896,7 @@ export default function ProfileScreen() {
                   alignItems: "center",
                   padding: 4,
                 }}
-                onPress={() => setIsimDuzenleniyor(true)}
+                onPress={isimDuzenlemeyiAc}
                 activeOpacity={0.7}
               >
                 <Text style={styles.userName}>
@@ -1244,12 +1281,9 @@ export default function ProfileScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                onPress={() =>
-                  Alert.alert(
-                    "Veli Bağlantı Kodu",
-                    `Bu kodu veline vererek seni takip etmesini sağlayabilirsin:\n\n${baglantiKodu}`
-                  )
-                }
+                onPress={baglantiKodunuGoster}
+                accessibilityRole="button"
+                accessibilityHint="Kodu gösterir ve paylaşma seçeneği sunar"
                 style={[
                   styles.menuItem,
                   { backgroundColor: tema.kutuArkaplan },
@@ -1266,11 +1300,11 @@ export default function ProfileScreen() {
                     Veli Bağlantı Kodum
                   </Text>
                   <Text style={[styles.menuAlt, { color: tema.ikincilMetin }]}>
-                    {baglantiKodu}
+                    {baglantiKodu ? "Gizli • Görmek için dokun" : "Hazırlanıyor..."}
                   </Text>
                 </View>
                 <Ionicons
-                  name="copy-outline"
+                  name="eye-outline"
                   size={18}
                   color={tema.ikincilMetin}
                 />
@@ -1517,187 +1551,10 @@ export default function ProfileScreen() {
           </Pressable>
         </Modal>
 
-        <Modal
-          visible={temaModalGorunur}
-          animationType="slide"
-          transparent={true}
-        >
-          <Pressable
-            style={styles.bottomSheetArkaplan}
-            onPress={() => setTemaModalGorunur(false)}
-          >
-            <Pressable
-              style={[
-                styles.bottomSheetKutu,
-                {
-                  backgroundColor: isGercektenKaranlik
-                    ? "#1C1C1E"
-                    : tema.kutuArkaplan,
-                },
-              ]}
-              onPress={(e) => e.stopPropagation()}
-            >
-              <Text
-                style={[
-                  styles.modalBaslik,
-                  {
-                    color: tema.metin,
-                    fontSize: 20,
-                    marginBottom: 25,
-                    marginTop: 5,
-                  },
-                ]}
-              >
-                Görünüm Tercihi
-              </Text>
-
-              <TouchableOpacity
-                style={[
-                  styles.temaKarti,
-                  {
-                    backgroundColor: getModalButonStil("light").bgColor,
-                    borderColor: getModalButonStil("light").borderColor,
-                  },
-                ]}
-                onPress={() => {
-                  temaDegistir("light");
-                  setTemaModalGorunur(false);
-                }}
-              >
-                <Ionicons
-                  name={temaModu === "light" ? "sunny" : "sunny-outline"}
-                  size={22}
-                  color={getModalButonStil("light").textColor}
-                  style={{ marginRight: 15 }}
-                />
-                <Text
-                  style={[
-                    styles.temaKartiYazi,
-                    {
-                      color: getModalButonStil("light").textColor,
-                      fontWeight: getModalButonStil("light").isSelected
-                        ? "800"
-                        : "500",
-                    },
-                  ]}
-                >
-                  Açık Mod
-                </Text>
-                {temaModu === "light" && (
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={22}
-                    color={getModalButonStil("light").textColor}
-                    style={{ marginLeft: "auto" }}
-                  />
-                )}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.temaKarti,
-                  {
-                    backgroundColor: getModalButonStil("dark").bgColor,
-                    borderColor: getModalButonStil("dark").borderColor,
-                  },
-                ]}
-                onPress={() => {
-                  temaDegistir("dark");
-                  setTemaModalGorunur(false);
-                }}
-              >
-                <Ionicons
-                  name={temaModu === "dark" ? "moon" : "moon-outline"}
-                  size={22}
-                  color={getModalButonStil("dark").textColor}
-                  style={{ marginRight: 15 }}
-                />
-                <Text
-                  style={[
-                    styles.temaKartiYazi,
-                    {
-                      color: getModalButonStil("dark").textColor,
-                      fontWeight: getModalButonStil("dark").isSelected
-                        ? "800"
-                        : "500",
-                    },
-                  ]}
-                >
-                  Koyu Mod
-                </Text>
-                {temaModu === "dark" && (
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={22}
-                    color={getModalButonStil("dark").textColor}
-                    style={{ marginLeft: "auto" }}
-                  />
-                )}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.temaKarti,
-                  {
-                    backgroundColor: getModalButonStil("system").bgColor,
-                    borderColor: getModalButonStil("system").borderColor,
-                  },
-                ]}
-                onPress={() => {
-                  temaDegistir("system");
-                  setTemaModalGorunur(false);
-                }}
-              >
-                <Ionicons
-                  name={
-                    temaModu === "system"
-                      ? "phone-portrait"
-                      : "phone-portrait-outline"
-                  }
-                  size={22}
-                  color={getModalButonStil("system").textColor}
-                  style={{ marginRight: 15 }}
-                />
-                <Text
-                  style={[
-                    styles.temaKartiYazi,
-                    {
-                      color: getModalButonStil("system").textColor,
-                      fontWeight: getModalButonStil("system").isSelected
-                        ? "800"
-                        : "500",
-                    },
-                  ]}
-                >
-                  Sistem Ayarı
-                </Text>
-                {temaModu === "system" && (
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={22}
-                    color={getModalButonStil("system").textColor}
-                    style={{ marginLeft: "auto" }}
-                  />
-                )}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => setTemaModalGorunur(false)}
-                style={styles.modalKapatButon}
-              >
-                <Text
-                  style={{
-                    color: tema.ikincilMetin,
-                    fontWeight: "bold",
-                    fontSize: 16,
-                  }}
-                >
-                  Vazgeç
-                </Text>
-              </TouchableOpacity>
-            </Pressable>
-          </Pressable>
-        </Modal>
+        <GorunumSecici
+          gorunur={temaModalGorunur}
+          kapat={() => setTemaModalGorunur(false)}
+        />
 
         <Modal
           visible={webViewModalGorunur}
@@ -1792,6 +1649,8 @@ export default function ProfileScreen() {
               >
                 {girisYonteminiBul(user) === "google"
                   ? "Güvenliğiniz için Google ile yeniden giriş yapmanız istenecek."
+                  : girisYonteminiBul(user) === "apple"
+                  ? "Güvenliğiniz için Apple ile yeniden doğrulama yapmanız istenecek."
                   : "Güvenliğiniz için hesap şifrenizi girmeniz gerekiyor."}
               </Text>
 
@@ -2150,29 +2009,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  bottomSheetArkaplan: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "flex-end",
-  },
-  bottomSheetKutu: {
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    padding: 25,
-    paddingBottom: Platform.OS === "ios" ? 45 : 30,
-  },
-  temaKarti: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    marginBottom: 12,
-  },
-  temaKartiYazi: {
-    fontSize: 16,
-  },
 
   webViewModalOverlay: {
     flex: 1,

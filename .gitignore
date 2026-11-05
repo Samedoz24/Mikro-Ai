@@ -47,3 +47,8 @@ GoogleService-Info.plist
 
 # Şifre Kasası
 .env
+
+# Firebase emülatör günlükleri
+firestore-debug.log
+firebase-debug.log
+ui-debug.log

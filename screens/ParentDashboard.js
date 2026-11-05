@@ -33,8 +33,6 @@ import {
   query,
   where,
   getDocs,
-  arrayUnion,
-  arrayRemove,
   getDocFromServer,
 } from "firebase/firestore";
 
@@ -46,7 +44,12 @@ import useAltMenuBoslugu from "../utils/altMenu";
 import { colors } from "../theme";
 import { cozumYukle, kesinSonuc } from "../utils/cozumYukleyici";
 import { dersBul } from "../utils/ders";
-import { kodlaOgrenciBul } from "../utils/baglanti";
+import {
+  veliBagla,
+  veliBaglantisiKaldir,
+  veliBaglaHataMesaji,
+} from "../utils/baglanti";
+import { profilFotoGecerliMi, adSoyadTemizle } from "../utils/profilDogrulama";
 
 const ekranGenisligi = Dimensions.get("window").width;
 const ekranYuksekligi = Dimensions.get("window").height;
@@ -94,26 +97,14 @@ export default function ParentDashboard() {
 
         if (veliSnap.exists()) {
           const data = veliSnap.data();
-          if (data.bagliOgrenciler) {
-            // Güvenlik kuralları bağlı öğrencileri bagliOgrenciIdleri listesinden tanır; bu liste
-            // sonradan eklendi, eski bağlantılar için bir kez tamamlanır. Öğrenci verisi
-            // okunmadan önce bitmesi için liste ekrana ondan sonra verilir.
-            const kayitliIdler = data.bagliOgrenciIdleri || [];
-            const eksikIdler = data.bagliOgrenciler
-              .map((ogr) => ogr.id)
-              .filter((id) => !kayitliIdler.includes(id));
-            if (eksikIdler.length > 0) {
-              try {
-                await setDoc(
-                  veliRef,
-                  { bagliOgrenciIdleri: arrayUnion(...eksikIdler) },
-                  { merge: true }
-                );
-              } catch (hata) {
-                console.log("Bağlı öğrenci listesi tamamlanamadı:", hata?.code);
-              }
-            }
-
+          if (Array.isArray(data.bagliOgrenciler)) {
+            // Yetkili liste sunucunun yazdığı bagliOgrenciIdleri'dir; yalnızca orada olan öğrenciler gösterilir
+            const yetkiliIdler = Array.isArray(data.bagliOgrenciIdleri)
+              ? data.bagliOgrenciIdleri
+              : [];
+            data.bagliOgrenciler = data.bagliOgrenciler.filter(
+              (ogr) => ogr && yetkiliIdler.includes(ogr.id)
+            );
             // Hesabını silmiş öğrenciler listeden çıkarılır. Yalnızca sunucu "belge yok" derse silinir;
             // ağ ya da izin hatasında liste olduğu gibi kalır (yanlışlıkla bağlantı kaybolmaz).
             let gecerliListe = data.bagliOgrenciler;
@@ -132,15 +123,9 @@ export default function ParentDashboard() {
                 durumlar
               );
               if (silinenler.length > 0) {
-                await setDoc(
-                  veliRef,
-                  {
-                    bagliOgrenciler: arrayRemove(...silinenler),
-                    bagliOgrenciIdleri: arrayRemove(
-                      ...silinenler.map((ogr) => ogr.id)
-                    ),
-                  },
-                  { merge: true }
+                // Liste yalnızca sunucuda değiştirilebilir
+                await Promise.all(
+                  silinenler.map((ogr) => veliBaglantisiKaldir(ogr.id))
                 );
                 const silinenIdler = new Set(silinenler.map((ogr) => ogr.id));
                 gecerliListe = data.bagliOgrenciler.filter(
@@ -192,8 +177,10 @@ export default function ParentDashboard() {
         const yeniFotolar = {};
         bagliOgrenciler.forEach((ogr, i) => {
           const snap = ogrSnaplar[i];
-          if (snap && snap.exists() && snap.data().profilFoto) {
-            yeniFotolar[ogr.id] = snap.data().profilFoto;
+          // Yalnızca öğrencinin kendi Storage fotoğrafı gösterilir; başka bir adres asla açılmaz
+          const foto = snap && snap.exists() ? snap.data().profilFoto : null;
+          if (profilFotoGecerliMi(ogr.id, foto)) {
+            yeniFotolar[ogr.id] = foto;
           }
         });
 
@@ -276,74 +263,26 @@ export default function ParentDashboard() {
 
     setYukleniyor(true);
     try {
-      const ogrenciId = await kodlaOgrenciBul(kod);
-
-      if (!ogrenciId) {
-        Alert.alert(
-          "Bulunamadı",
-          "Bu koda sahip bir öğrenci bulunamadı. Lütfen kodu kontrol edin."
-        );
-      } else if (ogrenciId === auth.currentUser.uid) {
-        Alert.alert("Hata", "Kendi hesabınızı öğrenci olarak ekleyemezsiniz.");
-      } else if (bagliOgrenciler.some((ogr) => ogr.id === ogrenciId)) {
+      // Bağlantıyı sunucu kurar: kodu doğrular, yanlış denemeleri sınırlar, listeyi kendisi yazar
+      const { ogrenci, zatenVar } = await veliBagla(kod);
+      if (zatenVar) {
         Alert.alert("Zaten Ekli", "Bu öğrenci listenizde bulunuyor.");
       } else {
-        const veliRef = doc(db, "kullanicilar", auth.currentUser.uid);
-
-        // Önce yetki (bagliOgrenciIdleri); öğrencinin adı ancak bağlandıktan sonra okunabilir
-        await setDoc(
-          veliRef,
-          { bagliOgrenciIdleri: arrayUnion(ogrenciId), rol: "veli" },
-          { merge: true }
-        );
-
-        let ogrenciIsim = "Öğrenci";
-        try {
-          const ogrSnap = await getDoc(doc(db, "kullanicilar", ogrenciId));
-          if (ogrSnap.exists()) {
-            const ogrVeri = ogrSnap.data();
-            ogrenciIsim =
-              ogrVeri.adSoyad || (ogrVeri.eposta || "Öğrenci").split("@")[0];
-          }
-        } catch (isimHatasi) {
-          console.log("Öğrenci adı alınamadı:", isimHatasi?.code);
-        }
-
-        const yeniOgrenci = { id: ogrenciId, isim: ogrenciIsim };
-        try {
-          await setDoc(
-            veliRef,
-            { bagliOgrenciler: arrayUnion(yeniOgrenci) },
-            { merge: true }
-          );
-        } catch (listeHatasi) {
-          // Liste yazılamadıysa yetki de geri alınır; yarım bağlantı kalmaz
-          try {
-            await setDoc(
-              veliRef,
-              { bagliOgrenciIdleri: arrayRemove(ogrenciId) },
-              { merge: true }
-            );
-          } catch (e) {}
-          throw listeHatasi;
-        }
-
-        setBagliOgrenciler((eskiListe) => [...eskiListe, yeniOgrenci]);
-        if (!aktifOgrenci) setAktifOgrenci(yeniOgrenci);
-
+        setBagliOgrenciler((eskiListe) => [
+          ...eskiListe.filter((o) => o.id !== ogrenci.id),
+          ogrenci,
+        ]);
+        if (!aktifOgrenci) setAktifOgrenci(ogrenci);
         setVeliModalGorunur(false);
         setOgrenciKoduInput("");
         Alert.alert(
           "Başarılı!",
-          `${ogrenciIsim} isimli öğrenci hesabınıza bağlandı.`
+          `${ogrenci.isim} isimli öğrenci hesabınıza bağlandı.`
         );
       }
     } catch (error) {
-      console.log("Öğrenci bağlama hatası:", error?.code);
-      Alert.alert(
-        "Bağlantı Hatası",
-        "Öğrenci bağlanamadı. İnternet bağlantını kontrol edip tekrar dene."
-      );
+      console.log("Öğrenci bağlama hatası:", error?.code, error?.message);
+      Alert.alert("Bağlantı Hatası", veliBaglaHataMesaji(error));
     }
     setYukleniyor(false);
   };
@@ -359,15 +298,7 @@ export default function ParentDashboard() {
           style: "destructive",
           onPress: async () => {
             try {
-              const veliRef = doc(db, "kullanicilar", auth.currentUser.uid);
-              await setDoc(
-                veliRef,
-                {
-                  bagliOgrenciler: arrayRemove(ogrenci),
-                  bagliOgrenciIdleri: arrayRemove(ogrenci.id),
-                },
-                { merge: true }
-              );
+              await veliBaglantisiKaldir(ogrenci.id);
 
               const yeniListe = bagliOgrenciler.filter(
                 (ogr) => ogr.id !== ogrenci.id

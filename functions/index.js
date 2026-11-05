@@ -9,6 +9,7 @@ const erisim = require("./erisim");
 const platform = require("./platform");
 const veli = require("./veli");
 const kota = require("./kota");
+const veliBaglanti = require("./veliBaglanti");
 
 initializeApp();
 
@@ -123,6 +124,19 @@ exports.soruGonder = onCall(ORTAK, (request) =>
   kota.soruGonder(kurum.girisliUid(request), request.auth.token, request.data)
 );
 
+// Veli–öğrenci bağlantısı (yalnızca sunucu kurar). Öğrenci kendi kodunu alır; veli kodla bağlanır/kaldırır.
+exports.baglantiKoduAl = onCall(ORTAK, (request) =>
+  veliBaglanti.baglantiKoduAl(kurum.girisliUid(request))
+);
+
+exports.veliBagla = onCall(ORTAK, (request) =>
+  veliBaglanti.veliBagla(kurum.girisliUid(request), request.data)
+);
+
+exports.veliBaglantisiKaldir = onCall(ORTAK, (request) =>
+  veliBaglanti.veliBaglantisiKaldir(kurum.girisliUid(request), request.data)
+);
+
 exports.kotaDurumu = onCall(ORTAK, (request) =>
   kota.kotaDurumu(kurum.girisliUid(request), request.auth.token, request.data)
 );
@@ -206,5 +220,7 @@ exports.veliBaglantilariniTemizle = onDocumentDeleted(
   async (event) => {
     const guncellenen = await veli.veliBaglantilariniTemizle(event.params.uid);
     if (guncellenen > 0) console.log("Veli bağlantısı temizlendi:", guncellenen);
+    // Öğrencinin bağlantı kodu kaydı da silinir (istemci artık bu koleksiyona erişemez)
+    await veliBaglanti.kodKayitlariniSil(event.params.uid);
   }
 );

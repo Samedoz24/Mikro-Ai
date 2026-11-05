@@ -1,12 +1,13 @@
 const { initializeApp } = require("firebase-admin/app");
 const { onCall } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
-const { onDocumentWritten } = require("firebase-functions/v2/firestore");
+const { onDocumentWritten, onDocumentDeleted } = require("firebase-functions/v2/firestore");
 const kurum = require("./kurum");
 const ozet = require("./ozet");
 const duyuru = require("./duyuru");
 const erisim = require("./erisim");
 const platform = require("./platform");
+const veli = require("./veli");
 
 initializeApp();
 
@@ -185,5 +186,15 @@ exports.isimOzetiniGuncelle = onDocumentWritten(
     if (!sonra?.kurumId || sonra.rol === "yonetici") return;
     if (once?.adSoyad === sonra.adSoyad && once?.kurumId === sonra.kurumId) return;
     await ozet.ozetYenile(event.params.uid);
+  }
+);
+
+// Bir kullanıcı (öğrenci) hesabını silince, onu bağlı öğrenci olarak tutan velilerin listelerinden çıkarılır.
+// Tekrar çalıştırılabilir; geçici hata olursa Firebase yeniden dener.
+exports.veliBaglantilariniTemizle = onDocumentDeleted(
+  { document: "kullanicilar/{uid}", region: "europe-west1", maxInstances: 5, retry: true },
+  async (event) => {
+    const guncellenen = await veli.veliBaglantilariniTemizle(event.params.uid);
+    if (guncellenen > 0) console.log("Veli bağlantısı temizlendi:", guncellenen);
   }
 );

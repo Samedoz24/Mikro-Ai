@@ -1173,8 +1173,6 @@ export default function ProfileScreen() {
                 <KurumKarti uid={user.uid} tema={tema} />
               )}
 
-              {user?.uid && <PlatformKarti uid={user.uid} tema={tema} />}
-
               {rol === "ogrenci" && (
                 <View
                   style={[
@@ -1320,6 +1318,13 @@ export default function ProfileScreen() {
                 />
               </TouchableOpacity>
             </>
+          )}
+
+          {/* Platform yönetimi: rolden bağımsız; yalnızca yetkili hesapta görünür (sunucu doğrular) */}
+          {user?.uid && (
+            <View style={{ marginTop: 20 }}>
+              <PlatformKarti uid={user.uid} tema={tema} />
+            </View>
           )}
 
           <Text

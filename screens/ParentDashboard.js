@@ -35,10 +35,12 @@ import {
   getDocs,
   arrayUnion,
   arrayRemove,
+  getDocFromServer,
 } from "firebase/firestore";
 
 import { useTheme } from "../ThemeContext";
 import YapayZekaBilgi from "./YapayZekaBilgi";
+import { silinmisOgrenciler } from "../utils/veliBaglanti";
 import useAltMenuBoslugu from "../utils/altMenu";
 // 🚀 YENİ: Gerçek karanlık mod kontrolü için
 import { colors } from "../theme";
@@ -112,9 +114,46 @@ export default function ParentDashboard() {
               }
             }
 
-            setBagliOgrenciler(data.bagliOgrenciler);
-            if (data.bagliOgrenciler.length > 0) {
-              setAktifOgrenci(data.bagliOgrenciler[0]);
+            // Hesabını silmiş öğrenciler listeden çıkarılır. Yalnızca sunucu "belge yok" derse silinir;
+            // ağ ya da izin hatasında liste olduğu gibi kalır (yanlışlıkla bağlantı kaybolmaz).
+            let gecerliListe = data.bagliOgrenciler;
+            try {
+              const durumlar = await Promise.all(
+                data.bagliOgrenciler.map((ogr) =>
+                  ogr && typeof ogr.id === "string"
+                    ? getDocFromServer(doc(db, "kullanicilar", ogr.id))
+                        .then((snap) => (snap.exists() ? "var" : "yok"))
+                        .catch(() => "hata")
+                    : Promise.resolve("hata")
+                )
+              );
+              const silinenler = silinmisOgrenciler(
+                data.bagliOgrenciler,
+                durumlar
+              );
+              if (silinenler.length > 0) {
+                await setDoc(
+                  veliRef,
+                  {
+                    bagliOgrenciler: arrayRemove(...silinenler),
+                    bagliOgrenciIdleri: arrayRemove(
+                      ...silinenler.map((ogr) => ogr.id)
+                    ),
+                  },
+                  { merge: true }
+                );
+                const silinenIdler = new Set(silinenler.map((ogr) => ogr.id));
+                gecerliListe = data.bagliOgrenciler.filter(
+                  (ogr) => !silinenIdler.has(ogr?.id)
+                );
+              }
+            } catch (hata) {
+              console.log("Silinmiş öğrenci kontrolü yapılamadı:", hata?.code);
+            }
+
+            setBagliOgrenciler(gecerliListe);
+            if (gecerliListe.length > 0) {
+              setAktifOgrenci(gecerliListe[0]);
             }
           }
           if (data.whatsappNo) setWhatsappNo(data.whatsappNo);

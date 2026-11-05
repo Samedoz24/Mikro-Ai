@@ -53,7 +53,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system/legacy";
-import * as Application from "expo-application";
 import * as Notifications from "expo-notifications";
 
 // 🚀 DÜZELTME: Yeni akıllı bildirim yöneticilerimiz eklendi
@@ -77,7 +76,7 @@ import { useTheme } from "../ThemeContext";
 import { usePremium } from "../PremiumContext";
 import { yerelTarih } from "../utils/tarih";
 import { dersBul } from "../utils/ders";
-import { kotaDurumu, maksimumKota } from "../utils/kota";
+import { kotaDurumuGetir } from "../utils/kotaIstemci";
 import { colors } from "../theme";
 
 // 13 yaş şartı nedeniyle liste 8. sınıftan başlar
@@ -144,63 +143,22 @@ export default function ProfileScreen() {
   // Bağlantı kodunun baglantiKodlari kaydı bu oturumda bir kez doğrulanır
   const kodKontrolEdildi = useRef(false);
 
-  // Premium durumu (canlı) değişince kota dinleyicisi yeniden kurulur; böylece "kalan/toplam"
-  // göstergesi her zaman güncel premium durumuna göre hesaplanır.
+  // Kalan günlük soru hakkı sunucudan okunur (kota sunucuda, hesap + cihaz başına sayılır).
+  // Sayfa her açıldığında ve premium durumu değişince yenilenir. Yalnızca öğrenciler soru gönderir.
   useEffect(() => {
-    let cihazAbonelik = () => {};
+    if (!user || !isFocused || rol !== "ogrenci") return undefined;
     let iptal = false;
-
-    const cihazKotasiDinle = async () => {
-      if (!user) return;
-
-      try {
-        // Premium durumu doğrudan sunucudan okunur (bağlam henüz yüklenmemiş olabilir)
-        const kullaniciSnap = await getDoc(doc(db, "kullanicilar", user.uid));
-        const isPremium = kullaniciSnap.exists()
-          ? kullaniciSnap.data().premiumMu === true
-          : false;
-
-        const guncelMaxKota = maksimumKota(isPremium);
-        setMaxKota(guncelMaxKota);
-
-        const cihazId =
-          Platform.OS === "android"
-            ? Application.getAndroidId()
-            : await Application.getIosIdForVendorAsync();
-
-        const bugun = yerelTarih();
-        const cihazRef = doc(db, "cihazHaklari", cihazId);
-
-        const abonelik = onSnapshot(cihazRef, async (cihazSnap) => {
-          const durum = kotaDurumu(
-            cihazSnap.exists() ? cihazSnap.data() : null,
-            bugun,
-            guncelMaxKota
-          );
-          setKalanSoru(durum.kalan);
-
-          if (durum.guncelleme) {
-            try {
-              await setDoc(cihazRef, durum.guncelleme, { merge: true });
-            } catch (hata) {
-              console.log("Kota güncellenemedi:", hata?.code);
-            }
-          }
-        });
-
-        if (iptal) abonelik();
-        else cihazAbonelik = abonelik;
-      } catch (error) {
-        console.log("Cihaz kotası dinleme hatası:", error?.code);
-      }
-    };
-
-    cihazKotasiDinle();
+    kotaDurumuGetir()
+      .then((durum) => {
+        if (iptal || !durum) return;
+        if (Number.isInteger(durum.sinir)) setMaxKota(durum.sinir);
+        if (Number.isInteger(durum.kalan)) setKalanSoru(durum.kalan);
+      })
+      .catch((hata) => console.log("Kota durumu alınamadı:", hata?.code));
     return () => {
       iptal = true;
-      cihazAbonelik();
     };
-  }, [user, premiumAktif]);
+  }, [user, isFocused, rol, premiumAktif]);
 
   useEffect(() => {
     let abonelik = () => {};

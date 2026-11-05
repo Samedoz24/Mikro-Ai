@@ -10,7 +10,7 @@ rules_version = '2';
 //   kullanicilar/{uid}        profil; sahibi okur/yazar, bağlı veli okur. premiumMu istemciden yazılamaz.
 //   sorular/{id}              sorular; sahibi okur/siler, bağlı veli okur. Yeni soru "Bekliyor" durumunda açılır.
 //   baglantiKodlari/{KOD}     öğrenci bağlantı kodu -> uid. Kodu bilen tek tek okuyabilir, listelenemez.
-//   cihazHaklari/{cihazId}    günlük soru kotası (cihaz bazlı).
+//   cihazHaklari/{cihazId}    eski istemci kotası (kullanılmıyor, kapalı); kota artık sunucuda: kotaSayaclari
 //   kurumlar/{kurumId}        dershane. Yalnızca sunucu (Admin SDK / Cloud Functions) yazar.
 //     /ozet/{uid}             öğrenci başına istatistik özeti; müdür ve "tum" kapsamlı öğretmen okur.
 //     /gruplar/{grupId}       sınıf/şube; /ozet/{uid} altındaki grup kopyasını yetkili öğretmen okur.
@@ -137,17 +137,9 @@ service cloud.firestore {
         || veliMi(resource.data.kullaniciUid);
       // Müdür soruları doğrudan okuyamaz: yalnızca sunucu fonksiyonları (erişim kaydı tutarak) verir
 
-      allow create: if girisli()
-        && request.resource.data.kullaniciUid == request.auth.uid
-        && request.resource.data.kullaniciEposta == request.auth.token.email
-        && request.resource.data.durum == 'Bekliyor'
-        && request.resource.data.fotoLink is string
-        && request.resource.data.keys().hasOnly(
-             ['kullaniciUid', 'kullaniciEposta', 'fotoLink', 'tarih', 'durum', 'ogrenciSecimi'])
-        // Öğrencinin işaretlediği cevap (çözümü doğrulamak için kullanılır). Alan, eski uygulama sürümleri
-        // gönderemediği için isteğe bağlıdır; varsa yalnızca bu altı değerden biri olabilir.
-        && (!('ogrenciSecimi' in request.resource.data)
-            || request.resource.data.ogrenciSecimi in ['A', 'B', 'C', 'D', 'E', 'Bilinmiyor']);
+      // Soru belgesini yalnızca sunucu (soruGonder) oluşturur: günlük kota sunucuda sayılır ve
+      // fotoğraf doğrulanır. İstemci doğrudan soru yazamaz.
+      allow create: if false;
 
       // Sahibi yalnızca okundu damgası ve ders alanını değiştirebilir
       allow update: if soruSahibi(resource.data)
@@ -242,20 +234,17 @@ service cloud.firestore {
 
     // ---------------------------------------------------------------- cihazHaklari
     match /cihazHaklari/{cihazId} {
-      allow get: if girisli();
-      allow list: if false;
+      // Eski (istemci tarafı) kota kaydı: artık kullanılmıyor, yazma kapalı. Kota sunucuda sayılır.
+      allow read, write: if false;
+    }
 
-      allow create, update: if girisli()
-        && request.resource.data.kalanSoru is int
-        && request.resource.data.kalanSoru >= 0
-        && request.resource.data.kalanSoru <= 50
-        && request.resource.data.toplamHak is int
-        && request.resource.data.toplamHak >= 1
-        && request.resource.data.toplamHak <= 50
-        && request.resource.data.tarih is string
-        && request.resource.data.tarih.size() == 10;
+    // Sunucu kota sayaçları ve ayarlar: istemciye tamamen kapalı (yalnızca Admin SDK)
+    match /kotaSayaclari/{kayitId} {
+      allow read, write: if false;
+    }
 
-      allow delete: if false;
+    match /ayarlar/{ayarId} {
+      allow read, write: if false;
     }
   }
 }

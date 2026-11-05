@@ -197,10 +197,14 @@ async function kotaBildirimiGerekliMiKontrolEt(simdi) {
 
 // Günlük hak bittiğinde çağrılır: ertesi sabah 09:00'da tek seferlik "hakların yenilendi".
 // Hata verse de çağıran akışı (soru gönderme) bozmaz.
+// sinir: sunucunun bildirdiği günlük hak (verilmezse premium 50, ücretsiz 3 varsayılır)
 export async function kotaYenilenmeHatirlatmasiKur(
   premiumMu = false,
-  simdi = new Date()
+  simdi = new Date(),
+  sinir
 ) {
+  const gunlukHak =
+    Number.isInteger(sinir) && sinir > 0 ? sinir : premiumMu ? 50 : 3;
   try {
     if (!(await bildirimlerAcikMi())) return;
 
@@ -212,8 +216,8 @@ export async function kotaYenilenmeHatirlatmasiKur(
       {
         title: "🎁 Günlük Hakların Yenilendi",
         body: premiumMu
-          ? "Bugün için 50 yeni soru hakkın hazır."
-          : "Bugün için 3 yeni soru hakkın hazır. Takıldığın soruyu şimdi gönder.",
+          ? `Bugün için ${gunlukHak} yeni soru hakkın hazır.`
+          : `Bugün için ${gunlukHak} yeni soru hakkın hazır. Takıldığın soruyu şimdi gönder.`,
       },
       tarih
     );

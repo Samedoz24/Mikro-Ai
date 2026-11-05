@@ -8,6 +8,7 @@ const duyuru = require("./duyuru");
 const erisim = require("./erisim");
 const platform = require("./platform");
 const veli = require("./veli");
+const kota = require("./kota");
 
 initializeApp();
 
@@ -115,6 +116,15 @@ exports.kurumYenidenAc = onCall(ORTAK, (request) =>
 
 exports.kurumKapat = onCall({ ...ORTAK, timeoutSeconds: 540 }, (request) =>
   platform.kurumKapat(kurum.girisliUid(request), request.auth.token, request.data)
+);
+
+// Soru gönderme ve günlük kota: kota sunucuda (hesap + cihaz başına) sayılır, soru belgesini sunucu oluşturur
+exports.soruGonder = onCall(ORTAK, (request) =>
+  kota.soruGonder(kurum.girisliUid(request), request.auth.token, request.data)
+);
+
+exports.kotaDurumu = onCall(ORTAK, (request) =>
+  kota.kotaDurumu(kurum.girisliUid(request), request.auth.token, request.data)
 );
 
 // Müdür öğrenci verisine yalnızca bu fonksiyonlarla ulaşır; her erişim önce kaydedilir (KVKK)

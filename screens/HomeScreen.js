@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Text,
   View,
@@ -22,18 +22,11 @@ import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import { Ionicons } from "@expo/vector-icons";
 
-import * as Application from "expo-application";
 import ConfettiCannon from "react-native-confetti-cannon";
 
 import { auth, db, storage } from "../firebaseConfig";
-import {
-  collection,
-  addDoc,
-  doc,
-  getDoc,
-  updateDoc,
-  setDoc,
-} from "firebase/firestore";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { ref, deleteObject } from "firebase/storage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { useTheme } from "../ThemeContext";
@@ -41,7 +34,7 @@ import { useTheme } from "../ThemeContext";
 import { colors } from "../theme";
 import { usePremium } from "../PremiumContext";
 import { kotaYenilenmeHatirlatmasiKur } from "../utils/notificationManager";
-import { takvimGunFarki, yerelTarih } from "../utils/tarih";
+import { takvimGunFarki } from "../utils/tarih";
 import YapayZekaBilgi from "./YapayZekaBilgi";
 import useAltMenuBoslugu from "../utils/altMenu";
 import {
@@ -51,7 +44,13 @@ import {
   gonderilebilirMi,
   secimEtiketi,
 } from "../utils/sikSecimi";
-import { kotaDurumu, maksimumKota } from "../utils/kota";
+import {
+  kotaDurumuGetir,
+  soruGonderSunucu,
+  kesinRetMi,
+  kotaDolduMu,
+  soruHataMesaji,
+} from "../utils/kotaIstemci";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -60,6 +59,8 @@ export default function HomeScreen() {
   const [image, setImage] = useState(null);
   // Öğrencinin işaretlediği cevap (A-E ya da "Bilinmiyor"); seçilmeden Gönder açılmaz
   const [secim, setSecim] = useState(null);
+  // Aynı fotoğrafın tekrar gönderiminde yeniden yükleme yapılmaz (çift soru oluşmasın)
+  const yuklenenFoto = useRef({ uri: null, yol: null });
   // Yüzen alt menünün altında kalmamak için en altta bırakılan boşluk
   const altMenuBoslugu = useAltMenuBoslugu(8);
 
@@ -186,6 +187,7 @@ export default function HomeScreen() {
   const fotografiIptalEt = () => {
     setImage(null);
     setSecim(null);
+    yuklenenFoto.current = { uri: null, yol: null };
   };
 
   // Gerçekten ihtiyaç duyduğumuz sunucuya (Firebase Storage) ulaşılabiliyor mu?
@@ -206,11 +208,16 @@ export default function HomeScreen() {
     }
   };
 
-  const getDeviceId = async () => {
-    if (Platform.OS === "android") {
-      return Application.getAndroidId();
+  // Kota dolduğunda: ertesi gün için hatırlatma kurulur; ücretsiz kullanıcıya premium sayfası açılır
+  const kotaDolduUyarisi = async (premiumMu, sinir) => {
+    await kotaYenilenmeHatirlatmasiKur(premiumMu, undefined, sinir);
+    if (premiumMu) {
+      Alert.alert(
+        "Günlük Limit Doldu",
+        `Premium adil kullanım kotanı (günlük ${sinir} soru) doldurdun. Lütfen yarın tekrar dene.`
+      );
     } else {
-      return await Application.getIosIdForVendorAsync();
+      premiumAc("kota");
     }
   };
 
@@ -225,116 +232,97 @@ export default function HomeScreen() {
       );
       return;
     }
+    const gonderilenFoto = image;
     try {
       setYukleniyor(true);
       const baglanti = await internetVarMi();
       if (!baglanti) {
-        setYukleniyor(false);
         Alert.alert("Bağlantı Hatası", "İnternet bağlantınızı kontrol edin.");
         return;
       }
 
-      const kullaniciRef = doc(db, "kullanicilar", auth.currentUser.uid);
-      const kullaniciSnap = await getDoc(kullaniciRef);
-      const isPremium = kullaniciSnap.exists()
-        ? kullaniciSnap.data().premiumMu === true
-        : false;
-
-      const maxKota = maksimumKota(isPremium);
-      const cihazId = await getDeviceId();
-
-      const bugunYerel = yerelTarih();
-
-      const cihazRef = doc(db, "cihazHaklari", cihazId);
-      const cihazSnap = await getDoc(cihazRef);
-
-      const mevcutKota = kotaDurumu(
-        cihazSnap.exists() ? cihazSnap.data() : null,
-        bugunYerel,
-        maxKota
-      ).kalan;
-
-      if (mevcutKota <= 0) {
-        setYukleniyor(false);
-        await kotaYenilenmeHatirlatmasiKur(isPremium);
-        if (isPremium) {
-          Alert.alert(
-            "Günlük Limit Doldu",
-            "Premium adil kullanım kotanızı (Günlük 50 Soru) doldurdunuz. Lütfen yarın tekrar deneyin."
-          );
-        } else {
-          premiumAc("kota");
-        }
+      // 1) Kalan hak sunucudan sorulur (kota dolmuşsa fotoğraf hiç yüklenmez)
+      const durum = await kotaDurumuGetir();
+      if (durum.kalan <= 0) {
+        await kotaDolduUyarisi(durum.premiumMu, durum.sinir);
         return;
       }
 
-      const dosyaYolu = `kullanicilar/${
-        auth.currentUser.uid
-      }/sorular/${Date.now()}.jpg`;
-      const encodedYol = encodeURIComponent(dosyaYolu);
-      const bucket =
-        storage.app.options.storageBucket ||
-        "project-21-3e377.firebasestorage.app";
-      const url = `https://firebasestorage.googleapis.com/v0/b/${bucket}/o?name=${encodedYol}`;
-      const token = await auth.currentUser.getIdToken();
+      // 2) Fotoğraf öğrencinin kendi klasörüne yüklenir. Aynı fotoğraf için önceki deneme yüklendiyse
+      //    (ağ kopması) yeniden yüklenmez; aynı yol tekrar gönderilir ve sunucu çift soru açmaz.
+      let dosyaYolu =
+        yuklenenFoto.current.uri === gonderilenFoto
+          ? yuklenenFoto.current.yol
+          : null;
+      if (!dosyaYolu) {
+        dosyaYolu = `kullanicilar/${
+          auth.currentUser.uid
+        }/sorular/${Date.now()}.jpg`;
+        const encodedYol = encodeURIComponent(dosyaYolu);
+        const bucket =
+          storage.app.options.storageBucket ||
+          "project-21-3e377.firebasestorage.app";
+        const url = `https://firebasestorage.googleapis.com/v0/b/${bucket}/o?name=${encodedYol}`;
+        const token = await auth.currentUser.getIdToken();
 
-      const uploadResult = await FileSystem.uploadAsync(url, image, {
-        httpMethod: "POST",
-        headers: {
-          "Content-Type": "image/jpeg",
-          Authorization: `Bearer ${token}`,
-        },
-      });
+        const uploadResult = await FileSystem.uploadAsync(url, gonderilenFoto, {
+          httpMethod: "POST",
+          headers: {
+            "Content-Type": "image/jpeg",
+            Authorization: `Bearer ${token}`,
+          },
+        });
 
-      if (uploadResult.status !== 200) {
-        throw new Error(
-          `Yükleme başarısız! Sunucu Kodu: ${uploadResult.status}`
-        );
+        if (uploadResult.status !== 200) {
+          throw new Error(
+            `Yükleme başarısız! Sunucu Kodu: ${uploadResult.status}`
+          );
+        }
+        yuklenenFoto.current = { uri: gonderilenFoto, yol: dosyaYolu };
       }
 
-      const data = JSON.parse(uploadResult.body);
-      const downloadURL = `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodedYol}?alt=media&token=${data.downloadTokens}`;
-
-      await addDoc(collection(db, "sorular"), {
-        kullaniciUid: auth.currentUser.uid,
-        kullaniciEposta: auth.currentUser.email,
-        fotoLink: downloadURL,
-        tarih: new Date().toISOString(),
-        durum: "Bekliyor",
-        ogrenciSecimi: gonderilenSecim,
-      });
-
-      // Soru zaten gönderildi; kota güncellemesi başarısız olsa bile kullanıcıya "hata" gösterip
-      // aynı soruyu tekrar göndermesine (çift kayıt) yol açmayız.
+      // 3) Soru sunucu üzerinden gönderilir: kota orada sayılır ve soru belgesini sunucu oluşturur
+      let sonuc;
       try {
-        await setDoc(
-          cihazRef,
-          {
-            kalanSoru: mevcutKota - 1,
-            tarih: bugunYerel,
-            toplamHak: maxKota,
-          },
-          { merge: true }
-        );
-      } catch (kotaHatasi) {
-        console.log("Kota güncellenemedi:", kotaHatasi?.code);
+        sonuc = await soruGonderSunucu({
+          fotoYolu: dosyaYolu,
+          ogrenciSecimi: gonderilenSecim,
+        });
+      } catch (hata) {
+        if (kesinRetMi(hata)) {
+          // Soru oluşturulmadı: yüklenen fotoğraf silinir (boşta dosya kalmasın)
+          yuklenenFoto.current = { uri: null, yol: null };
+          try {
+            await deleteObject(ref(storage, dosyaYolu));
+          } catch (silmeHatasi) {
+            console.log("Fotoğraf silinemedi:", silmeHatasi?.code);
+          }
+        }
+        if (kotaDolduMu(hata)) {
+          await kotaDolduUyarisi(
+            hata?.details?.premiumMu === true,
+            Number.isInteger(hata?.details?.sinir) ? hata.details.sinir : durum.sinir
+          );
+          return;
+        }
+        console.log("Soru gönderilemedi:", hata?.code, hata?.message);
+        Alert.alert("Gönderilemedi", soruHataMesaji(hata));
+        return;
       }
 
       // Son hak kullanıldıysa ertesi sabah "hakların yenilendi" bildirimi kurulur
-      if (mevcutKota - 1 <= 0) {
-        await kotaYenilenmeHatirlatmasiKur(isPremium);
+      if (sonuc.kalan <= 0) {
+        await kotaYenilenmeHatirlatmasiKur(sonuc.premiumMu, undefined, sonuc.sinir);
       }
 
       Alert.alert(
         "Başarılı",
-        `Soru gönderildi! Cihazının kotasından 1 hak düştü. (Kalan Hak: ${
-          mevcutKota - 1
-        })`
+        `Soru gönderildi! (Bugün kalan hakkın: ${sonuc.kalan})`
       );
       fotografiIptalEt();
     } catch (error) {
-      console.log("📸 Fotoğraf Gönderme Hatası Detayı:", error);
-      Alert.alert("Hata", "Yükleme sırasında bir hata oluştu.");
+      console.log("📸 Fotoğraf Gönderme Hatası Detayı:", error?.code || error?.message);
+      Alert.alert("Hata", "Yükleme sırasında bir hata oluştu. Lütfen tekrar dene.");
     } finally {
       setYukleniyor(false);
     }

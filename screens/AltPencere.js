@@ -2,12 +2,13 @@
 // Hesabım ekranındaki seçim pencereleri bu kabuğu kullanır; böylece hepsi aynı görünür ve davranır.
 
 import React from "react";
-import { Modal, Pressable, View, Text, StyleSheet } from "react-native";
+import { Modal, Pressable, View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../ThemeContext";
 import { colors } from "../theme";
 
-export default function AltPencere({ gorunur, kapat, baslik, aciklama, children, kapatilabilir = true }) {
+// kaydirmaRef verilirse içerik kaydırılabilir olur (klavyeli pencereler: odaklanan kutu görünür tutulur)
+export default function AltPencere({ gorunur, kapat, baslik, aciklama, children, kapatilabilir = true, kaydirmaRef }) {
   const { tema } = useTheme();
   const insets = useSafeAreaInsets();
   const karanlik = tema.arkaplan === colors.dark.arkaplan;
@@ -17,6 +18,7 @@ export default function AltPencere({ gorunur, kapat, baslik, aciklama, children,
 
   return (
     <Modal visible={gorunur} animationType="slide" transparent onRequestClose={kapatIstegi} statusBarTranslucent>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <Pressable style={stiller.arkaplan} onPress={kapatIstegi} accessibilityLabel="Kapat">
         <Pressable
           style={[
@@ -36,9 +38,22 @@ export default function AltPencere({ gorunur, kapat, baslik, aciklama, children,
             </Text>
           )}
           {!!aciklama && <Text style={[stiller.aciklama, { color: tema.ikincilMetin }]}>{aciklama}</Text>}
-          {children}
+          {kaydirmaRef ? (
+            <ScrollView
+              ref={kaydirmaRef}
+              style={{ flexShrink: 1 }}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+            >
+              {children}
+            </ScrollView>
+          ) : (
+            children
+          )}
         </Pressable>
       </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

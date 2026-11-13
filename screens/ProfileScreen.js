@@ -16,7 +16,6 @@ import {
   StatusBar,
   Share,
   Linking,
-  KeyboardAvoidingView,
 } from "react-native";
 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -80,6 +79,7 @@ import { kotaDurumuGetir } from "../utils/kotaIstemci";
 import { colors } from "../theme";
 import GorunumSecici from "./GorunumSecici";
 import SinifSecici from "./SinifSecici";
+import HesapSilPenceresi, { ONAY_METNI } from "./HesapSilPenceresi";
 import {
   AD_SOYAD_EN_FAZLA,
   adSoyadTemizle,
@@ -660,7 +660,7 @@ export default function ProfileScreen() {
   };
 
   const guvenliHesabiSil = async () => {
-    if (silOnayMetni !== "SİL") {
+    if (silOnayMetni !== ONAY_METNI) {
       Alert.alert("Hata", "Lütfen kutucuğa büyük harflerle SİL yazın.");
       return;
     }
@@ -1588,164 +1588,22 @@ export default function ProfileScreen() {
           </View>
         </Modal>
 
-        <Modal
-          visible={hesapSilModalGorunur}
-          animationType="slide"
-          transparent={true}
-        >
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            style={styles.modalArkaplan}
-          >
-            <View
-              style={[styles.modalKutu, { backgroundColor: tema.kutuArkaplan }]}
-            >
-              <View style={{ alignItems: "center", marginBottom: 20 }}>
-                <Ionicons name="warning" size={48} color={tema.hataKirmizi} />
-              </View>
-
-              <Text style={[styles.modalBaslik, { color: tema.metin }]}>
-                Hesabı Kalıcı Olarak Sil
-              </Text>
-
-              <Text
-                style={{
-                  color: tema.ikincilMetin,
-                  textAlign: "center",
-                  marginBottom: 20,
-                  lineHeight: 22,
-                }}
-              >
-                Hesabınız; gönderdiğiniz soruların fotoğrafları, çözümler,
-                profil bilgileriniz ve istatistikleriniz ile birlikte kalıcı
-                olarak silinecektir. Bu işlem{" "}
-                <Text style={{ fontWeight: "bold", color: tema.metin }}>
-                  geri alınamaz.
-                </Text>
-              </Text>
-
-              <Text
-                style={{
-                  color: tema.ikincilMetin,
-                  textAlign: "center",
-                  marginBottom: 16,
-                  lineHeight: 20,
-                  fontSize: 13,
-                }}
-              >
-                {girisYonteminiBul(user) === "google"
-                  ? "Güvenliğiniz için Google ile yeniden giriş yapmanız istenecek."
-                  : girisYonteminiBul(user) === "apple"
-                  ? "Güvenliğiniz için Apple ile yeniden doğrulama yapmanız istenecek."
-                  : "Güvenliğiniz için hesap şifrenizi girmeniz gerekiyor."}
-              </Text>
-
-              {girisYonteminiBul(user) === "password" && (
-                <TextInput
-                  style={[
-                    styles.silSifreInput,
-                    {
-                      backgroundColor: tema.arkaplan,
-                      color: tema.metin,
-                      borderColor: tema.kutuCerceve,
-                    },
-                  ]}
-                  placeholder="Şifreniz"
-                  placeholderTextColor={tema.ikincilMetin}
-                  secureTextEntry
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  value={silSifre}
-                  onChangeText={setSilSifre}
-                />
-              )}
-
-              <Text
-                style={{
-                  color: tema.metin,
-                  fontWeight: "600",
-                  marginBottom: 8,
-                  textAlign: "center",
-                }}
-              >
-                Onaylamak için aşağıya SİL yazın:
-              </Text>
-
-              <TextInput
-                style={[
-                  styles.silInput,
-                  {
-                    backgroundColor: tema.arkaplan,
-                    color: tema.hataKirmizi,
-                    borderColor:
-                      silOnayMetni === "SİL"
-                        ? tema.hataKirmizi
-                        : tema.kutuCerceve,
-                  },
-                ]}
-                placeholder="SİL"
-                placeholderTextColor={tema.ikincilMetin}
-                autoCapitalize="characters"
-                value={silOnayMetni}
-                onChangeText={setSilOnayMetni}
-              />
-
-              <View style={styles.modalButonSatir}>
-                <TouchableOpacity
-                  onPress={() => {
-                    setHesapSilModalGorunur(false);
-                    setSilOnayMetni("");
-                    setSilSifre("");
-                  }}
-                  style={styles.modalIptalButon}
-                >
-                  <Text
-                    style={{
-                      color: tema.ikincilMetin,
-                      fontWeight: "bold",
-                      fontSize: 16,
-                    }}
-                  >
-                    Vazgeç
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={guvenliHesabiSil}
-                  disabled={
-                    silOnayMetni !== "SİL" ||
-                    hesapSiliniyor ||
-                    (girisYonteminiBul(user) === "password" && !silSifre)
-                  }
-                  style={[
-                    styles.modalOnayButon,
-                    {
-                      backgroundColor:
-                        silOnayMetni === "SİL"
-                          ? tema.hataKirmizi
-                          : tema.kutuCerceve,
-                    },
-                  ]}
-                >
-                  {hesapSiliniyor ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text
-                      style={{
-                        color:
-                          silOnayMetni === "SİL" ? "#fff" : tema.ikincilMetin,
-                        fontWeight: "bold",
-                        fontSize: 16,
-                      }}
-                    >
-                      Hesabımı Sil
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-          </KeyboardAvoidingView>
-        </Modal>
+        <HesapSilPenceresi
+          gorunur={hesapSilModalGorunur}
+          kapat={() => {
+            if (hesapSiliniyor) return;
+            setHesapSilModalGorunur(false);
+            setSilOnayMetni("");
+            setSilSifre("");
+          }}
+          yontem={girisYonteminiBul(user)}
+          sifre={silSifre}
+          setSifre={setSilSifre}
+          onay={silOnayMetni}
+          setOnay={setSilOnayMetni}
+          siliniyor={hesapSiliniyor}
+          sil={guvenliHesabiSil}
+        />
       </ScrollView>
     </View>
   );
@@ -1934,30 +1792,7 @@ const styles = StyleSheet.create({
   menuBaslik: { fontSize: 15, fontWeight: "600" },
   menuAlt: { fontSize: 12, marginTop: 3 },
 
-  modalArkaplan: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "center",
-    padding: 25,
-  },
-  modalKutu: { borderRadius: 24, padding: 25, width: "100%" },
-  modalBaslik: {
-    fontSize: 19,
-    fontWeight: "bold",
-    textAlign: "center",
-    marginBottom: 15,
-  },
 
-  silInput: {
-    borderWidth: 2,
-    borderRadius: 12,
-    padding: 15,
-    fontSize: 20,
-    fontWeight: "bold",
-    textAlign: "center",
-    letterSpacing: 3,
-    marginBottom: 10,
-  },
   abonelikRozet: {
     flexDirection: "row",
     alignItems: "center",
@@ -1971,25 +1806,6 @@ const styles = StyleSheet.create({
     borderRadius: 100,
     alignItems: "center",
     justifyContent: "center",
-  },
-  silSifreInput: {
-    borderWidth: 1.5,
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 16,
-    marginBottom: 12,
-  },
-  modalButonSatir: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 15,
-  },
-  modalIptalButon: { padding: 15, flex: 1, alignItems: "center" },
-  modalOnayButon: {
-    padding: 15,
-    flex: 1,
-    borderRadius: 14,
-    alignItems: "center",
   },
 
 

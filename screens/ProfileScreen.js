@@ -77,6 +77,7 @@ import { yerelTarih } from "../utils/tarih";
 import { dersBul } from "../utils/ders";
 import { kotaDurumuGetir } from "../utils/kotaIstemci";
 import { colors } from "../theme";
+import * as Application from "expo-application";
 import GorunumSecici from "./GorunumSecici";
 import SinifSecici from "./SinifSecici";
 import HesapSilPenceresi, { ONAY_METNI } from "./HesapSilPenceresi";
@@ -138,6 +139,7 @@ export default function ProfileScreen() {
   const rozetIslenen = useRef(new Set());
   // Kutlama sırası: her öğe aynı anda kazanılan rozetlerin listesi
   const [kutlamaSirasi, setKutlamaSirasi] = useState([]);
+  const [bildirimKaydediliyor, setBildirimKaydediliyor] = useState(false);
   const [dersIstatistikleri, setDersIstatistikleri] = useState([]);
   const [istatistikYukleniyor, setIstatistikYukleniyor] = useState(true);
 
@@ -548,36 +550,61 @@ export default function ProfileScreen() {
     }
   };
 
-  // 🚀 DÜZELTME: Anahtarı (Switch) çevirdiğimizde yeni stratejileri kursun
+  // Bildirim anahtarı: önce izin, sonra sunucuya kayıt; ikisi de başarılıysa anahtar değişir.
+  // Başarısız olursa anahtar eski haline döner ve kullanıcıya söylenir (eskiden hata yutuluyordu).
   const bildirimAyariniDegistir = async (deger) => {
+    if (!user || bildirimKaydediliyor) return;
+    const onceki = bildirimAktif;
+    setBildirimKaydediliyor(true);
     setBildirimAktif(deger);
-    await AsyncStorage.setItem("bildirimAktif", JSON.stringify(deger));
-
-    if (user) {
-      const kullaniciRef = doc(db, "kullanicilar", user.uid);
-      await updateDoc(kullaniciRef, { bildirimAktif: deger });
-
+    try {
       if (deger) {
         const izinVerildi = await registerForPushNotificationsAsync();
-        if (izinVerildi) {
-          // Önce her şeyi sıfırla, sonra role göre güncel bildirimleri kur
-          await cancelAllNotifications();
-          await setupSmartNotifications(rol);
-
-          Alert.alert(
-            "Bildirimler Açıldı",
-            "Sana özel hatırlatıcılar başarıyla kuruldu."
-          );
-        } else {
-          setBildirimAktif(false);
+        if (!izinVerildi) {
+          setBildirimAktif(onceki);
           Alert.alert(
             "İzin Gerekli",
-            "Bildirim almak için telefon ayarlarından izin vermelisin."
+            "Bildirim almak için telefon ayarlarından Mikro'ya bildirim izni vermelisin.",
+            [
+              { text: "Vazgeç", style: "cancel" },
+              {
+                text: "Ayarları Aç",
+                onPress: () => Linking.openSettings().catch(() => {}),
+              },
+            ]
           );
+          return;
         }
-      } else {
-        await cancelAllNotifications();
       }
+
+      await updateDoc(doc(db, "kullanicilar", user.uid), {
+        bildirimAktif: deger,
+      });
+      await AsyncStorage.setItem("bildirimAktif", JSON.stringify(deger));
+    } catch (e) {
+      console.log("Bildirim ayarı kaydedilemedi:", e?.code);
+      setBildirimAktif(onceki);
+      Alert.alert(
+        "Ayar Kaydedilemedi",
+        "İnternet bağlantını kontrol edip tekrar dene."
+      );
+      return;
+    } finally {
+      setBildirimKaydediliyor(false);
+    }
+
+    // Hatırlatıcılar yalnızca bu cihazda kurulur/kaldırılır; hata ayarın kendisini bozmaz
+    try {
+      await cancelAllNotifications();
+      if (deger) {
+        await setupSmartNotifications(rol);
+        Alert.alert(
+          "Bildirimler Açıldı",
+          "Sana özel hatırlatıcılar kuruldu."
+        );
+      }
+    } catch (e) {
+      console.log("Hatırlatıcılar kurulamadı:", e?.message);
     }
   };
 
@@ -767,6 +794,14 @@ export default function ProfileScreen() {
     setWebViewModalGorunur(true);
   };
 
+  // Sürüm uygulamanın kendisinden okunur (elle yazılan numara güncellemelerde unutuluyordu)
+  const uygulamaSurumu = (() => {
+    const surum = Application.nativeApplicationVersion;
+    const derleme = Application.nativeBuildVersion;
+    if (!surum) return "Sürüm bilgisi yok";
+    return derleme ? `Sürüm ${surum} (${derleme})` : `Sürüm ${surum}`;
+  })();
+
   const getAvatarHarf = () =>
     gorunenIsim(adSoyad, user?.email, rol === "veli" ? "Veli" : "Öğrenci")
       .charAt(0)
@@ -888,20 +923,16 @@ export default function ProfileScreen() {
             >
               <Ionicons name="camera" size={16} color="#fff" />
             </View>
+            {fotoYukleniyor && (
+              <View
+                style={styles.avatarYukleniyor}
+                accessibilityLabel="Profil fotoğrafı yükleniyor"
+                accessibilityLiveRegion="polite"
+              >
+                <ActivityIndicator color="#fff" />
+              </View>
+            )}
           </TouchableOpacity>
-
-          {fotoYukleniyor && (
-            <Text
-              style={{
-                color: "#fff",
-                fontSize: 12,
-                marginTop: -10,
-                marginBottom: 10,
-              }}
-            >
-              Yükleniyor...
-            </Text>
-          )}
 
           <View style={styles.isimDuzenlemeKutu}>
             {isimDuzenleniyor ? (
@@ -1412,6 +1443,8 @@ export default function ProfileScreen() {
             <Switch
               value={bildirimAktif}
               onValueChange={bildirimAyariniDegistir}
+              disabled={bildirimKaydediliyor}
+              accessibilityLabel="Bildirimleri al"
               trackColor={{ false: tema.kutuCerceve, true: tema.anaButon }}
             />
           </View>
@@ -1484,7 +1517,7 @@ export default function ProfileScreen() {
 
           <View style={{ alignItems: "center", marginTop: 15 }}>
             <Text style={{ color: tema.ikincilMetin, fontSize: 13 }}>
-              Versiyon 1.0.2
+              {uygulamaSurumu}
             </Text>
           </View>
 
@@ -1617,6 +1650,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderBottomLeftRadius: 34,
     borderBottomRightRadius: 34,
+  },
+  avatarYukleniyor: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   avatarContainer: {
     width: 80,

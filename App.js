@@ -14,6 +14,7 @@ import {
   doc,
   getDoc,
   setDoc,
+  updateDoc,
 } from "firebase/firestore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -50,6 +51,7 @@ import { PremiumProvider } from "./PremiumContext";
 import { dersiTamamla } from "./utils/dersTamamla";
 import { dersBul, dersBilgisiVar } from "./utils/ders";
 import ErrorBoundary from "./ErrorBoundary";
+import { adSoyadTemizle } from "./utils/profilDogrulama";
 
 const Tab = createBottomTabNavigator();
 
@@ -127,6 +129,11 @@ function MainApp() {
           const userDocRef = doc(db, "kullanicilar", aktifKullanici.uid);
           let userDoc = await getDoc(userDocRef);
           const hedefRol = await AsyncStorage.getItem("hedefRol");
+          // Apple ile ilk girişte Apple'ın verdiği ad (yalnızca bir kez gelir); kullanıldıktan sonra silinir
+          const bekleyenAdSoyad = adSoyadTemizle(
+            await AsyncStorage.getItem("bekleyenAdSoyad")
+          );
+          await AsyncStorage.removeItem("bekleyenAdSoyad");
 
           // Girişi reddedip oturumu kapatır; giriş ekranının yükleniyor durumunu sıfırlar
           const girisiReddet = async (baslik, mesaj) => {
@@ -162,6 +169,15 @@ function MainApp() {
               return;
             }
 
+            // Profilde ad yoksa ve Apple ad verdiyse eklenir (var olan ad asla değiştirilmez)
+            if (bekleyenAdSoyad && !userDoc.data().adSoyad) {
+              try {
+                await updateDoc(userDocRef, { adSoyad: bekleyenAdSoyad });
+              } catch (e) {
+                console.log("Ad eklenemedi:", e?.code);
+              }
+            }
+
             const yasOnayi = userDoc.data().yasOnayi;
             setOnayGerekli(
               !(
@@ -182,6 +198,7 @@ function MainApp() {
                 eposta: aktifKullanici.email,
                 rol: yeniRol,
                 kayitTarihi: new Date().toISOString(),
+                ...(bekleyenAdSoyad ? { adSoyad: bekleyenAdSoyad } : {}),
               },
               { merge: true }
             );

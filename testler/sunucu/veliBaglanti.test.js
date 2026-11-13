@@ -154,6 +154,18 @@ const temizle = async () => {
   const isimsizKod = (await vb.baglantiKoduAl("isimsiz")).kod;
   esit("isimsizse e-posta başı", (await vb.veliBagla("veli4", { kod: isimsizKod })).ogrenci.isim, "can.demir");
 
+  // Apple "E-postamı Gizle": rastgele adres başı isim olarak gösterilmez
+  await db.doc("kullanicilar/gizli").set({ rol: "ogrenci", eposta: "dm6rnpjjww@privaterelay.appleid.com" });
+  const gizliKod = (await vb.baglantiKoduAl("gizli")).kod;
+  esit("gizli e-postada isim Öğrenci", (await vb.veliBagla("veli4", { kod: gizliKod })).ogrenci.isim, "Öğrenci");
+  await db.doc("kullanicilar/gizliIsimli").set({ rol: "ogrenci", adSoyad: "Elif Kaya", eposta: "x1@privaterelay.appleid.com" });
+  const gizliIsimliKod = (await vb.baglantiKoduAl("gizliIsimli")).kod;
+  esit("gizli e-posta + ad: ad görünür", (await vb.veliBagla("veli4", { kod: gizliIsimliKod })).ogrenci.isim, "Elif Kaya");
+  const isimMod = require(path.join(FN, "isim.js"));
+  esit("büyük harfli gizli adres", isimMod.gorunenIsim({ eposta: "AB@PRIVATERELAY.APPLEID.COM" }), "Öğrenci");
+  esit("benzer ama gizli olmayan alan adı", isimMod.gorunenIsim({ eposta: "ali@privaterelay.appleid.com.tr" }), "ali");
+  esit("veli varsayılanı", isimMod.gorunenIsim({ eposta: "q@privaterelay.appleid.com" }, "Veli"), "Veli");
+
   // ---------------------------------------------------------------- kaldırma
   esit("kaldırma", await vb.veliBaglantisiKaldir("veli1", { ogrenciId: "ogr1" }), { kaldirildi: true });
   const v1b = (await db.doc("kullanicilar/veli1").get()).data();

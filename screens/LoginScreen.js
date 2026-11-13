@@ -236,7 +236,10 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
     setAppleYukleniyor(true);
     try {
       await AsyncStorage.setItem("hedefRol", seciliRol);
-      const { kimlik } = await appleKimligiAl();
+      const { kimlik, adSoyad } = await appleKimligiAl();
+      // Apple adı yalnızca ilk girişte verir: profil oluşturulurken kullanılmak üzere saklanır
+      if (adSoyad) await AsyncStorage.setItem("bekleyenAdSoyad", adSoyad);
+      else await AsyncStorage.removeItem("bekleyenAdSoyad");
       await signInWithCredential(auth, kimlik);
     } catch (error) {
       setAppleYukleniyor(false);

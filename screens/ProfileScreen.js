@@ -84,6 +84,8 @@ import {
   AD_SOYAD_EN_FAZLA,
   adSoyadTemizle,
   profilFotoGecerliMi,
+  gorunenEposta,
+  gorunenIsim,
 } from "../utils/profilDogrulama";
 
 // 13 yaş şartı nedeniyle liste 8. sınıftan başlar
@@ -742,12 +744,10 @@ export default function ProfileScreen() {
     setWebViewModalGorunur(true);
   };
 
-  const getAvatarHarf = () => {
-    if (adSoyad && adSoyad.trim().length > 0) {
-      return adSoyad.charAt(0).toUpperCase();
-    }
-    return user?.email?.charAt(0).toUpperCase() || "?";
-  };
+  const getAvatarHarf = () =>
+    gorunenIsim(adSoyad, user?.email, rol === "veli" ? "Veli" : "Öğrenci")
+      .charAt(0)
+      .toLocaleUpperCase("tr-TR");
 
   const kullaniciPuan = toplamSoru * 50 + seriGunu * 20;
   const kullaniciSeviye = Math.floor(kullaniciPuan / 1000) + 1;
@@ -915,7 +915,11 @@ export default function ProfileScreen() {
                 activeOpacity={0.7}
               >
                 <Text style={styles.userName}>
-                  {adSoyad || user?.email?.split("@")[0]}
+                  {gorunenIsim(
+                    adSoyad,
+                    user?.email,
+                    rol === "veli" ? "Veli" : "Öğrenci"
+                  )}
                 </Text>
                 <View style={{ marginLeft: 8 }}>
                   <Ionicons
@@ -928,7 +932,7 @@ export default function ProfileScreen() {
             )}
           </View>
 
-          <Text style={styles.userEmail}>{user?.email}</Text>
+          <Text style={styles.userEmail}>{gorunenEposta(user?.email)}</Text>
 
           {rol === "ogrenci" && (
             <View

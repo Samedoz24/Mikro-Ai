@@ -10,7 +10,7 @@
 //   kurumDenemeleri/{uid}             kod deneme sayacı (istemciye tamamen kapalı)
 
 const crypto = require("node:crypto");
-const { guvenliIsim } = require("./isim");
+const { guvenliIsim, gorunenIsim } = require("./isim");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
 const { getAuth } = require("firebase-admin/auth");
 const { HttpsError } = require("firebase-functions/v2/https");
@@ -78,7 +78,7 @@ const denemeHakkiKullan = async (uid) => {
 };
 
 const ozetBaslangic = (kullanici) => ({
-  isim: guvenliIsim(kullanici.adSoyad) || String(kullanici.eposta || "").split("@")[0] || "Öğrenci",
+  isim: gorunenIsim(kullanici),
   toplamSoru: 0,
   okunanCozum: 0,
   dersDagilimi: {},

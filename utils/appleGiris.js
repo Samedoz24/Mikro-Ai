@@ -11,6 +11,7 @@ import { Platform } from "react-native";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as Crypto from "expo-crypto";
 import { OAuthProvider } from "firebase/auth";
+import { adSoyadTemizle } from "./profilDogrulama";
 
 export const APPLE_IPTAL = "apple/iptal";
 
@@ -65,5 +66,10 @@ export const appleKimligiAl = async () => {
     rawNonce: hamNonce,
   });
 
-  return { kimlik, yetkiKodu: cevap.authorizationCode || null };
+  // Apple adı yalnızca İLK yetkilendirmede verir; temizlenip döndürülür (yoksa boş)
+  const ad = cevap.fullName
+    ? [cevap.fullName.givenName, cevap.fullName.familyName].filter(Boolean).join(" ")
+    : "";
+
+  return { kimlik, yetkiKodu: cevap.authorizationCode || null, adSoyad: adSoyadTemizle(ad) };
 };

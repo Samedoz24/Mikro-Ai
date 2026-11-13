@@ -24,3 +24,17 @@ export const profilFotoGecerliMi = (uid, adres) => {
   );
   return kalip.test(adres);
 };
+
+// Apple "E-postamı Gizle" adresi (…@privaterelay.appleid.com): @ öncesi rastgeledir, kullanıcıya gösterilmez
+export const gizliEpostaMi = (eposta) =>
+  typeof eposta === "string" && /@privaterelay\.appleid\.com$/i.test(eposta.trim());
+
+// Ekranda gösterilecek e-posta metni
+export const gorunenEposta = (eposta) =>
+  gizliEpostaMi(eposta) ? "Apple ile gizli e-posta" : eposta || "";
+
+// Ekranda gösterilecek isim: ad soyad > (gizli değilse) e-posta başı > rol adı
+export const gorunenIsim = (adSoyad, eposta, varsayilan = "Öğrenci") =>
+  adSoyadTemizle(adSoyad) ||
+  (gizliEpostaMi(eposta) ? "" : adSoyadTemizle(String(eposta || "").split("@")[0])) ||
+  varsayilan;

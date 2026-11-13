@@ -15,7 +15,7 @@
 const crypto = require("crypto");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { HttpsError } = require("firebase-functions/v2/https");
-const { guvenliIsim } = require("./isim");
+const { gorunenIsim } = require("./isim");
 const { listedenCikar } = require("./veli");
 
 const db = () => getFirestore();
@@ -144,10 +144,7 @@ const veliBagla = async (uid, veri, simdi = Date.now()) => {
     }
 
     const ogrenciVeri = ogrenciSnap.data();
-    const isim =
-      guvenliIsim(ogrenciVeri.adSoyad) ||
-      guvenliIsim(String(ogrenciVeri.eposta || "").split("@")[0]) ||
-      "Öğrenci";
+    const isim = gorunenIsim(ogrenciVeri);
 
     const idler = Array.isArray(veli.bagliOgrenciIdleri) ? veli.bagliOgrenciIdleri : [];
     const liste = Array.isArray(veli.bagliOgrenciler) ? veli.bagliOgrenciler : [];

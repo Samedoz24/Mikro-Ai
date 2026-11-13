@@ -56,7 +56,7 @@ GoogleSignin.configure({
   webClientId:
     "758732204910-2juevkcahro9998k6u9tllfqo49sot1a.apps.googleusercontent.com",
   iosClientId:
-    "758732204910-1nqkd7vk72ch45urq8prkb3gk6rc3fsm.apps.googleusercontent.com",
+    "758732204910-s6sdn4eamn1ged2ugvvus93tsok9tfmc.apps.googleusercontent.com",
 });
 
 // Google'ın resmi çok renkli "G" logosu; uygulamaya gömülü (dış bir sunucudan indirilmez)

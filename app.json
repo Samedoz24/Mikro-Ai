@@ -19,7 +19,7 @@
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
-              "com.googleusercontent.apps.758732204910-1nqkd7vk72ch45urq8prkb3gk6rc3fsm"
+              "com.googleusercontent.apps.758732204910-s6sdn4eamn1ged2ugvvus93tsok9tfmc"
             ]
           }
         ],
@@ -29,7 +29,12 @@
           "tr"
         ]
       },
-      "usesAppleSignIn": true
+      "usesAppleSignIn": true,
+      "appleTeamId": "4656X385W5",
+      "entitlements": {
+        "aps-environment": "development",
+        "com.apple.developer.devicecheck.appattest-environment": "production"
+      }
     },
     "android": {
       "package": "com.samedoz.mikroai",
@@ -49,6 +54,27 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static",
+            "forceStaticLinking": [
+              "RNFBApp",
+              "RNFBAppCheck"
+            ]
+          }
+        }
+      ],
+      [
+        "@react-native-firebase/app",
+        {
+          "ios": {
+            "disableSPM": true
+          }
+        }
+      ],
+      "@react-native-firebase/app-check",
       "@react-native-google-signin/google-signin",
       "expo-apple-authentication",
       [

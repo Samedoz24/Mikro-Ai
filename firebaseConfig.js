@@ -8,6 +8,7 @@ import {
   getAuth,
 } from "firebase/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { appCheckBaslat } from "./utils/appCheck";
 
 // Şifreler artık güvenli .env dosyasından otomatik çekiliyor
 const firebaseConfig = {
@@ -21,6 +22,9 @@ const firebaseConfig = {
 
 // 🛡️ Uygulama zaten başlatıldıysa olanı al, yoksa yeni başlat
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+
+// App Check, Firebase servisleri kullanılmadan önce başlatılmalı (bkz. utils/appCheck.js)
+appCheckBaslat(app);
 
 let auth;
 try {

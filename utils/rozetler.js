@@ -97,6 +97,13 @@ export const ROZETLER = [
     kosul: (i) => i.toplamSoru >= 25,
   },
   {
+    id: "seviye-10",
+    baslik: "Yükselen Yıldız",
+    ikon: "⭐",
+    aciklama: "10. seviye",
+    kosul: (i) => i.seviye >= 10,
+  },
+  {
     id: "bilge-baykus",
     baslik: "Bilge Baykuş",
     ikon: "🦉",
@@ -118,6 +125,13 @@ export const ROZETLER = [
     kosul: (i) => i.toplamSoru >= 100,
   },
   {
+    id: "seviye-30",
+    baslik: "Parlayan Yıldız",
+    ikon: "🌟",
+    aciklama: "30. seviye",
+    kosul: (i) => i.seviye >= 30,
+  },
+  {
     id: "demir-irade",
     baslik: "Demir İrade",
     ikon: "🏅",
@@ -132,18 +146,39 @@ export const ROZETLER = [
     kosul: (i) => i.toplamSoru >= 250,
   },
   {
+    id: "seviye-50",
+    baslik: "Yarı Yol",
+    ikon: "💫",
+    aciklama: "50. seviye",
+    kosul: (i) => i.seviye >= 50,
+  },
+  {
     id: "profesor",
     baslik: "Profesör",
     ikon: "🎓",
     aciklama: "500 soru sordun",
     kosul: (i) => i.toplamSoru >= 500,
   },
+  {
+    id: "seviye-70",
+    baslik: "Zirveye Az Kaldı",
+    ikon: "🔱",
+    aciklama: "70. seviye",
+    kosul: (i) => i.seviye >= 70,
+  },
+  {
+    id: "seviye-100",
+    baslik: "Efsanevi Seviye",
+    ikon: "🏆",
+    aciklama: "100. seviye",
+    kosul: (i) => i.seviye >= 100,
+  },
 ];
 
 const sayi = (x) => (Number.isFinite(x) ? x : 0);
 
 /**
- * @param istatistik { toplamSoru, seriGunu, adSoyad, sinifSecildi, okunanCozum, farkliDers }
+ * @param istatistik { toplamSoru, seriGunu, adSoyad, sinifSecildi, okunanCozum, farkliDers, seviye }
  * @returns şu anda koşulu sağlanan rozetlerin id listesi
  */
 export const kazanilanRozetIdleri = (istatistik = {}) => {
@@ -154,6 +189,7 @@ export const kazanilanRozetIdleri = (istatistik = {}) => {
     farkliDers: sayi(istatistik.farkliDers),
     adSoyad: typeof istatistik.adSoyad === "string" ? istatistik.adSoyad : "",
     sinifSecildi: istatistik.sinifSecildi === true,
+    seviye: sayi(istatistik.seviye),
   };
   return ROZETLER.filter((r) => r.kosul(i)).map((r) => r.id);
 };

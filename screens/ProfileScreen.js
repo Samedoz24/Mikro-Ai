@@ -82,6 +82,7 @@ import GorunumSecici from "./GorunumSecici";
 import SinifSecici from "./SinifSecici";
 import HesapSilPenceresi, { ONAY_METNI } from "./HesapSilPenceresi";
 import RozetKutlama from "./RozetKutlama";
+import { puanHesapla, seviyeBilgisi, EN_YUKSEK_SEVIYE } from "../utils/seviye";
 import {
   AD_SOYAD_EN_FAZLA,
   adSoyadTemizle,
@@ -807,12 +808,8 @@ export default function ProfileScreen() {
       .charAt(0)
       .toLocaleUpperCase("tr-TR");
 
-  const kullaniciPuan = toplamSoru * 50 + seriGunu * 20;
-  const kullaniciSeviye = Math.floor(kullaniciPuan / 1000) + 1;
-
-  const seviyeIcinGerekenXP = 1000;
-  const mevcutSeviyeXP = kullaniciPuan % seviyeIcinGerekenXP;
-  const ilerlemeYuzdesi = (mevcutSeviyeXP / seviyeIcinGerekenXP) * 100;
+  // Puan yalnızca azalmayan sayılardan gelir (soru ve okunan çözüm); seviye düşmez. Bkz. utils/seviye.js
+  const seviye = seviyeBilgisi(puanHesapla({ toplamSoru, okunanCozum }));
 
   const kazanilanIdler = kazanilanRozetIdleri({
     toplamSoru,
@@ -821,6 +818,7 @@ export default function ProfileScreen() {
     sinifSecildi: SINIFLAR.includes(seciliSinif),
     okunanCozum,
     farkliDers,
+    seviye: seviye.seviye,
   });
   const kazanilanAnahtar = kazanilanIdler.join(",");
 
@@ -998,20 +996,30 @@ export default function ProfileScreen() {
             >
               <View style={styles.seviyeVeXpKapsayici}>
                 <Text style={styles.seviyeYazisi}>
-                  Seviye {kullaniciSeviye}
+                  Seviye {seviye.seviye}
+                  <Text style={styles.seviyeMaksYazisi}> / {EN_YUKSEK_SEVIYE}</Text>
                 </Text>
                 <View style={styles.xpKutusu}>
                   <Ionicons name="star" size={16} color="#FFD700" />
-                  <Text style={styles.xpYazisi}>{kullaniciPuan} XP</Text>
+                  <Text style={styles.xpYazisi}>
+                    {seviye.puan.toLocaleString("tr-TR")} XP
+                  </Text>
                 </View>
               </View>
-              <View style={styles.xpBarArkaplan}>
+              <View
+                style={styles.xpBarArkaplan}
+                accessibilityRole="progressbar"
+                accessibilityLabel={`Seviye ${seviye.seviye}`}
+                accessibilityValue={{ min: 0, max: 100, now: seviye.yuzde }}
+              >
                 <View
-                  style={[styles.xpBarDolu, { width: `${ilerlemeYuzdesi}%` }]}
+                  style={[styles.xpBarDolu, { width: `${seviye.yuzde}%` }]}
                 />
               </View>
               <Text style={styles.xpKalanYazi}>
-                Sonraki seviyeye {seviyeIcinGerekenXP - mevcutSeviyeXP} XP kaldı
+                {seviye.enYuksekte
+                  ? "En yüksek seviyedesin! 🎉"
+                  : `Sonraki seviyeye ${seviye.kalanPuan.toLocaleString("tr-TR")} XP kaldı`}
               </Text>
             </View>
           )}
@@ -1738,6 +1746,11 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: 16,
     marginRight: 12,
+  },
+  seviyeMaksYazisi: {
+    color: "rgba(255,255,255,0.7)",
+    fontWeight: "600",
+    fontSize: 13,
   },
   xpKutusu: {
     flexDirection: "row",

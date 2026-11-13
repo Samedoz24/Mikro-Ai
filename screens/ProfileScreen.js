@@ -80,6 +80,7 @@ import { colors } from "../theme";
 import GorunumSecici from "./GorunumSecici";
 import SinifSecici from "./SinifSecici";
 import HesapSilPenceresi, { ONAY_METNI } from "./HesapSilPenceresi";
+import RozetKutlama from "./RozetKutlama";
 import {
   AD_SOYAD_EN_FAZLA,
   adSoyadTemizle,
@@ -135,6 +136,8 @@ export default function ProfileScreen() {
   // Kalıcı rozetler: undefined = henüz yüklenmedi, null = belgede alan yok, dizi = kayıtlı rozet id'leri
   const [rozetKaydi, setRozetKaydi] = useState(undefined);
   const rozetIslenen = useRef(new Set());
+  // Kutlama sırası: her öğe aynı anda kazanılan rozetlerin listesi
+  const [kutlamaSirasi, setKutlamaSirasi] = useState([]);
   const [dersIstatistikleri, setDersIstatistikleri] = useState([]);
   const [istatistikYukleniyor, setIstatistikYukleniyor] = useState(true);
 
@@ -820,15 +823,10 @@ export default function ProfileScreen() {
     })
       .then(() => {
         if (!bildirimGerekli) return;
-        const satirlar = ROZETLER.filter((r) => yeniler.includes(r.id)).map(
-          (r) => `${r.ikon} ${r.baslik} (${r.aciklama})`
-        );
-        Alert.alert(
-          yeniler.length > 1
-            ? "Yeni rozetler kazandın! 🏆"
-            : "Yeni rozet kazandın! 🏆",
-          satirlar.join("\n")
-        );
+        const kazanilanlar = ROZETLER.filter((r) => yeniler.includes(r.id));
+        if (kazanilanlar.length > 0) {
+          setKutlamaSirasi((sira) => [...sira, kazanilanlar]);
+        }
       })
       .catch((hata) => {
         // Yazılamadıysa bir sonraki açılışta yeniden denenir
@@ -846,6 +844,10 @@ export default function ProfileScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: tema.arkaplan }]}>
+      <RozetKutlama
+        rozetler={isFocused ? kutlamaSirasi[0] : null}
+        bitti={() => setKutlamaSirasi((sira) => sira.slice(1))}
+      />
       {isFocused && (
         <StatusBar
           barStyle={isGercektenKaranlik ? "light-content" : "dark-content"}

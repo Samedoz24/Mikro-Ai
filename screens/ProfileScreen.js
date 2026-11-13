@@ -124,8 +124,8 @@ export default function ProfileScreen() {
   const [profilFoto, setProfilFoto] = useState(null);
   const [fotoYukleniyor, setFotoYukleniyor] = useState(false);
 
-  const [kalanSoru, setKalanSoru] = useState(3);
-  const [maxKota, setMaxKota] = useState(3);
+  // Sunucudan gelen kota bilgisi: { kalan, sinir, ucretsizSinir, premiumSinir } (yüklenene kadar null)
+  const [kota, setKota] = useState(null);
   const [seriGunu, setSeriGunu] = useState(0);
   const [baglantiKodu, setBaglantiKodu] = useState("Yükleniyor...");
 
@@ -160,8 +160,14 @@ export default function ProfileScreen() {
     kotaDurumuGetir()
       .then((durum) => {
         if (iptal || !durum) return;
-        if (Number.isInteger(durum.sinir)) setMaxKota(durum.sinir);
-        if (Number.isInteger(durum.kalan)) setKalanSoru(durum.kalan);
+        const sayiMi = (d) => Number.isInteger(d) && d >= 0;
+        if (!sayiMi(durum.kalan) || !sayiMi(durum.sinir)) return;
+        setKota({
+          kalan: Math.min(durum.kalan, durum.sinir),
+          sinir: durum.sinir,
+          ucretsizSinir: sayiMi(durum.ucretsizSinir) ? durum.ucretsizSinir : null,
+          premiumSinir: sayiMi(durum.premiumSinir) ? durum.premiumSinir : null,
+        });
       })
       .catch((hata) => console.log("Kota durumu alınamadı:", hata?.code));
     return () => {
@@ -210,7 +216,6 @@ export default function ProfileScreen() {
             setRozetKaydi(Array.isArray(data.rozetler) ? data.rozetler : null);
 
             if (data.premiumMu !== undefined) {
-              setMaxKota(data.premiumMu ? 50 : 3);
               setPremiumMu(data.premiumMu === true);
             }
 
@@ -343,6 +348,21 @@ export default function ProfileScreen() {
     } catch (error) {
       return false;
     }
+  };
+
+  // Abonelik kartı metni: sayılar sunucudaki ayardan gelir; henüz yüklenmediyse sayı yazılmaz
+  const abonelikAciklamasi = (premium, k) => {
+    const ucretsiz = k?.ucretsizSinir;
+    const prem = k?.premiumSinir;
+    if (premium) {
+      return Number.isInteger(prem)
+        ? `Günde ${prem} soru ve PDF indirme aktif.`
+        : "Premium soru hakkı ve PDF indirme aktif.";
+    }
+    if (Number.isInteger(ucretsiz) && Number.isInteger(prem)) {
+      return `Günde ${ucretsiz} soru. Premium ile günde ${prem} soru ve PDF indirme.`;
+    }
+    return "Premium ile daha fazla günlük soru ve PDF indirme.";
   };
 
   // Sınıf yalnızca listeden seçilir; önce sunucuya yazılır, başarılı olursa ekranda ve cihazda güncellenir
@@ -1162,7 +1182,7 @@ export default function ProfileScreen() {
                     Günlük Soru Kotası
                   </Text>
                   <Text style={[styles.kotaSayi, { color: tema.anaButon }]}>
-                    {kalanSoru} / {maxKota}
+                    {kota ? `${kota.kalan} / ${kota.sinir}` : "—"}
                   </Text>
                 </View>
                 <View
@@ -1176,7 +1196,11 @@ export default function ProfileScreen() {
                       styles.barDolu,
                       {
                         backgroundColor: tema.anaButon,
-                        width: `${(kalanSoru / maxKota) * 100}%`,
+                        width: `${
+                          kota && kota.sinir > 0
+                            ? Math.round((kota.kalan / kota.sinir) * 100)
+                            : 0
+                        }%`,
                       },
                     ]}
                   />
@@ -1242,9 +1266,7 @@ export default function ProfileScreen() {
                       marginBottom: 14,
                     }}
                   >
-                    {premiumAktif
-                      ? "Günde 50 soru ve PDF indirme aktif."
-                      : "Günde 3 soru. Premium ile günde 50 soru ve PDF indirme."}
+                    {abonelikAciklamasi(premiumAktif, kota)}
                   </Text>
 
                   <TouchableOpacity

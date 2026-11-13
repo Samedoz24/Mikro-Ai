@@ -12,7 +12,7 @@ export const cihazKimligi = async () =>
     ? Application.getAndroidId()
     : await Application.getIosIdForVendorAsync();
 
-// { kalan, sinir, premiumMu }
+// { kalan, sinir, premiumMu, ucretsizSinir, premiumSinir }
 export const kotaDurumuGetir = async () => {
   const cihazId = await cihazKimligi();
   const sonuc = await httpsCallable(functions, "kotaDurumu")({ cihazId });

@@ -72,6 +72,7 @@ const ogrenciProfili = (snap) => {
 };
 
 // Kalan hak (soru göndermeden önce ve Hesabım ekranı için). Girdi: { cihazId }
+// Dönüş: { kalan, sinir, premiumMu, ucretsizSinir, premiumSinir }
 const kotaDurumu = async (uid, token, veri) => {
   const cihazId = cihazKontrol(veri?.cihazId);
   const sinirlar = await sinirlariOku();
@@ -89,6 +90,9 @@ const kotaDurumu = async (uid, token, veri) => {
     kalan: kalanHak(sinir, bugunkuKullanim(hesapSnap.data(), gun), bugunkuKullanim(cihazSnap.data(), gun)),
     sinir,
     premiumMu,
+    // Abonelik kartı ve premium metinleri için iki paketin günlük sınırı (ayarlar/kota; gizli değil)
+    ucretsizSinir: sinirlar.ucretsiz,
+    premiumSinir: sinirlar.premium,
   };
 };
 

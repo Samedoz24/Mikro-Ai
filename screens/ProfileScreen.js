@@ -28,6 +28,7 @@ import { appCheckBasligi } from "../utils/appCheck";
 import { signOut } from "firebase/auth";
 import { baglantiKoduAl } from "../utils/baglanti";
 import KurumKarti from "./KurumKarti";
+import VeliBaglantiPenceresi from "./VeliBaglantiPenceresi";
 import PlatformKarti from "./PlatformKarti";
 import useAltMenuBoslugu from "../utils/altMenu";
 import {
@@ -141,6 +142,7 @@ export default function ProfileScreen() {
   const [kota, setKota] = useState(null);
   const [seriGunu, setSeriGunu] = useState(0);
   const [baglantiKodu, setBaglantiKodu] = useState("Yükleniyor...");
+  const [veliPenceresiGorunur, setVeliPenceresiGorunur] = useState(false);
 
   const [toplamSoru, setToplamSoru] = useState(0);
   const [okunanCozum, setOkunanCozum] = useState(0);
@@ -662,23 +664,10 @@ export default function ProfileScreen() {
     );
   };
 
-  // Bağlantı kodu öğrenciyi takip etmeyi sağlar: ekranda sürekli açık durmaz, istenince gösterilir
+  // Bağlantı kodu ve bağlı veliler: ekranda sürekli açık durmaz, pencerede gösterilir (kaldırma, kodu yenileme)
   const baglantiKodunuGoster = () => {
     if (!baglantiKodu) return;
-    Alert.alert(
-      "Veli Bağlantı Kodun",
-      `${baglantiKodu}\n\nBu kodu yalnızca veline ver. Kodu bilen kişi soru geçmişini ve çalışma istatistiklerini görebilir.`,
-      [
-        { text: "Kapat", style: "cancel" },
-        {
-          text: "Veline Gönder",
-          onPress: () =>
-            Share.share({
-              message: `Mikro veli bağlantı kodum: ${baglantiKodu}\nMikro veli hesabında öğrenci eklerken bu kodu girebilirsin.`,
-            }).catch(() => {}),
-        },
-      ]
-    );
+    setVeliPenceresiGorunur(true);
   };
 
   const bizeUlasin = () => {
@@ -1378,7 +1367,7 @@ export default function ProfileScreen() {
               <TouchableOpacity
                 onPress={baglantiKodunuGoster}
                 accessibilityRole="button"
-                accessibilityHint="Kodu gösterir ve paylaşma seçeneği sunar"
+                accessibilityHint="Kodu, bağlı velileri ve kodu yenileme seçeneğini gösterir"
                 style={[
                   styles.menuItem,
                   { backgroundColor: tema.kutuArkaplan },
@@ -1392,14 +1381,14 @@ export default function ProfileScreen() {
                 />
                 <View style={styles.menuMetinAlan}>
                   <Text style={[styles.menuBaslik, { color: tema.metin }]}>
-                    Veli Bağlantı Kodum
+                    Veli Bağlantısı
                   </Text>
                   <Text style={[styles.menuAlt, { color: tema.ikincilMetin }]}>
-                    {baglantiKodu ? "Gizli • Görmek için dokun" : "Hazırlanıyor..."}
+                    {baglantiKodu ? "Kodun ve bağlı veliler" : "Hazırlanıyor..."}
                   </Text>
                 </View>
                 <Ionicons
-                  name="eye-outline"
+                  name="chevron-forward"
                   size={18}
                   color={tema.ikincilMetin}
                 />
@@ -1643,6 +1632,13 @@ export default function ProfileScreen() {
             </View>
           </View>
         </Modal>
+
+        <VeliBaglantiPenceresi
+          gorunur={veliPenceresiGorunur}
+          kapat={() => setVeliPenceresiGorunur(false)}
+          kod={/^[A-Z0-9]{6}$/.test(baglantiKodu) ? baglantiKodu : null}
+          onKodYenilendi={setBaglantiKodu}
+        />
 
         <HesapSilPenceresi
           gorunur={hesapSilModalGorunur}

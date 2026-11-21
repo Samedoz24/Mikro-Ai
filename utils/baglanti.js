@@ -22,6 +22,32 @@ export const veliBaglantisiKaldir = async (ogrenciId) => {
   return sonuc.data;
 };
 
+// Öğrenci: hesabına bağlı veliler. Dönüş: [{ id, isim }]
+export const bagliVelileriGetir = async () => {
+  const sonuc = await httpsCallable(functions, "ogrenciVelileriGetir")();
+  return Array.isArray(sonuc.data?.veliler) ? sonuc.data.veliler : [];
+};
+
+// Öğrenci: bir velinin hesabına erişimini kaldırır. Dönüş: { kaldirildi }
+export const veliErisiminiKaldir = async (veliId) => {
+  const sonuc = await httpsCallable(functions, "ogrenciVeliKaldir")({ veliId });
+  return sonuc.data;
+};
+
+// Öğrenci: bağlantı kodunu yeniler (eski kod geçersiz olur). Dönüş: yeni kod
+export const baglantiKoduYenile = async () => {
+  const sonuc = await httpsCallable(functions, "baglantiKoduYenile")();
+  return sonuc.data?.kod || null;
+};
+
+// Öğrencinin veli denetimi işlemlerindeki hata mesajları
+export const veliDenetimHataMesaji = (hata) => {
+  const mesaj = hata?.message || "";
+  if (mesaj === "cok-sik") return "Kodu az önce yeniledin. Bir dakika sonra tekrar deneyebilirsin.";
+  if (mesaj === "rol-uygun-degil") return "Bu işlem yalnızca öğrenci hesaplarında yapılabilir.";
+  return "İşlem tamamlanamadı. İnternet bağlantını kontrol edip tekrar dene.";
+};
+
 // Sunucu hatasını kullanıcıya gösterilecek Türkçe mesaja çevirir
 export const veliBaglaHataMesaji = (hata) => {
   const kod = hata?.code || "";

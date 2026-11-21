@@ -141,6 +141,19 @@ exports.veliBaglantisiKaldir = onCall(ORTAK, (request) =>
   veliBaglanti.veliBaglantisiKaldir(kurum.girisliUid(request), request.data)
 );
 
+// Öğrencinin kendi veli bağlantıları üzerindeki denetimi: bağlı velileri görme, kaldırma, kodu yenileme
+exports.ogrenciVelileriGetir = onCall(ORTAK, (request) =>
+  veliBaglanti.ogrenciVelileriGetir(kurum.girisliUid(request))
+);
+
+exports.ogrenciVeliKaldir = onCall(ORTAK, (request) =>
+  veliBaglanti.ogrenciVeliKaldir(kurum.girisliUid(request), request.data)
+);
+
+exports.baglantiKoduYenile = onCall(ORTAK, (request) =>
+  veliBaglanti.baglantiKoduYenile(kurum.girisliUid(request))
+);
+
 exports.kotaDurumu = onCall(ORTAK, (request) =>
   kota.kotaDurumu(kurum.girisliUid(request), request.auth.token, request.data)
 );

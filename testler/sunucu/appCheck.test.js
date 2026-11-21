@@ -71,7 +71,7 @@ const cagir = (fn, basliklar = {}) =>
   const callable = Object.entries(fonksiyonlar).filter(([, f]) => f?.__endpoint?.callableTrigger);
   const digerleri = Object.entries(fonksiyonlar).filter(([, f]) => !f?.__endpoint?.callableTrigger);
 
-  esit("callable fonksiyon sayısı", callable.length, 29);
+  esit("callable fonksiyon sayısı", callable.length, 32);
   esit("callable olmayan (zamanlanmış/tetikleyici) sayısı", digerleri.length, 5);
 
   for (const [ad, fn] of callable) {

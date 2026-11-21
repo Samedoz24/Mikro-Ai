@@ -27,6 +27,8 @@ const KOD_URETME_DENEMESI = 10;
 const SAATLIK_YANLIS = 10;
 const GUNLUK_YANLIS = 30;
 const EN_FAZLA_OGRENCI = 10;
+const KOD_YENILEME_BEKLEME_MS = 60 * 1000;
+const EN_FAZLA_VELI_LISTESI = 50;
 
 // Saf: kriptografik rastgele 6 karakterlik kod
 const kodUret = () => {
@@ -183,6 +185,82 @@ const veliBaglantisiKaldir = async (uid, veri) => {
   return { kaldirildi };
 };
 
+// ---------------------------------------------------------------------------
+// Öğrencinin kendi bağlantıları üzerindeki denetimi. Bağlantı kodu ele geçirilse bile öğrenci, hesabına
+// bağlanan velileri görür, istemediğini kaldırır ve kodu yenileyerek eski kodu geçersiz kılar.
+// Hepsi yalnızca çağıranın KENDİ hesabı için çalışır (kimlik belirtecinden gelen uid).
+// ---------------------------------------------------------------------------
+
+// Öğrenci: hesabına bağlı veliler. Dönüş: { veliler: [{ id, isim }] }
+const ogrenciVelileriGetir = async (uid) => {
+  const profil = await db().doc(`kullanicilar/${uid}`).get();
+  if (!profil.exists) throw new HttpsError("failed-precondition", "profil-yok");
+  if (!ogrenciRolundeMi(profil.data())) throw new HttpsError("permission-denied", "rol-uygun-degil");
+  const snap = await db()
+    .collection("kullanicilar")
+    .where("bagliOgrenciIdleri", "array-contains", uid)
+    .limit(EN_FAZLA_VELI_LISTESI)
+    .get();
+  // Yalnızca görünen isim verilir; velinin e-postası, bağlı diğer öğrencileri vb. verilmez
+  return { veliler: snap.docs.map((d) => ({ id: d.id, isim: gorunenIsim(d.data(), "Veli") })) };
+};
+
+// Öğrenci: bir velinin hesabına erişimini kaldırır. Girdi: { veliId }. Dönüş: { kaldirildi }
+// Rol denetimi yapılmaz: rolü değişmiş olsa bile kişi kendi verisine erişimi her zaman kapatabilmelidir.
+const ogrenciVeliKaldir = async (uid, veri) => {
+  const veliId = veri?.veliId;
+  if (typeof veliId !== "string" || !UID_BICIMI.test(veliId)) {
+    throw new HttpsError("invalid-argument", "veli-gecersiz");
+  }
+  if (veliId === uid) throw new HttpsError("invalid-argument", "veli-gecersiz");
+  const veliRef = db().doc(`kullanicilar/${veliId}`);
+  const kaldirildi = await db().runTransaction(async (tx) => {
+    const snap = await tx.get(veliRef);
+    if (!snap.exists) return false;
+    // Yalnızca çağıranın kendi kimliği çıkarılır; velinin diğer öğrencilerine dokunulmaz
+    const yeni = listedenCikar(snap.data(), uid);
+    if (!yeni) return false;
+    tx.update(veliRef, yeni);
+    return true;
+  });
+  return { kaldirildi };
+};
+
+// Öğrenci: bağlantı kodunu yeniler; eski kod anında geçersiz olur (zaten bağlı veliler etkilenmez).
+// Bekleme süresi, istemcinin değiştiremeyeceği kod kaydının oluşturma zamanından hesaplanır. Dönüş: { kod }
+const baglantiKoduYenile = async (uid, simdi = Date.now()) => {
+  const profilRef = db().doc(`kullanicilar/${uid}`);
+  for (let i = 0; i < KOD_URETME_DENEMESI; i++) {
+    const kod = kodUret();
+    const yeniRef = db().doc(`baglantiKodlari/${kod}`);
+    const sonuc = await db().runTransaction(async (tx) => {
+      const profil = await tx.get(profilRef);
+      if (!profil.exists) throw new HttpsError("failed-precondition", "profil-yok");
+      if (!ogrenciRolundeMi(profil.data())) throw new HttpsError("permission-denied", "rol-uygun-degil");
+
+      const eski = profil.data().baglantiKodu;
+      const eskiRef = typeof eski === "string" && KOD_BICIMI.test(eski) ? db().doc(`baglantiKodlari/${eski}`) : null;
+      const [eskiSnap, yeniSnap] = await Promise.all([eskiRef ? tx.get(eskiRef) : null, tx.get(yeniRef)]);
+
+      const eskiBizim = eskiSnap?.exists && eskiSnap.data().uid === uid;
+      const olusturma = eskiBizim ? eskiSnap.data().olusturma : null;
+      const olusturmaMs = olusturma && typeof olusturma.toMillis === "function" ? olusturma.toMillis() : null;
+      if (olusturmaMs !== null && simdi - olusturmaMs < KOD_YENILEME_BEKLEME_MS) {
+        throw new HttpsError("resource-exhausted", "cok-sik");
+      }
+      if (yeniSnap.exists) return null; // çakışma: yeni kod denenir
+
+      // Eski kayıt yalnızca bu öğrenciye aitse silinir (başkasının koduna asla dokunulmaz)
+      if (eskiBizim) tx.delete(eskiRef);
+      tx.create(yeniRef, { uid, olusturma: FieldValue.serverTimestamp() });
+      tx.update(profilRef, { baglantiKodu: kod });
+      return kod;
+    });
+    if (sonuc) return { kod: sonuc };
+  }
+  throw new HttpsError("internal", "kod-uretilemedi");
+};
+
 // Hesap silinince öğrencinin bağlantı kodu kaydı da silinir (kod başka birine geçmez, eşleme kalmaz)
 const kodKayitlariniSil = async (uid) => {
   if (typeof uid !== "string" || !uid) return 0;
@@ -195,6 +273,9 @@ module.exports = {
   baglantiKoduAl,
   veliBagla,
   veliBaglantisiKaldir,
+  ogrenciVelileriGetir,
+  ogrenciVeliKaldir,
+  baglantiKoduYenile,
   kodKayitlariniSil,
   // test için
   kodUret,

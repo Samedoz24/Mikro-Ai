@@ -12,6 +12,7 @@ const kota = require("./kota");
 const veliBaglanti = require("./veliBaglanti");
 const hesapTemizlik = require("./hesapTemizlik");
 const goc = require("./goc");
+const temizlik = require("./temizlik");
 
 initializeApp();
 
@@ -213,6 +214,9 @@ exports.lisansKontrol = onSchedule(
     // Eski sürümle hesaplanmış özetler (katılım öncesi soruları da sayan) bir kez yeniden hesaplanır
     const guncellenen = await ozet.ozetleriGuncelle();
     console.log("Güncellenen özet:", guncellenen);
+    // Sahipsiz veri: rapor hazırlanır; yalnızca Console'dan "onaylandi" yapılınca listedekiler silinir (temizlik.js)
+    const temizlikSonucu = await temizlik.sahipsizVeriAdimi();
+    console.log("Sahipsiz veri:", JSON.stringify(temizlikSonucu));
   }
 );
 

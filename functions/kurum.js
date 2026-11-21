@@ -15,6 +15,7 @@ const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestor
 const { getAuth } = require("firebase-admin/auth");
 const { HttpsError } = require("firebase-functions/v2/https");
 const { ozetYenile } = require("./ozet");
+const { premiumGuncellemesi } = require("./premium");
 
 const db = () => getFirestore();
 
@@ -140,7 +141,8 @@ const kurumaKatil = async (uid, veri) => {
     });
     tx.set(kurumRef.collection("ozet").doc(uid), ozetBaslangic(kullanici));
     tx.update(kurumRef, { uyeSayisi: FieldValue.increment(1) });
-    tx.update(userRef, { kurumId: kurumRef.id, premiumMu: true });
+    // Dershane premium'u ayrı bir kaynak olarak eklenir (öğrencinin kendi premium'u/aboneliği korunur)
+    tx.update(userRef, { kurumId: kurumRef.id, ...premiumGuncellemesi(kullanici, { kurum: true }) });
 
     return { kurumId: kurumRef.id, kurumAdi: kurum.ad, zatenUye: false };
   });
@@ -191,9 +193,15 @@ const uyelikSonlandir = async (uid, kurumId) => {
     if (userSnap.exists) {
       const guncelleme = {};
       if (baglantiVar) guncelleme.kurumId = FieldValue.delete();
-      // Premium yalnızca öğrenci bu kurumdaysa (ya da hiçbir kurumda görünmüyorsa) geri alınır
+      // Dershane premium'u yalnızca öğrenci bu kurumdaysa (ya da hiçbir kurumda görünmüyorsa) kaldırılır;
+      // öğrencinin kendi premium'u (abonelik, elle) korunur. Eski yapıdaki kayıtta oncekiPremium kaynağı belirler.
       if (uyeSnap.exists && (baglantiVar || !kullanici.kurumId)) {
-        guncelleme.premiumMu = uyeSnap.data().oncekiPremium === true;
+        Object.assign(
+          guncelleme,
+          premiumGuncellemesi(kullanici, { kurum: null }, {
+            eskiPremiumKaynagi: uyeSnap.data().oncekiPremium === true ? "elle" : "kurum",
+          })
+        );
       }
       if (Object.keys(guncelleme).length > 0) tx.update(userRef, guncelleme);
     }
@@ -761,12 +769,15 @@ const kurumuKapat = async (kurumId) => {
     for (const uye of uyeler.docs) {
       batch.delete(uye.ref);
       batch.delete(kurumRef.collection("ozet").doc(uye.id));
-      // Premium'u yalnızca kurum vermişse geri al; kullanıcı belgesi silinmişse atla
+      // Yalnızca dershane premium'u kaldırılır (öğrencinin kendi premium'u korunur); kullanıcı silinmişse atla
       const userRef = db().doc(`kullanicilar/${uye.id}`);
-      if ((await userRef.get()).exists) {
+      const userSnap = await userRef.get();
+      if (userSnap.exists) {
         batch.update(userRef, {
           kurumId: FieldValue.delete(),
-          premiumMu: uye.data().oncekiPremium === true,
+          ...premiumGuncellemesi(userSnap.data(), { kurum: null }, {
+            eskiPremiumKaynagi: uye.data().oncekiPremium === true ? "elle" : "kurum",
+          }),
         });
       }
     }

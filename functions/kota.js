@@ -15,6 +15,7 @@ const crypto = require("crypto");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getStorage } = require("firebase-admin/storage");
 const { HttpsError } = require("firebase-functions/v2/https");
+const { premiumDurumu } = require("./premium");
 
 const db = () => getFirestore();
 
@@ -83,7 +84,7 @@ const kotaDurumu = async (uid, token, veri) => {
     refler.cihaz.get(),
   ]);
   const profil = ogrenciProfili(profilSnap);
-  const premiumMu = profil.premiumMu === true;
+  const premiumMu = premiumDurumu(profil);
   const sinir = premiumMu ? sinirlar.premium : sinirlar.ucretsiz;
   const gun = turkiyeGunu();
   return {
@@ -157,7 +158,8 @@ const soruGonder = async (uid, token, veri, simdi = Date.now()) => {
       tx.get(refler.cihaz),
     ]);
     const profil = ogrenciProfili(profilSnap);
-    const premiumMu = profil.premiumMu === true;
+    // Kaynaklardan hesaplanır: bitiş tarihi geçmiş abonelik, haber gelmemiş olsa bile sayılmaz
+    const premiumMu = premiumDurumu(profil, simdi);
     const sinir = premiumMu ? sinirlar.premium : sinirlar.ucretsiz;
     const hesapKullanim = bugunkuKullanim(hesapSnap.data(), gun);
     const cihazKullanim = bugunkuKullanim(cihazSnap.data(), gun);

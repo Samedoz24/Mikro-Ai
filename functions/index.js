@@ -211,6 +211,9 @@ exports.lisansKontrol = onSchedule(
     // Tek seferlik: yalnızca e-postayla sahiplenilmiş eski sorulara sahibinin kimliği yazılır (goc.js)
     const gocSonucu = await goc.eskiSorularaKimlikEkle();
     console.log("Eski sorulara kimlik:", JSON.stringify(gocSonucu));
+    // Tek seferlik: eski tek alanlı premium'lar kaynak yapısına taşınır (goc.js, premium.js)
+    const premiumGoc = await goc.premiumKaynaklariniTasi();
+    console.log("Premium kaynakları:", JSON.stringify(premiumGoc));
     // Eski sürümle hesaplanmış özetler (katılım öncesi soruları da sayan) bir kez yeniden hesaplanır
     const guncellenen = await ozet.ozetleriGuncelle();
     console.log("Güncellenen özet:", guncellenen);

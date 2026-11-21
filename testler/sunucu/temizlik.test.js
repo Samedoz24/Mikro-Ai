@@ -42,6 +42,7 @@ const K = "kurumTEM";
     for (const d of (await db.collection(k).get()).docs) await d.ref.delete();
   }
   for (const k of (await getAuth().listUsers()).users) await getAuth().deleteUser(k.uid);
+  await db.recursiveDelete(db.collection("kurumlar")); // önceki testlerin dershane verisi
   await kova.deleteFiles({ force: true }).catch(() => {});
 
   const a = await getAuth().createUser({ email: "var@ornek.com", password: "sifre12345" });

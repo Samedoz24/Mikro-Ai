@@ -7,7 +7,8 @@ rules_version = '2';
 // Aşağıdaki kurallar yalnızca uygulamadaki istemci erişimini sınırlar.
 //
 // Koleksiyonlar:
-//   kullanicilar/{uid}        profil; sahibi okur/yazar, bağlı veli okur. premiumMu istemciden yazılamaz.
+//   kullanicilar/{uid}        profil; sahibi okur/yazar, bağlı veli okur. premiumMu ve premiumKaynaklari
+//                             (dershane/abonelik/elle) istemciden yazılamaz; yalnızca sunucu hesaplar.
 //   sorular/{id}              sorular; sahibi okur/siler, bağlı veli okur. Yeni soru "Bekliyor" durumunda açılır.
 //   baglantiKodlari/{KOD}     öğrenci bağlantı kodu -> uid. Kodu bilen tek tek okuyabilir, listelenemez.
 //   cihazHaklari/{cihazId}    eski istemci kotası (kullanılmıyor, kapalı); kota artık sunucuda: kotaSayaclari
@@ -130,7 +131,7 @@ service cloud.firestore {
     // Veli–öğrenci bağlantısı ve bağlantı kodu yalnızca sunucuda (veliBagla / baglantiKoduAl) yazılır.
     // Bu alanları istemci yazabilseydi, veliMi() kod bilmeden herhangi bir öğrenciye erişim verirdi.
     function sunucuAlanlari() {
-      return ['premiumMu', 'kurumId', 'kurumRol', 'bagliOgrenciIdleri', 'bagliOgrenciler', 'baglantiKodu'];
+      return ['premiumMu', 'premiumKaynaklari', 'kurumId', 'kurumRol', 'bagliOgrenciIdleri', 'bagliOgrenciler', 'baglantiKodu'];
     }
 
     // Yeni belge: alan varsa geçerli olmalı

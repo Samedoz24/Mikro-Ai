@@ -84,4 +84,39 @@ const eskiSorularaKimlikEkle = async () => {
   return { eklenen, sahipsiz };
 };
 
-module.exports = { eskiSorularaKimlikEkle, kimlikYazilabilirMi, SAAT_PAYI_MS };
+// premiumKaynaklariniTasi: Eski yapıda premium tek alandı (premiumMu). Premium'u açık olan ve henüz kaynak
+// yapısı olmayan kullanıcılara kaynak yazılır:
+//   dershane üyesiyse      → kurum: true  (+ katılmadan önce de premium idiyse elle: true)
+//   değilse                → elle: true   (Console'dan verilmiş; asla kaybettirilmez)
+// premiumMu değişmez (hepsi zaten true kalır). Kaynak yapısı olanlara dokunulmaz. Bitince bayrakla kapanır.
+const premiumKaynaklariniTasi = async () => {
+  const bayrakRef = db().doc(BAYRAK);
+  if ((await bayrakRef.get()).data()?.premiumKaynaklari === true) return { atlandi: true };
+
+  let tasinan = 0;
+  const snap = await db().collection("kullanicilar").where("premiumMu", "==", true).get();
+  for (const belge of snap.docs) {
+    const veri = belge.data();
+    if (veri.premiumKaynaklari && typeof veri.premiumKaynaklari === "object") continue;
+    let kaynaklar = { elle: true };
+    if (typeof veri.kurumId === "string" && veri.kurumId && veri.rol !== "yonetici") {
+      const uye = await db().doc(`kurumlar/${veri.kurumId}/uyeler/${belge.id}`).get();
+      if (uye.exists) {
+        kaynaklar = { kurum: true };
+        if (uye.data().oncekiPremium === true) kaynaklar.elle = true;
+      }
+    }
+    // Yarışa karşı: belge bu arada değiştiyse (kaynak yazıldıysa) dokunulmaz
+    const yazildi = await db().runTransaction(async (tx) => {
+      const guncel = await tx.get(belge.ref);
+      if (!guncel.exists || guncel.data().premiumKaynaklari || guncel.data().premiumMu !== true) return false;
+      tx.update(belge.ref, { premiumKaynaklari: kaynaklar });
+      return true;
+    });
+    if (yazildi) tasinan++;
+  }
+  await bayrakRef.set({ premiumKaynaklari: true, premiumTasinan: tasinan }, { merge: true });
+  return { tasinan };
+};
+
+module.exports = { eskiSorularaKimlikEkle, premiumKaynaklariniTasi, kimlikYazilabilirMi, SAAT_PAYI_MS };

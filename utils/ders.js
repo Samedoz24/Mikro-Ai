@@ -6,8 +6,12 @@ export const DERSLER = [
   "Kimya",
   "Biyoloji",
   "Türkçe",
+  "Edebiyat",
   "Tarih",
   "Coğrafya",
+  "Felsefe",
+  "Din Kültürü",
+  "İngilizce",
   "Diğer",
 ];
 
@@ -29,10 +33,18 @@ const DERS_ESLESMELERI = {
   kimya: "Kimya",
   biyoloji: "Biyoloji",
   turkce: "Türkçe",
-  "turk dili ve edebiyati": "Türkçe",
-  edebiyat: "Türkçe",
+  "turk dili ve edebiyati": "Edebiyat",
+  edebiyat: "Edebiyat",
   tarih: "Tarih",
   cografya: "Coğrafya",
+  felsefe: "Felsefe",
+  mantik: "Felsefe",
+  din: "Din Kültürü",
+  "din kulturu": "Din Kültürü",
+  "din kulturu ve ahlak bilgisi": "Din Kültürü",
+  ingilizce: "İngilizce",
+  english: "İngilizce",
+  "yabanci dil": "İngilizce",
   diger: "Diğer",
 };
 
@@ -64,7 +76,7 @@ const ANAHTAR = {
     "asal", "ebob", "ekok", "oran", "yuzde", "faiz", "ardisik", "dizi", "carpan", "kesir",
     "ondalik", "parabol", "problem", "grafik", "ortalama", "medyan", "aritmetik", "rakam",
     "basamak", "karekok", "koordinat", "prizma", "piramit", "silindir", "pisagor", "yamuk",
-    "paralelkenar", "benzerlik", "veri analizi", "dogru denklem", "dik aci",
+    "paralelkenar", "benzerlik", "veri analizi", "dogru denklem", "dik aci", "onerme", "bilesik onerme",
   ],
   Fizik: [
     "kuvvet", "ivme", "enerji", "momentum", "surtunme", "basinc", "elektrik", "akim",
@@ -87,14 +99,37 @@ const ANAHTAR = {
   ],
   Türkçe: [
     "sozcuk", "cumle", "paragraf", "anlatim", "fiil", "isim", "sifat", "zarf", "yazim",
-    "noktalama", "deyim", "atasozu", "edebiyat", "siir", "roman", "metin", "ozne", "yuklem",
-    "nesne", "ses olay", "soz sanati", "hikaye", "uslup", "edat", "baglac", "unlem",
+    "noktalama", "deyim", "atasozu", "metin", "ozne", "yuklem", "nesne", "ses olay", "uslup",
+    "edat", "baglac", "unlem", "ek fiil", "anlam bilgisi",
+  ],
+  Edebiyat: [
+    "edebiyat", "siir", "roman", "hikaye", "soz sanati", "divan", "gazel", "kaside", "mesnevi",
+    "nazim", "aruz", "hece olcusu", "tiyatro", "sair", "servet i funun", "fecr i ati",
+    "tanzimat edebiyati", "milli edebiyat", "halk edebiyati", "edebi", "kosma",
+    "destan", "masal", "makale", "fikra", "biyografi", "otobiyografi", "nesir",
+  ],
+  Felsefe: [
+    "felsefe", "filozof", "estetik", "etik", "ahlak felsefesi", "epistemoloji",
+    "bilgi felsefesi", "varlik felsefesi", "ontoloji", "metafizik", "sokrates", "platon",
+    "aristoteles", "kant", "descartes", "nietzsche", "empirizm", "rasyonalizm", "varolus",
+    "ozgur irade", "siyaset felsefesi", "bilim felsefesi", "din felsefesi", "sanat felsefesi",
+    "idealizm", "septisizm", "psikoloji", "sosyoloji",
+  ],
+  "Din Kültürü": [
+    "din kulturu", "ibadet", "namaz", "oruc", "zekat", "hac", "kuran", "ayet", "hadis",
+    "peygamber", "hz", "tevhid", "iman", "melek", "ahiret", "kader", "vahiy", "abdest", "dua",
+    "tasavvuf", "mezhep", "sunnet", "kurban", "islam", "allah", "kelime i sehadet", "sadaka",
+  ],
+  "İngilizce": [
+    "ingilizce", "english", "grammar", "vocabulary", "tense", "present perfect", "past simple",
+    "passive voice", "preposition", "conditional", "relative clause", "reading", "dialogue",
+    "the", "which", "following", "sentence", "word", "paragraph", "choose",
   ],
   Tarih: [
     "osmanli", "selcuk", "ataturk", "kurtulus", "cumhuriyet", "inkilap", "padisah",
     "antlasma", "fetih", "islamiyet", "medeniyet", "orta cag", "ronesans", "fransiz ihtilal",
     "dunya savasi", "sultan", "hanedan", "lozan", "mondros", "sevr", "tanzimat", "mesrutiyet",
-    "milli mucadele", "ilk cag", "uygarlik",
+    "milli mucadele", "ilk cag", "uygarlik", "islamiyet oncesi", "islam tarihi",
   ],
   Coğrafya: [
     "iklim", "harita", "nufus", "yer sekilleri", "akarsu", "goller", "dag", "ova", "enlem",
@@ -163,4 +198,18 @@ export const kategoriSiralamasi = (sorular, zamanBul = () => 0) => {
     return a.localeCompare(b, "tr");
   });
   return ["Tümü", ...tumDersler, "Diğer"];
+};
+
+// Çözümü hazır ama öğrencinin henüz açmadığı soru ("yeni çözüm"). Alt menüdeki sayı ve Geçmiş Sorular
+// kartları aynı kuralı kullanır; böylece ikisi hiçbir zaman çelişmez.
+export const yeniCozumMu = (soru) => soru?.durum === "Çözüldü" && soru?.okunduMu !== true;
+
+// n8n dersi "Diğer" yazdı ama konu başlığı dersi açıkça gösteriyor mu? (ör. "Varlık felsefesi" → Felsefe)
+// Öğrencinin elle seçtiği ders (dersKaynak "kullanici") asla değiştirilmez. Tahmin yoksa null.
+export const digerYerineDers = (soru) => {
+  if (!soru || soru.durum !== "Çözüldü") return null;
+  if (soru.dersKaynak === "kullanici") return null;
+  if (dersBul(soru) !== "Diğer") return null;
+  const tahmin = dersTahminEt({ topic: soru.topic || soru.konu, question: "" });
+  return tahmin && tahmin !== "Diğer" ? tahmin : null;
 };

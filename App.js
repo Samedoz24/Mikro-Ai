@@ -48,8 +48,8 @@ import { rozetDegeri, sekmeEtiketi } from "./utils/sekmeAyarlari";
 import { yoneticiOl, kurumHataMesaji } from "./utils/kurumIstemci";
 import { YAS_ONAYI_SURUMU } from "./utils/yasalMetinler";
 import { PremiumProvider } from "./PremiumContext";
-import { dersiTamamla } from "./utils/dersTamamla";
-import { dersBul, dersBilgisiVar } from "./utils/ders";
+import { dersiTamamla, digerDersiDuzelt } from "./utils/dersTamamla";
+import { dersBul, dersBilgisiVar, yeniCozumMu, digerYerineDers } from "./utils/ders";
 import ErrorBoundary from "./ErrorBoundary";
 import { adSoyadTemizle } from "./utils/profilDogrulama";
 
@@ -270,20 +270,14 @@ function MainApp() {
       let okunmamisAdet = 0;
       snapshot.forEach((doc) => {
         const veri = doc.data();
-        if (veri.durum === "Çözüldü" && veri.okunduMu !== true) {
-          okunmamisAdet++;
-        }
+        if (yeniCozumMu(veri)) okunmamisAdet++;
       });
       setOkunmamisSayisi(okunmamisAdet);
 
       snapshot.docChanges().forEach((change) => {
         if (change.type === "modified") {
           const veri = change.doc.data();
-          if (
-            veri.durum === "Çözüldü" &&
-            veri.okunduMu !== true &&
-            !bildirilenSorular.current.has(change.doc.id)
-          ) {
+          if (yeniCozumMu(veri) && !bildirilenSorular.current.has(change.doc.id)) {
             bildirilenSorular.current.add(change.doc.id);
             const dersAdi = dersBilgisiVar(veri) ? dersBul(veri) : "";
             sendQuestionSolvedNotification(dersAdi);
@@ -298,6 +292,10 @@ function MainApp() {
         if (veri.durum === "Çözüldü" && !dersBilgisiVar(veri)) {
           bildirilenSorular.current.add(belge.id);
           dersiTamamla({ id: belge.id, ...veri }, kullanici.email);
+        } else if (digerYerineDers(veri)) {
+          // n8n "Diğer" yazdı ama konu dersi gösteriyor (ör. "Varlık felsefesi" → Felsefe)
+          bildirilenSorular.current.add(belge.id);
+          digerDersiDuzelt({ id: belge.id, ...veri });
         }
       });
     });

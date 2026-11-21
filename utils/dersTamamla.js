@@ -1,7 +1,7 @@
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import { cozumYukle } from "./cozumYukleyici";
-import { dersTahminEt, dersBilgisiVar, dersAdiniDuzelt } from "./ders";
+import { dersTahminEt, dersBilgisiVar, dersAdiniDuzelt, digerYerineDers } from "./ders";
 
 // Çözülmüş ama belgesinde ders alanı olmayan sorulara (yeni n8n akışı ders yazmıyor) ders ekler:
 //  1) çözüm dosyasında "subject" varsa onu kullanır,
@@ -50,5 +50,29 @@ const tamamla = async (soru, eposta) => {
 // İstekler art arda (sırayla) işlenir; çok sayıda soru aynı anda sunucuyu yormaz.
 export const dersiTamamla = (soru, eposta) => {
   kuyruk = kuyruk.then(() => tamamla(soru, eposta)).catch(() => null);
+  return kuyruk;
+};
+
+// n8n dersi "Diğer" yazdı ama konu başlığı dersi açıkça gösteriyorsa (ör. "Estetik" → Felsefe) dersi düzeltir.
+// Dosya indirmez (konu belgede); öğrencinin elle seçtiği derse dokunmaz; her soru için en fazla birkaç deneme.
+const duzeltmeDenemesi = new Map();
+
+const digerDuzelt = async (soru) => {
+  const ders = digerYerineDers(soru);
+  if (!ders) return null;
+  const onceki = duzeltmeDenemesi.get(soru.id) || 0;
+  if (onceki >= EN_FAZLA_DENEME) return null;
+  duzeltmeDenemesi.set(soru.id, onceki + 1);
+  try {
+    await updateDoc(doc(db, "sorular", soru.id), { ders, dersKaynak: "tahmin" });
+    return ders;
+  } catch (hata) {
+    console.log("Ders düzeltilemedi:", soru.id, hata?.code || hata?.message);
+    return null;
+  }
+};
+
+export const digerDersiDuzelt = (soru) => {
+  kuyruk = kuyruk.then(() => digerDuzelt(soru)).catch(() => null);
   return kuyruk;
 };

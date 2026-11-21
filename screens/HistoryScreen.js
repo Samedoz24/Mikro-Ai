@@ -56,7 +56,7 @@ import {
   kesinSonuc,
 } from "../utils/cozumYukleyici";
 import { soruBlokHtml, belgeHtml } from "../utils/pdfIcerik";
-import { DERSLER, dersBul, kategoriSiralamasi } from "../utils/ders";
+import { DERSLER, dersBul, kategoriSiralamasi, yeniCozumMu } from "../utils/ders";
 
 const ekranGenisligi = Dimensions.get("window").width;
 const ekranYuksekligi = Dimensions.get("window").height;
@@ -158,10 +158,14 @@ export default function HistoryScreen() {
     setDinamikKategoriler(kategoriSiralamasi(sorular, zaman));
   }, [sorular]);
 
+  // Açılmamış çözüm sayısı (seçili kategoride; alt menüdeki sayıyla aynı kural)
+  const yeniCozumSayisiHesapla = (liste) => liste.filter(yeniCozumMu).length;
+
   const filtrelenmisSorular =
     seciliKategori === "Tümü"
       ? sorular
       : sorular.filter((soru) => dersBul(soru) === seciliKategori);
+  const yeniCozumSayisi = yeniCozumSayisiHesapla(filtrelenmisSorular);
 
   const soruDetayAc = async (soru) => {
     setSeciliSoru(soru);
@@ -172,7 +176,7 @@ export default function HistoryScreen() {
     setPratikModalGorunur(false);
     setDersSecimiAcik(false);
 
-    if (soru.durum === "Çözüldü" && soru.okunduMu !== true) {
+    if (yeniCozumMu(soru)) {
       try {
         await updateDoc(doc(db, "sorular", soru.id), {
           okunduMu: true,
@@ -483,27 +487,67 @@ export default function HistoryScreen() {
                 keyExtractor={(item) => item.id}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: altMenuBoslugu + 90 }}
-                renderItem={({ item }) => (
+                ListHeaderComponent={
+                  yeniCozumSayisi > 0 ? (
+                    <View
+                      style={[styles.yeniOzet, { borderColor: tema.anaButon }]}
+                      accessibilityLiveRegion="polite"
+                    >
+                      <View style={[styles.yeniNokta, { backgroundColor: tema.anaButon }]} />
+                      <Text style={[styles.yeniOzetYazi, { color: tema.metin }]}>
+                        {yeniCozumSayisi === 1
+                          ? "1 yeni çözüm seni bekliyor"
+                          : `${yeniCozumSayisi} yeni çözüm seni bekliyor`}
+                      </Text>
+                    </View>
+                  ) : null
+                }
+                renderItem={({ item }) => {
+                  const yeni = yeniCozumMu(item);
+                  return (
                   <TouchableOpacity
                     style={[
                       styles.kart,
                       {
                         backgroundColor: tema.kutuArkaplan,
-                        borderColor: tema.kutuCerceve,
+                        borderColor: yeni ? tema.anaButon : tema.kutuCerceve,
+                        borderWidth: yeni ? 2 : 1,
                       },
                     ]}
                     onPress={() => soruDetayAc(item)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${dersBul(item)}, ${
+                      yeni ? "yeni çözüm, henüz açılmadı" : item.durum === "Çözüldü" ? "çözüldü" : item.durum
+                    }`}
                   >
-                    <Image
-                      source={{ uri: item.fotoLink }}
-                      style={styles.kucukFoto}
-                    />
+                    <View>
+                      <Image
+                        source={{ uri: item.fotoLink }}
+                        style={styles.kucukFoto}
+                      />
+                      {yeni && (
+                        <View
+                          style={[
+                            styles.fotoNokta,
+                            { backgroundColor: tema.anaButon, borderColor: tema.kutuArkaplan },
+                          ]}
+                        />
+                      )}
+                    </View>
                     <View style={styles.kartBilgi}>
-                      <Text
-                        style={[styles.kartDersAd, { color: tema.metin }]}
-                      >
-                        {dersBul(item)}
-                      </Text>
+                      <View style={styles.kartBaslikSatir}>
+                        <Text
+                          style={[styles.kartDersAd, { color: tema.metin }]}
+                          numberOfLines={1}
+                        >
+                          {dersBul(item)}
+                        </Text>
+                        {yeni && (
+                          <View style={[styles.yeniEtiket, { backgroundColor: tema.anaButon }]}>
+                            <Text style={styles.yeniEtiketYazi}>YENİ</Text>
+                          </View>
+                        )}
+                      </View>
                       <Text
                         style={[styles.kartTarih, { color: tema.ikincilMetin }]}
                       >
@@ -513,25 +557,29 @@ export default function HistoryScreen() {
                         style={[
                           styles.kartDurum,
                           {
-                            color:
-                              item.durum === "Çözüldü"
+                            color: yeni
+                              ? tema.anaButon
+                              : item.durum === "Çözüldü"
                                 ? "#4CAF50"
                                 : tema.anaButon,
                           },
                         ]}
                       >
-                        {item.durum === "Çözüldü"
-                          ? "✅ Çözüldü"
-                          : "⏳ " + item.durum}
+                        {yeni
+                          ? "Yeni çözüm · açmak için dokun"
+                          : item.durum === "Çözüldü"
+                            ? "✅ Çözüldü"
+                            : "⏳ " + item.durum}
                       </Text>
                     </View>
                     <Ionicons
                       name="chevron-forward-outline"
                       size={20}
-                      color={tema.ikincilMetin}
+                      color={yeni ? tema.anaButon : tema.ikincilMetin}
                     />
                   </TouchableOpacity>
-                )}
+                  );
+                }}
               />
             </View>
           )}
@@ -1005,6 +1053,7 @@ export default function HistoryScreen() {
                     <Text style={[styles.dersSecimBaslik, { color: tema.metin }]}>
                       Dersi Seç
                     </Text>
+                    <ScrollView style={styles.dersSecimListe} bounces={false}>
                     {DERSLER.map((ders) => {
                       const secili = dersBul(seciliSoru) === ders;
                       return (
@@ -1038,6 +1087,7 @@ export default function HistoryScreen() {
                         </TouchableOpacity>
                       );
                     })}
+                    </ScrollView>
                   </View>
                 </View>
               )}
@@ -1366,11 +1416,35 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   kartBilgi: { flex: 1 },
+  kartBaslikSatir: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 },
+  yeniEtiket: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
+  yeniEtiketYazi: { color: "#fff", fontSize: 10, fontWeight: "800", letterSpacing: 0.6 },
+  fotoNokta: {
+    position: "absolute",
+    top: -4,
+    right: 10,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+  },
+  yeniOzet: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 14,
+  },
+  yeniNokta: { width: 8, height: 8, borderRadius: 4 },
+  yeniOzetYazi: { fontSize: 14, fontWeight: "600" },
   kartDersAd: {
     fontSize: 16,
     fontWeight: "bold",
-    marginBottom: 4,
     letterSpacing: 0.3,
+    flexShrink: 1,
   },
   kartTarih: { fontSize: 13, marginBottom: 6 },
   kartDurum: { fontSize: 15, fontWeight: "bold" },
@@ -1495,7 +1569,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 20,
     overflow: "hidden",
+    maxHeight: "85%",
   },
+  dersSecimListe: { flexGrow: 0 },
   dersSecimBaslik: {
     fontSize: 17,
     fontWeight: "800",

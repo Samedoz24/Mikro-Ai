@@ -48,6 +48,7 @@ import {
   sifreSifirlamaHatasiMesaji,
   googleGirisHatasiMesaji,
   appleGirisHatasiMesaji,
+  SIFRE_EN_AZ,
 } from "../utils/authHatalari";
 
 // 🚀 DÜZELTME: useIsFocused tamamen silindi! (Hatanın kaynağı burasıydı)
@@ -133,8 +134,10 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
       Alert.alert("Uyarı", "Lütfen e-posta ve şifre alanlarını doldurun.");
       return;
     }
-    if (password.length < 6) {
-      Alert.alert("Uyarı", "Şifre en az 6 karakter olmalı.");
+    // Firebase'in şifre politikası da en az 8 karakteri sunucuda zorunlu tutar (uygulama atlanamaz);
+    // bu kontrol yalnızca kullanıcıya hemen geri bildirim içindir. Girişte uygulanmaz: eski hesaplar kilitlenmesin.
+    if (password.length < SIFRE_EN_AZ) {
+      Alert.alert("Uyarı", `Şifre en az ${SIFRE_EN_AZ} karakter olmalı.`);
       return;
     }
     setYukleniyor(true);
@@ -581,7 +584,11 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
               ref={sifreRef}
               style={dinamikStil.input}
               placeholderTextColor={tema.ikincilMetin}
-              placeholder="Şifreniz"
+              placeholder={
+                gosterilenSayfa === "giris"
+                  ? "Şifreniz"
+                  : `Şifre (en az ${SIFRE_EN_AZ} karakter)`
+              }
               value={password}
               onChangeText={setPassword}
               secureTextEntry={!sifreGoster}

@@ -13,6 +13,9 @@ const ORTAK = {
 
 const GENEL = "Bir sorun oluştu. Lütfen tekrar dene.";
 
+// Yeni şifrelerde en az uzunluk (Firebase Console > Authentication > Şifre politikası ile aynı)
+export const SIFRE_EN_AZ = 8;
+
 const YANLIS_BILGI = [
   "auth/invalid-credential",
   "auth/wrong-password",
@@ -30,7 +33,8 @@ export const kayitHatasiMesaji = (hata) => {
   const kod = hata?.code;
   if (kod === "auth/email-already-in-use")
     return "Bu e-posta ile zaten bir hesap var. Giriş yapmayı dene.";
-  if (kod === "auth/weak-password") return "Şifre en az 6 karakter olmalı.";
+  if (kod === "auth/weak-password" || kod === "auth/password-does-not-meet-requirements")
+    return `Şifre en az ${SIFRE_EN_AZ} karakter olmalı.`;
   if (kod === "auth/operation-not-allowed")
     return "E-posta ile kayıt şu an kullanılamıyor. Lütfen daha sonra tekrar dene.";
   return ORTAK[kod] || "Hesap oluşturulamadı. Lütfen tekrar dene.";

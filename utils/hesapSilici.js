@@ -1,4 +1,3 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   GoogleSignin,
   isSuccessResponse,
@@ -22,21 +21,12 @@ import {
 import { ref, listAll, deleteObject } from "firebase/storage";
 import { auth, db, storage } from "../firebaseConfig";
 import { appleKimligiAl, APPLE_IPTAL } from "./appleGiris";
-import { cozumOnbelleginiTemizle } from "./cozumYukleyici";
+import { yerelKullaniciVerisiniTemizle, googleOturumunuKapat } from "./oturum";
 import { kurumdanAyril } from "./kurumIstemci";
 
 // Kullanıcının işlem iptal etmesi (Google penceresini kapatma) gibi hata olmayan çıkışlar için
 export const SILME_IPTAL = "hesap-silme/iptal";
 
-const YEREL_ANAHTARLAR = [
-  "adSoyad",
-  "seciliSinif",
-  "kullaniciRolu",
-  "bildirimAktif",
-  "profilFoto",
-  "seriGunu",
-  "hedefRol",
-];
 
 // Hesabın giriş yöntemi: şifre mi, Google mı, Apple mı?
 export const girisYonteminiBul = (user) => {
@@ -206,8 +196,7 @@ export const kullaniciVerileriniSil = async (user) => {
 
 // Cihazdaki yerel kayıtları temizler.
 export const yerelVeriyiTemizle = async () => {
-  await AsyncStorage.multiRemove(YEREL_ANAHTARLAR);
-  await cozumOnbelleginiTemizle();
+  await yerelKullaniciVerisiniTemizle();
 };
 
 // Tam akış: doğrula → sunucu verisini sil → giriş hesabını sil → yerel temizlik.
@@ -234,8 +223,6 @@ export const hesabiTamamenSil = async (user, sifre) => {
     throw e;
   }
 
-  try {
-    await GoogleSignin.signOut();
-  } catch (e) {}
+  await googleOturumunuKapat();
   await yerelVeriyiTemizle();
 };

@@ -25,10 +25,10 @@ import { useIsFocused } from "@react-navigation/native";
 // Firebase Kütüphaneleri
 import { auth, db, storage } from "../firebaseConfig";
 import { appCheckBasligi } from "../utils/appCheck";
-import { signOut } from "firebase/auth";
 import { baglantiKoduAl } from "../utils/baglanti";
 import KurumKarti from "./KurumKarti";
 import VeliBaglantiPenceresi from "./VeliBaglantiPenceresi";
+import { oturumuKapat } from "../utils/oturum";
 import PlatformKarti from "./PlatformKarti";
 import useAltMenuBoslugu from "../utils/altMenu";
 import {
@@ -634,16 +634,8 @@ export default function ProfileScreen() {
           text: "Evet",
           onPress: async () => {
             try {
-              await cancelAllNotifications();
-              await AsyncStorage.multiRemove([
-                "adSoyad",
-                "seciliSinif",
-                "kullaniciRolu",
-                "bildirimAktif",
-                "profilFoto",
-                "seriGunu",
-              ]);
-              await signOut(auth);
+              // Bildirimler, çözüm önbelleği, profil bilgileri ve Google oturumu temizlenir (utils/oturum.js)
+              await oturumuKapat();
             } catch (error) {
               console.log("Çıkış hatası:", error);
             }

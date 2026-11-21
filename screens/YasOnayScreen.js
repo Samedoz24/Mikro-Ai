@@ -18,9 +18,9 @@ import {
 import { WebView } from "react-native-webview";
 import { Ionicons } from "@expo/vector-icons";
 import { doc, setDoc } from "firebase/firestore";
-import { signOut } from "firebase/auth";
 
 import { auth, db } from "../firebaseConfig";
+import { oturumuKapat } from "../utils/oturum";
 import { useTheme } from "../ThemeContext";
 import { colors } from "../theme";
 import {
@@ -146,7 +146,7 @@ export default function YasOnayScreen({ kullanici, rol, onOnaylandi }) {
 
   const cikisYap = async () => {
     try {
-      await signOut(auth);
+      await oturumuKapat();
     } catch (error) {
       console.log("Çıkış hatası:", error);
     }

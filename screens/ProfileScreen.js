@@ -127,9 +127,31 @@ const dosyaModulleriniYukle = () => {
 
 // Profil fotoğrafı: Dosyalar'dan seçilen ham dosya için üst sınır; kaydedilen kare fotoğrafın kenarı
 const FOTO_DOSYA_EN_FAZLA = 25 * 1024 * 1024;
-const PROFIL_FOTO_KENAR = 1024;
+const PROFIL_FOTO_KENAR = 1080;
+// Profil fotoğrafı JPEG kalitesi (1080 px ile tahminen 100–200 KB; ekranda net)
+const PROFIL_FOTO_KALITE = 0.7;
+// Fotoğrafı ortadan kare kırpar, en fazla PROFIL_FOTO_KENAR piksele küçültür, JPEG kaydeder.
+// Kamera, Fotoğraflar ve Dosyalar aynı ayarla kaydedilir. Resim açılamazsa hata fırlatır.
+const kareProfilFotografiHazirla = async (uri, { ImageManipulator, SaveFormat }) => {
+  const resim = await ImageManipulator.manipulate(uri).renderAsync();
+  const kenar = Math.min(resim.width, resim.height);
+  const kare = await ImageManipulator.manipulate(uri)
+    .crop({
+      originX: Math.floor((resim.width - kenar) / 2),
+      originY: Math.floor((resim.height - kenar) / 2),
+      width: kenar,
+      height: kenar,
+    })
+    .resize({ width: Math.min(kenar, PROFIL_FOTO_KENAR) })
+    .renderAsync();
+  const kayit = await kare.saveAsync({ format: SaveFormat.JPEG, compress: PROFIL_FOTO_KALITE });
+  return kayit.uri;
+};
+
 // iOS menüsünün kapanma animasyonu (bu sürede yeni pencere açılamaz)
 const MENU_KAPANMA_MS = 600;
+// Dosyalar'dan gelen fotoğraf kırpma ekranına bu boyuta küçültülerek gelir
+const KIRPMA_EN_FAZLA_KENAR = 2048;
 
 export default function ProfileScreen() {
   const user = auth.currentUser;
@@ -166,7 +188,8 @@ export default function ProfileScreen() {
   const [veliPenceresiGorunur, setVeliPenceresiGorunur] = useState(false);
   const [fotoGoruntuleyiciAcik, setFotoGoruntuleyiciAcik] = useState(false);
   const fotoSecimiSuruyor = useRef(false);
-  const [onizlemeUri, setOnizlemeUri] = useState(null);
+  // { uri, kirp, genislik?, yukseklik? } — "Kullan" denmeden yüklenmez
+  const [onizleme, setOnizleme] = useState(null);
 
   // Fotoğraf önceden belleğe alınır: tam ekran görünüm dokunur dokunmaz açılır
   useEffect(() => {
@@ -493,15 +516,37 @@ export default function ProfileScreen() {
   };
 
   // Önizleme: "Kullan" denirse yüklenir; vazgeçilirse geçici kopya cihazdan silinir
-  const onizlemeOnayla = async () => {
-    const uri = onizlemeUri;
-    setOnizlemeUri(null);
-    if (uri) await profilFotografiYukle(uri);
+  // kirpmaAlani: Dosyalar kırpma ekranında seçilen kare (orijinal piksel); diğer kaynaklarda yok
+  const onizlemeOnayla = async (kirpmaAlaniSecimi) => {
+    const secim = onizleme;
+    setOnizleme(null);
+    if (!secim?.uri) return;
+    let yuklenecek = secim.uri;
+    if (secim.kirp) {
+      const moduller = dosyaModulleriniYukle();
+      if (!moduller || !kirpmaAlaniSecimi) return;
+      try {
+        const { ImageManipulator, SaveFormat } = moduller;
+        const kare = await ImageManipulator.manipulate(secim.uri)
+          .crop(kirpmaAlaniSecimi)
+          .resize({ width: Math.min(kirpmaAlaniSecimi.width, PROFIL_FOTO_KENAR) })
+          .renderAsync();
+        const kayit = await kare.saveAsync({ format: SaveFormat.JPEG, compress: PROFIL_FOTO_KALITE });
+        yuklenecek = kayit.uri;
+      } catch (e) {
+        console.log("Fotoğraf kırpılamadı:", e?.message);
+        Alert.alert("Fotoğraf Kırpılamadı", "Lütfen tekrar dene.");
+        return;
+      } finally {
+        FileSystem.deleteAsync(secim.uri, { idempotent: true }).catch(() => {});
+      }
+    }
+    await profilFotografiYukle(yuklenecek);
   };
 
   const onizlemeIptal = () => {
-    const uri = onizlemeUri;
-    setOnizlemeUri(null);
+    const uri = onizleme?.uri;
+    setOnizleme(null);
     if (uri) FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
   };
 
@@ -624,19 +669,15 @@ export default function ProfileScreen() {
       return null;
     }
     try {
+      // Kırpma ekranının akıcı çalışması için çok büyük fotoğraf önce en fazla 2048 piksele küçültülür
       const resim = await ImageManipulator.manipulate(dosya.uri).renderAsync();
-      const kenar = Math.min(resim.width, resim.height);
-      const kare = await ImageManipulator.manipulate(dosya.uri)
-        .crop({
-          originX: Math.floor((resim.width - kenar) / 2),
-          originY: Math.floor((resim.height - kenar) / 2),
-          width: kenar,
-          height: kenar,
-        })
-        .resize({ width: Math.min(kenar, PROFIL_FOTO_KENAR) })
+      const uzunKenar = Math.max(resim.width, resim.height);
+      const olcek = uzunKenar > KIRPMA_EN_FAZLA_KENAR ? KIRPMA_EN_FAZLA_KENAR / uzunKenar : 1;
+      const hazir = await ImageManipulator.manipulate(dosya.uri)
+        .resize({ width: Math.round(resim.width * olcek) })
         .renderAsync();
-      const kayit = await kare.saveAsync({ format: SaveFormat.JPEG, compress: 0.5 });
-      return kayit.uri;
+      const kayit = await hazir.saveAsync({ format: SaveFormat.JPEG, compress: 0.9 });
+      return { uri: kayit.uri, genislik: kayit.width, yukseklik: kayit.height, kirp: true };
     } catch (e) {
       console.log("Dosya fotoğraf olarak açılamadı:", e?.message);
       Alert.alert("Fotoğraf Açılamadı", "Bu dosya bir fotoğraf olarak açılamadı. Başka bir dosya dene.");
@@ -647,7 +688,7 @@ export default function ProfileScreen() {
   // kaynak: "kamera" | "galeri" | "dosya". Üç yolda da kare fotoğraf aynı güvenli yoldan yüklenir.
   // Bir seçim sürerken yenisi başlatılmaz (art arda dokunuşta seçiciler birbirini engelliyordu).
   const profilFotografiSec = async (kaynak = "galeri") => {
-    if (fotoSecimiSuruyor.current || onizlemeUri) return;
+    if (fotoSecimiSuruyor.current || onizleme) return;
     fotoSecimiSuruyor.current = true;
     try {
       await profilFotografiSecIc(kaynak);
@@ -659,26 +700,50 @@ export default function ProfileScreen() {
     }
   };
 
+  // Üç kaynak (Kamera, Fotoğraflar, Dosyalar) aynı yoldan geçer: fotoğraf hazırlanır, ÖNİZLEMEDE gösterilir;
+  // yalnızca "Kullan" denirse yüklenir.
   const profilFotografiSecIc = async (kaynak) => {
-    let secilenFotoUri = null;
+    let secim = null;
     if (kaynak === "dosya") {
-      // Dosyalar'ın kendi onay ekranı yok: fotoğraf önce önizlemede gösterilir, "Kullan" denirse yüklenir
-      const uri = await dosyadanFotoAl();
-      if (!uri) return;
-      if (fotoGoruntuleyiciAcik) setOnizlemeUri(uri);
-      // Görünüm kapalıyken seçici tamamen kapandıktan sonra açılır (iOS kapanan pencerenin üstüne açamaz)
-      else setTimeout(() => setOnizlemeUri(uri), MENU_KAPANMA_MS);
-      return;
+      secim = await dosyadanFotoAl(); // { uri, genislik, yukseklik, kirp: true } — kırpma önizlemede yapılır
     } else {
-      const kameraMi = kaynak === "kamera";
-      if (!(await izinIste(kameraMi))) return;
-      const secenekler = { mediaTypes: ["images"], allowsEditing: true, aspect: [1, 1], quality: 0.3 };
-      const result = kameraMi
-        ? await ImagePicker.launchCameraAsync(secenekler)
-        : await ImagePicker.launchImageLibraryAsync(secenekler);
-      if (!result.canceled) secilenFotoUri = result.assets?.[0]?.uri || null;
+      const uri = await secicidenFotoAl(kaynak === "kamera"); // telefonun kendi kırpması yapıldı
+      if (uri) secim = { uri, kirp: false };
     }
-    if (secilenFotoUri) await profilFotografiYukle(secilenFotoUri);
+    if (!secim) return;
+    // Görünüm açıksa önizleme onun içinde (yeni pencere açılmaz); kapalıysa seçici tamamen kapandıktan
+    // sonra açılır (iOS kapanmakta olan pencerenin üstüne yenisini açamaz)
+    if (fotoGoruntuleyiciAcik) setOnizleme(secim);
+    else setTimeout(() => setOnizleme(secim), MENU_KAPANMA_MS);
+  };
+
+  // Kamera / Fotoğraflar: telefonun kırpma ekranından sonra 1080 px / %70 JPEG'e hazırlanır.
+  // Düzenleyiciyi içermeyen eski derlemede seçici düşük kalitede çalışır (5 MB sınırı aşılmaz). Dönüş: uri | null
+  const secicidenFotoAl = async (kameraMi) => {
+    if (!(await izinIste(kameraMi))) return null;
+    const moduller = dosyaModulleriniYukle();
+    const secenekler = {
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: moduller ? 1 : 0.3,
+    };
+    const result = kameraMi
+      ? await ImagePicker.launchCameraAsync(secenekler)
+      : await ImagePicker.launchImageLibraryAsync(secenekler);
+    const hamUri = result.canceled ? null : result.assets?.[0]?.uri || null;
+    if (!hamUri) return null;
+    if (!moduller) return hamUri;
+    try {
+      return await kareProfilFotografiHazirla(hamUri, moduller);
+    } catch (e) {
+      console.log("Fotoğraf hazırlanamadı:", e?.message);
+      Alert.alert("Fotoğraf Hazırlanamadı", "Lütfen başka bir fotoğraf dene.");
+      return null;
+    } finally {
+      // Yüksek kaliteli ham kopya cihazda tutulmaz
+      FileSystem.deleteAsync(hamUri, { idempotent: true }).catch(() => {});
+    }
   };
 
   const profilFotografiYukle = async (secilenFotoUri) => {
@@ -1803,9 +1868,9 @@ export default function ProfileScreen() {
         </Modal>
 
         <ProfilFotoGoruntuleyici
-          gorunur={(fotoGoruntuleyiciAcik && !!profilFoto) || !!onizlemeUri}
+          gorunur={(fotoGoruntuleyiciAcik && !!profilFoto) || !!onizleme}
           foto={profilFoto}
-          onizleme={onizlemeUri}
+          onizleme={onizleme}
           onizlemeOnayla={onizlemeOnayla}
           onizlemeIptal={onizlemeIptal}
           kapat={() => setFotoGoruntuleyiciAcik(false)}

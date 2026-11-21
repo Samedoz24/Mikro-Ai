@@ -18,6 +18,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { temelOlcek, ortalamaKaydirmasi, kirpmaAlani } from "../utils/kirpma";
 
 // onizleme verilirse (Dosyalar'dan seçilen, henüz yüklenmemiş fotoğraf) o gösterilir ve altta Vazgeç / Kullan
 // çıkar; "Kullan" denmedikçe hiçbir şey yüklenmez.
@@ -33,7 +34,8 @@ export default function ProfilFotoGoruntuleyici({
   onizlemeIptal,
 }) {
   const onizlemeModu = !!onizleme;
-  const gosterilen = onizleme || foto;
+  const kirpmaModu = !!(onizleme?.kirp && onizleme.genislik > 0 && onizleme.yukseklik > 0);
+  const gosterilen = onizleme?.uri || foto;
   const kapatIstegi = onizlemeModu ? onizlemeIptal : kapat;
   const insets = useSafeAreaInsets();
   const { width: genislik } = useWindowDimensions();
@@ -41,6 +43,40 @@ export default function ProfilFotoGoruntuleyici({
   const buyutulmus = useRef(false);
   const sonDokunus = useRef(0);
   const opaklik = useRef(new Animated.Value(0)).current;
+  const { height: ekranYuksekligi } = useWindowDimensions();
+  // Kırpma çerçevesi: ekran genişliğinden kenar boşlukları düşülür, çok uzun ekranlarda da sığar
+  const cerceve = Math.round(Math.min(genislik - 32, ekranYuksekligi * 0.55));
+  const kirpmaDurumu = useRef({ x: 0, y: 0, zoom: 1 });
+  const kirpmaKaydirmaRef = useRef(null);
+
+  // Görünen kare ile kırpılan kare aynı olsun: açılınca konum her iki platformda açıkça ortalanır
+  // (Android başlangıç kaydırması özelliğini desteklemez)
+  const kirpmaAlaniHazir = () => {
+    if (!kirpmaModu) return;
+    const orta = ortalamaKaydirmasi(onizleme.genislik, onizleme.yukseklik, cerceve);
+    kirpmaKaydirmaRef.current?.scrollTo({ x: orta.x, y: orta.y, animated: false });
+    kirpmaDurumu.current = { x: orta.x, y: orta.y, zoom: 1 };
+  };
+
+  // Kırpma modunda başlangıç: fotoğraf kareyi kaplar ve ortalanır
+  useEffect(() => {
+    if (!kirpmaModu) return;
+    const orta = ortalamaKaydirmasi(onizleme.genislik, onizleme.yukseklik, cerceve);
+    kirpmaDurumu.current = { x: orta.x, y: orta.y, zoom: 1 };
+  }, [kirpmaModu, onizleme?.uri, cerceve]);
+
+  const kirpmayiOnayla = () => {
+    const d = kirpmaDurumu.current;
+    const alan = kirpmaAlani({
+      genislik: onizleme.genislik,
+      yukseklik: onizleme.yukseklik,
+      cerceve,
+      kayX: d.x,
+      kayY: d.y,
+      zoom: d.zoom,
+    });
+    if (alan) onizlemeOnayla(alan);
+  };
 
   // Hızlı açılış: sistemin yavaş kayma/solma animasyonu yerine kısa bir solma
   useEffect(() => {
@@ -83,11 +119,45 @@ export default function ProfilFotoGoruntuleyici({
 
         {onizlemeModu && (
           <Text style={[stiller.onizlemeBaslik, { top: insets.top + 22 }]} accessibilityRole="header">
-            Profil fotoğrafın böyle görünecek
+            {kirpmaModu ? "Kaydırıp yakınlaştırarak kareyi ayarla" : "Profil fotoğrafın böyle görünecek"}
           </Text>
         )}
 
-        {/* İki parmakla yakınlaştırma (iOS'un yerleşik özelliği; ek paket yok). Çift dokunuş: büyüt / geri al */}
+        {kirpmaModu ? (
+          <View style={{ width: cerceve, height: cerceve }}>
+            {/* Kaydır ve iki parmakla yakınlaştır; çerçevenin içi profil fotoğrafı olur */}
+            <ScrollView
+              ref={kirpmaKaydirmaRef}
+              onLayout={kirpmaAlaniHazir}
+              key={onizleme.uri}
+              style={{ width: cerceve, height: cerceve }}
+              contentContainerStyle={{
+                width: onizleme.genislik * temelOlcek(onizleme.genislik, onizleme.yukseklik, cerceve),
+                height: onizleme.yukseklik * temelOlcek(onizleme.genislik, onizleme.yukseklik, cerceve),
+              }}
+              contentOffset={ortalamaKaydirmasi(onizleme.genislik, onizleme.yukseklik, cerceve)}
+              minimumZoomScale={1}
+              maximumZoomScale={4}
+              bouncesZoom
+              showsHorizontalScrollIndicator={false}
+              showsVerticalScrollIndicator={false}
+              scrollEventThrottle={16}
+              onScroll={(e) => {
+                const { contentOffset, zoomScale } = e.nativeEvent;
+                kirpmaDurumu.current = { x: contentOffset.x, y: contentOffset.y, zoom: zoomScale || 1 };
+              }}
+            >
+              <Image
+                source={{ uri: onizleme.uri }}
+                style={{ width: "100%", height: "100%" }}
+                resizeMode="cover"
+                accessible
+                accessibilityLabel="Kırpılacak fotoğraf. Kaydırıp yakınlaştırarak kareyi ayarla."
+              />
+            </ScrollView>
+            <View pointerEvents="none" style={stiller.cerceveCizgisi} />
+          </View>
+        ) : (
         <ScrollView
           ref={kaydirmaRef}
           style={stiller.kaydirma}
@@ -113,6 +183,7 @@ export default function ProfilFotoGoruntuleyici({
             />
           </Pressable>
         </ScrollView>
+        )}
 
         <TouchableOpacity
           onPress={kapatIstegi}
@@ -139,7 +210,7 @@ export default function ProfilFotoGoruntuleyici({
                 <Text style={stiller.dugmeYazi}>Vazgeç</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={onizlemeOnayla}
+                onPress={kirpmaModu ? kirpmayiOnayla : () => onizlemeOnayla()}
                 style={[stiller.dugme, stiller.birincil]}
                 accessibilityRole="button"
                 accessibilityHint="Bu fotoğrafı profil fotoğrafın yapar"
@@ -190,6 +261,7 @@ const stiller = StyleSheet.create({
   },
   yukleniyorYazi: { color: "#fff", fontSize: 15, fontWeight: "600" },
   pasif: { opacity: 0.4 },
+  cerceveCizgisi: { ...StyleSheet.absoluteFillObject, borderWidth: 2, borderColor: "#fff", borderRadius: 4 },
   birincil: { backgroundColor: "#0095F6" },
   onizlemeBaslik: { position: "absolute", left: 16, right: 72, color: "#fff", fontSize: 17, fontWeight: "700" },
   kaydirmaIcerik: { alignItems: "center", justifyContent: "center" },

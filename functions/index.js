@@ -13,7 +13,10 @@ const veliBaglanti = require("./veliBaglanti");
 
 initializeApp();
 
-const ORTAK = { region: "europe-west1", maxInstances: 10 };
+// enforceAppCheck: uygulamadan gelen her istek geçerli bir App Check belgesi taşımalı (iOS'ta Apple App Attest).
+// Belgesiz ya da geçersiz belgeli istekler fonksiyon koduna ulaşmadan reddedilir (kurcalanmış programlar, botlar).
+// Bu ayar yalnızca callable fonksiyonları etkiler; zamanlanmış görevler ve veritabanı tetikleyicileri etkilenmez.
+const ORTAK = { region: "europe-west1", maxInstances: 10, enforceAppCheck: true };
 
 // Gece görevleri: Cloud Run bazen soğuk başlatmada örnek bulamayıp isteği reddeder ("aborted after waiting too long
 // for an available instance"). Görev kodumuza hiç ulaşmadan başarısız olur; bu yüzden hata alırsa 5 kez denenir.

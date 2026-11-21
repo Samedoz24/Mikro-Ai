@@ -24,6 +24,7 @@ import { useIsFocused } from "@react-navigation/native";
 
 // Firebase Kütüphaneleri
 import { auth, db, storage } from "../firebaseConfig";
+import { appCheckBasligi } from "../utils/appCheck";
 import { signOut } from "firebase/auth";
 import { baglantiKoduAl } from "../utils/baglanti";
 import KurumKarti from "./KurumKarti";
@@ -517,6 +518,7 @@ export default function ProfileScreen() {
               headers: {
                 "Content-Type": "image/jpeg",
                 Authorization: `Bearer ${token}`,
+                ...(await appCheckBasligi()),
               },
             }
           );

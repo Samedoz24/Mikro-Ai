@@ -25,6 +25,7 @@ import { Ionicons } from "@expo/vector-icons";
 import ConfettiCannon from "react-native-confetti-cannon";
 
 import { auth, db, storage } from "../firebaseConfig";
+import { appCheckBasligi } from "../utils/appCheck";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { ref, deleteObject } from "firebase/storage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -270,6 +271,7 @@ export default function HomeScreen() {
           headers: {
             "Content-Type": "image/jpeg",
             Authorization: `Bearer ${token}`,
+            ...(await appCheckBasligi()),
           },
         });
 

@@ -17,7 +17,7 @@ import {
   getToken as yerelBelgeAl,
   ReactNativeFirebaseAppCheckProvider,
 } from "@react-native-firebase/app-check";
-import { initializeAppCheck, CustomProvider } from "firebase/app-check";
+import { initializeAppCheck, CustomProvider, getToken as jsBelgeAl } from "firebase/app-check";
 
 const VARSAYILAN_OMUR_MS = 30 * 60 * 1000;
 
@@ -47,6 +47,7 @@ const simulatordeHataAyiklamaSaglayicisi = async (yerel) => {
 };
 
 let baslatildi = false;
+let jsAppCheck = null;
 
 // firebaseConfig.js'te, Firestore/Storage/Functions/Auth kullanılmadan önce bir kez çağrılır
 export const appCheckBaslat = (jsUygulamasi) => {
@@ -70,7 +71,7 @@ export const appCheckBaslat = (jsUygulamasi) => {
     );
   }
 
-  initializeAppCheck(jsUygulamasi, {
+  jsAppCheck = initializeAppCheck(jsUygulamasi, {
     provider: new CustomProvider({
       getToken: async () => {
         const { token } = await yerelBelgeAl(yerel, false);
@@ -79,4 +80,18 @@ export const appCheckBaslat = (jsUygulamasi) => {
     }),
     isTokenAutoRefreshEnabled: true,
   });
+};
+
+// Firebase kütüphanesi dışından yapılan doğrudan Storage istekleri (dosya yükleme, indirme bağlantısı)
+// App Check belgesini kendiliğinden taşımaz; bu başlık eklenmelidir. Belge kısa ömürlüdür, her istekte
+// yeniden alınır (önbellekten gelir, ağ gerektirmez). Belge alınamazsa boş döner: zorunluluk açıkken
+// istek sunucuda reddedilir, belge hiçbir zaman uydurulmaz.
+export const appCheckBasligi = async () => {
+  if (!jsAppCheck) return {};
+  try {
+    const { token } = await jsBelgeAl(jsAppCheck, false);
+    return token ? { "X-Firebase-AppCheck": token } : {};
+  } catch {
+    return {};
+  }
 };

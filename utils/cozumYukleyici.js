@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ref, getDownloadURL } from "firebase/storage";
 import { storage } from "../firebaseConfig";
+import { appCheckBasligi } from "./appCheck";
 import { dersAdiniDuzelt } from "./ders";
 
 // Bulunan çözümler önbelleğe alınır; böylece aynı soruya her tıklamada Storage'dan tekrar indirilmez.
@@ -245,7 +246,7 @@ const getir = async (anahtar, yollar, jsonMu, onbellegeYazilsin, onbellektenOku 
       const url = await getDownloadURL(ref(storage, yol));
       let deger = url;
       if (jsonMu) {
-        const response = await fetch(url);
+        const response = await fetch(url, { headers: await appCheckBasligi() });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         deger = await response.json();
       }

@@ -809,6 +809,7 @@ const lisansKontrol = async (simdi = Date.now()) => {
 };
 
 module.exports = {
+  uyelikSonlandir,
   kurumaKatil,
   kurumdanAyril,
   yoneticiOl,

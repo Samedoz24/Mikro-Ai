@@ -10,6 +10,7 @@ const platform = require("./platform");
 const veli = require("./veli");
 const kota = require("./kota");
 const veliBaglanti = require("./veliBaglanti");
+const hesapTemizlik = require("./hesapTemizlik");
 
 initializeApp();
 
@@ -216,14 +217,14 @@ exports.isimOzetiniGuncelle = onDocumentWritten(
   }
 );
 
-// Bir kullanıcı (öğrenci) hesabını silince, onu bağlı öğrenci olarak tutan velilerin listelerinden çıkarılır.
-// Tekrar çalıştırılabilir; geçici hata olursa Firebase yeniden dener.
+// Kullanıcı profili silinince (hesap silme) kimliğe bağlı tüm veri sunucuda da temizlenir: veli bağlantıları,
+// bağlantı kodu, dershane üyeliği (müdür ekranından kalkar, koltuk boşalır), soru belgeleri ve Storage dosyaları.
+// Uygulamanın temizliği yarıda kalsa bile hiçbir şey ortada kalmaz. Ayrıntı ve güvenlik notu: hesapTemizlik.js
+// Tekrar çalıştırılabilir; geçici hata olursa Firebase yeniden dener. (Ad, daha önce yayınlanan fonksiyonla aynı kalır.)
 exports.veliBaglantilariniTemizle = onDocumentDeleted(
-  { document: "kullanicilar/{uid}", region: "europe-west1", maxInstances: 5, retry: true },
+  { document: "kullanicilar/{uid}", region: "europe-west1", maxInstances: 5, retry: true, timeoutSeconds: 300 },
   async (event) => {
-    const guncellenen = await veli.veliBaglantilariniTemizle(event.params.uid);
-    if (guncellenen > 0) console.log("Veli bağlantısı temizlendi:", guncellenen);
-    // Öğrencinin bağlantı kodu kaydı da silinir (istemci artık bu koleksiyona erişemez)
-    await veliBaglanti.kodKayitlariniSil(event.params.uid);
+    const sonuc = await hesapTemizlik.silinenHesabiTemizle(event.params.uid, event.data?.data());
+    console.log("Silinen hesap temizlendi:", JSON.stringify(sonuc));
   }
 );

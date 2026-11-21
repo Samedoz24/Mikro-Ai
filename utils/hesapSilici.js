@@ -157,14 +157,21 @@ export const kullaniciVerileriniSil = async (user) => {
     console.log("Kurumdan ayrılma (hesap silme):", e?.code, e?.message);
   }
 
-  // 1) Sorular: belgeler + her sorunun fotoğrafı
-  let soruBelgeleri = [];
+  // 1) Sorular: belgeler + her sorunun fotoğrafı. Hem kullanıcı kimliğiyle (yeni sistem, her soruda var)
+  //    hem e-postayla (eski sistem) aranır; e-posta alanı boş ya da farklı olan sorular da kalmaz.
+  const sorularAnlik = [
+    getDocs(query(collection(db, "sorular"), where("kullaniciUid", "==", uid))),
+  ];
   if (eposta) {
-    const anlik = await getDocs(
-      query(collection(db, "sorular"), where("kullaniciEposta", "==", eposta))
+    sorularAnlik.push(
+      getDocs(query(collection(db, "sorular"), where("kullaniciEposta", "==", eposta)))
     );
-    soruBelgeleri = anlik.docs;
   }
+  const bulunanlar = new Map();
+  for (const anlik of await Promise.all(sorularAnlik)) {
+    anlik.docs.forEach((d) => bulunanlar.set(d.id, d));
+  }
+  const soruBelgeleri = [...bulunanlar.values()];
 
   for (const soru of soruBelgeleri) {
     const fotoLink = soru.data().fotoLink;

@@ -12,6 +12,7 @@ import {
   Image,
   ActivityIndicator,
   Platform,
+  ActionSheetIOS,
   Pressable,
   StatusBar,
   Share,
@@ -28,6 +29,7 @@ import { appCheckBasligi } from "../utils/appCheck";
 import { baglantiKoduAl } from "../utils/baglanti";
 import KurumKarti from "./KurumKarti";
 import VeliBaglantiPenceresi from "./VeliBaglantiPenceresi";
+import ProfilFotoGoruntuleyici from "./ProfilFotoGoruntuleyici";
 import { oturumuKapat } from "../utils/oturum";
 import PlatformKarti from "./PlatformKarti";
 import useAltMenuBoslugu from "../utils/altMenu";
@@ -110,6 +112,25 @@ const rolNormalize = (deger) =>
 const ROL_ADLARI = { ogrenci: "Öğrenci", veli: "Veli", yonetici: "Yönetici" };
 const rolEtiketi = (rol) => ROL_ADLARI[rol] || "Kullanıcı";
 
+// Dosyalar seçici ve fotoğraf düzenleyici yalnızca "Dosyalar" seçilince yüklenir: bu yerel parçaları içermeyen
+// eski bir derlemede uygulama açılışta çökmez, yalnızca bu seçenek kullanılamaz.
+const dosyaModulleriniYukle = () => {
+  try {
+    const DocumentPicker = require("expo-document-picker");
+    const { ImageManipulator, SaveFormat } = require("expo-image-manipulator");
+    return { DocumentPicker, ImageManipulator, SaveFormat };
+  } catch (e) {
+    console.log("Dosya seçici kullanılamıyor:", e?.message);
+    return null;
+  }
+};
+
+// Profil fotoğrafı: Dosyalar'dan seçilen ham dosya için üst sınır; kaydedilen kare fotoğrafın kenarı
+const FOTO_DOSYA_EN_FAZLA = 25 * 1024 * 1024;
+const PROFIL_FOTO_KENAR = 1024;
+// iOS menüsünün kapanma animasyonu (bu sürede yeni pencere açılamaz)
+const MENU_KAPANMA_MS = 600;
+
 export default function ProfileScreen() {
   const user = auth.currentUser;
   const insets = useSafeAreaInsets();
@@ -143,6 +164,16 @@ export default function ProfileScreen() {
   const [seriGunu, setSeriGunu] = useState(0);
   const [baglantiKodu, setBaglantiKodu] = useState("Yükleniyor...");
   const [veliPenceresiGorunur, setVeliPenceresiGorunur] = useState(false);
+  const [fotoGoruntuleyiciAcik, setFotoGoruntuleyiciAcik] = useState(false);
+  const fotoSecimiSuruyor = useRef(false);
+  const [onizlemeUri, setOnizlemeUri] = useState(null);
+
+  // Fotoğraf önceden belleğe alınır: tam ekran görünüm dokunur dokunmaz açılır
+  useEffect(() => {
+    if (typeof profilFoto === "string" && profilFoto.startsWith("https://")) {
+      Image.prefetch(profilFoto).catch(() => {});
+    }
+  }, [profilFoto]);
 
   const [toplamSoru, setToplamSoru] = useState(0);
   const [okunanCozum, setOkunanCozum] = useState(0);
@@ -429,19 +460,73 @@ export default function ProfileScreen() {
     }
   };
 
-  const fotoAksiyonMenusu = () => {
-    if (profilFoto) {
-      Alert.alert("Profil Fotoğrafı", "Ne yapmak istersiniz?", [
-        { text: "İptal", style: "cancel" },
-        { text: "Fotoğrafı Değiştir", onPress: profilFotografiSec },
-        {
-          text: "Fotoğrafı Kaldır",
-          onPress: profilFotografiKaldir,
-          style: "destructive",
-        },
-      ]);
+  // Fotoğrafın nereden alınacağı. iOS'ta sistemin kendi menüsü kullanılır: tam ekran görünümün üstünde
+  // açılır, görünüm kapanmaz; seçim ekranı da görünümün üstüne gelir.
+  const fotoKaynagiSec = () => {
+    const islemler = [
+      () => profilFotografiSec("kamera"),
+      () => profilFotografiSec("galeri"),
+      () => profilFotografiSec("dosya"),
+    ];
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { title: "Profil Fotoğrafı", options: ["Kamera", "Fotoğraflar", "Dosyalar", "İptal"], cancelButtonIndex: 3 },
+        (secim) => {
+          // Menü kapanırken iOS yeni bir pencere (Dosyalar, uyarı) açamaz: kapanma bitince açılır
+          if (secim >= 0 && secim < islemler.length) setTimeout(islemler[secim], MENU_KAPANMA_MS);
+        }
+      );
     } else {
-      profilFotografiSec();
+      Alert.alert("Profil Fotoğrafı", "Fotoğrafı nereden eklemek istersin?", [
+        { text: "Kamera", onPress: islemler[0] },
+        { text: "Fotoğraflar", onPress: islemler[1] },
+        { text: "Dosyalar", onPress: islemler[2] },
+        { text: "İptal", style: "cancel" },
+      ]);
+    }
+  };
+
+  // Fotoğraf varsa tam ekran gösterilir (Değiştir / Kaldır orada); yoksa kaynak seçimi açılır
+  const fotoAksiyonMenusu = () => {
+    if (profilFoto) setFotoGoruntuleyiciAcik(true);
+    else fotoKaynagiSec();
+  };
+
+  // Önizleme: "Kullan" denirse yüklenir; vazgeçilirse geçici kopya cihazdan silinir
+  const onizlemeOnayla = async () => {
+    const uri = onizlemeUri;
+    setOnizlemeUri(null);
+    if (uri) await profilFotografiYukle(uri);
+  };
+
+  const onizlemeIptal = () => {
+    const uri = onizlemeUri;
+    setOnizlemeUri(null);
+    if (uri) FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+  };
+
+  // Görünüm açık kalır; yeni fotoğraf yüklenince görünümde hemen yenisi görünür
+  const goruntuleyicidenDegistir = () => fotoKaynagiSec();
+
+  // Kaldırılınca fotoğraf kalmadığı için görünüm kendiliğinden kapanır
+  const goruntuleyicidenKaldir = () => {
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          title: "Profil fotoğrafın kaldırılsın mı?",
+          options: ["Fotoğrafı Kaldır", "Vazgeç"],
+          destructiveButtonIndex: 0,
+          cancelButtonIndex: 1,
+        },
+        (secim) => {
+          if (secim === 0) setTimeout(profilFotografiKaldir, MENU_KAPANMA_MS);
+        }
+      );
+    } else {
+      Alert.alert("Fotoğrafı Kaldır", "Profil fotoğrafın kaldırılsın mı?", [
+        { text: "Vazgeç", style: "cancel" },
+        { text: "Kaldır", style: "destructive", onPress: profilFotografiKaldir },
+      ]);
     }
   };
 
@@ -478,88 +563,181 @@ export default function ProfileScreen() {
     }
   };
 
-  const profilFotografiSec = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
+  // İzin iste; reddedilmişse ayarları açma seçeneği sun
+  const izinIste = async (kameraMi) => {
+    const { status } = kameraMi
+      ? await ImagePicker.requestCameraPermissionsAsync()
+      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status === "granted") return true;
+    Alert.alert(
+      "İzin Gerekli",
+      kameraMi
+        ? "Fotoğraf çekebilmek için kamera izni vermelisin."
+        : "Fotoğraf seçebilmek için galeri erişim izni vermelisin.",
+      [
+        { text: "Vazgeç", style: "cancel" },
+        { text: "Ayarları Aç", onPress: () => Linking.openSettings().catch(() => {}) },
+      ]
+    );
+    return false;
+  };
+
+  // Dosyalar uygulamasından fotoğraf: yalnızca resim türleri; dosya gerçekten resim olarak açılabilmeli.
+  // Kare kırpılır, en fazla 1024 piksele küçültülür ve JPEG'e çevrilir (resim olmayan dosya yüklenemez,
+  // boyut sunucu sınırını aşamaz). Dönüş: yerel JPEG adresi ya da null.
+  const dosyadanFotoAl = async () => {
+    const moduller = dosyaModulleriniYukle();
+    if (!moduller) {
       Alert.alert(
-        "İzin Gerekli",
-        "Fotoğraf seçebilmek için galeri erişim izni vermelisiniz."
+        "Kullanılamıyor",
+        "Dosyalardan fotoğraf seçmek için uygulamanın güncel sürümü gerekiyor."
+      );
+      return null;
+    }
+    const { DocumentPicker, ImageManipulator, SaveFormat } = moduller;
+    let sonuc;
+    try {
+      sonuc = await DocumentPicker.getDocumentAsync({
+        type: ["image/jpeg", "image/png", "image/heic", "image/heif", "image/webp"],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+    } catch (e) {
+      // Paket, açamadığı bir pencere için "seçim sürüyor" durumunda kalabiliyor; kullanıcıya yol gösterilir
+      console.log("Dosya seçici açılamadı:", e?.message);
+      Alert.alert(
+        "Dosyalar Açılamadı",
+        String(e?.message || "").includes("in progress")
+          ? "Dosya seçici şu an meşgul. Uygulamayı tamamen kapatıp açtıktan sonra tekrar dene."
+          : "Dosya seçici açılamadı. Lütfen tekrar dene."
+      );
+      return null;
+    }
+    if (sonuc.canceled || !sonuc.assets?.[0]) return null;
+    const dosya = sonuc.assets[0];
+    if (typeof dosya.mimeType !== "string" || !dosya.mimeType.startsWith("image/")) {
+      Alert.alert("Desteklenmeyen Dosya", "Lütfen bir fotoğraf dosyası seç.");
+      return null;
+    }
+    if (Number.isFinite(dosya.size) && dosya.size > FOTO_DOSYA_EN_FAZLA) {
+      Alert.alert("Dosya Çok Büyük", "Lütfen 25 MB'tan küçük bir fotoğraf seç.");
+      return null;
+    }
+    try {
+      const resim = await ImageManipulator.manipulate(dosya.uri).renderAsync();
+      const kenar = Math.min(resim.width, resim.height);
+      const kare = await ImageManipulator.manipulate(dosya.uri)
+        .crop({
+          originX: Math.floor((resim.width - kenar) / 2),
+          originY: Math.floor((resim.height - kenar) / 2),
+          width: kenar,
+          height: kenar,
+        })
+        .resize({ width: Math.min(kenar, PROFIL_FOTO_KENAR) })
+        .renderAsync();
+      const kayit = await kare.saveAsync({ format: SaveFormat.JPEG, compress: 0.5 });
+      return kayit.uri;
+    } catch (e) {
+      console.log("Dosya fotoğraf olarak açılamadı:", e?.message);
+      Alert.alert("Fotoğraf Açılamadı", "Bu dosya bir fotoğraf olarak açılamadı. Başka bir dosya dene.");
+      return null;
+    }
+  };
+
+  // kaynak: "kamera" | "galeri" | "dosya". Üç yolda da kare fotoğraf aynı güvenli yoldan yüklenir.
+  // Bir seçim sürerken yenisi başlatılmaz (art arda dokunuşta seçiciler birbirini engelliyordu).
+  const profilFotografiSec = async (kaynak = "galeri") => {
+    if (fotoSecimiSuruyor.current || onizlemeUri) return;
+    fotoSecimiSuruyor.current = true;
+    try {
+      await profilFotografiSecIc(kaynak);
+    } catch (e) {
+      console.log("Fotoğraf seçilemedi:", e?.message);
+      Alert.alert("Fotoğraf Seçilemedi", "Lütfen tekrar dene.");
+    } finally {
+      fotoSecimiSuruyor.current = false;
+    }
+  };
+
+  const profilFotografiSecIc = async (kaynak) => {
+    let secilenFotoUri = null;
+    if (kaynak === "dosya") {
+      // Dosyalar'ın kendi onay ekranı yok: fotoğraf önce önizlemede gösterilir, "Kullan" denirse yüklenir
+      const uri = await dosyadanFotoAl();
+      if (!uri) return;
+      if (fotoGoruntuleyiciAcik) setOnizlemeUri(uri);
+      // Görünüm kapalıyken seçici tamamen kapandıktan sonra açılır (iOS kapanan pencerenin üstüne açamaz)
+      else setTimeout(() => setOnizlemeUri(uri), MENU_KAPANMA_MS);
+      return;
+    } else {
+      const kameraMi = kaynak === "kamera";
+      if (!(await izinIste(kameraMi))) return;
+      const secenekler = { mediaTypes: ["images"], allowsEditing: true, aspect: [1, 1], quality: 0.3 };
+      const result = kameraMi
+        ? await ImagePicker.launchCameraAsync(secenekler)
+        : await ImagePicker.launchImageLibraryAsync(secenekler);
+      if (!result.canceled) secilenFotoUri = result.assets?.[0]?.uri || null;
+    }
+    if (secilenFotoUri) await profilFotografiYukle(secilenFotoUri);
+  };
+
+  const profilFotografiYukle = async (secilenFotoUri) => {
+    setFotoYukleniyor(true);
+    const baglanti = await internetVarMi();
+    if (!baglanti) {
+      setFotoYukleniyor(false);
+      Alert.alert(
+        "Bağlantı Hatası",
+        "Lütfen internet bağlantınızı kontrol edip tekrar deneyin."
       );
       return;
     }
 
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.3,
-    });
+    // Yükleme başarısız olursa eski fotoğrafa dönülür (önceden fotoğraf ekrandan tamamen kayboluyordu)
+    const oncekiFoto = profilFoto;
+    setProfilFoto(secilenFotoUri);
 
-    if (!result.canceled) {
-      setFotoYukleniyor(true);
-      const baglanti = await internetVarMi();
-      if (!baglanti) {
-        setFotoYukleniyor(false);
-        Alert.alert(
-          "Bağlantı Hatası",
-          "Lütfen internet bağlantınızı kontrol edip tekrar deneyin."
-        );
-        return;
-      }
+    try {
+      if (user) {
+        const dosyaYolu = `profil_fotograflari/${user.uid}.jpg`;
+        const encodedYol = encodeURIComponent(dosyaYolu);
+        const bucket =
+          storage.app.options.storageBucket ||
+          "project-21-3e377.firebasestorage.app";
+        const url = `https://firebasestorage.googleapis.com/v0/b/${bucket}/o?name=${encodedYol}`;
+        const token = await user.getIdToken();
 
-      const secilenFotoUri = result.assets[0].uri;
-      setProfilFoto(secilenFotoUri);
+        const uploadResult = await FileSystem.uploadAsync(url, secilenFotoUri, {
+          httpMethod: "POST",
+          headers: {
+            "Content-Type": "image/jpeg",
+            Authorization: `Bearer ${token}`,
+            ...(await appCheckBasligi()),
+          },
+        });
 
-      try {
-        if (user) {
-          const dosyaYolu = `profil_fotograflari/${user.uid}.jpg`;
-          const encodedYol = encodeURIComponent(dosyaYolu);
-          const bucket =
-            storage.app.options.storageBucket ||
-            "project-21-3e377.firebasestorage.app";
-          const url = `https://firebasestorage.googleapis.com/v0/b/${bucket}/o?name=${encodedYol}`;
-          const token = await user.getIdToken();
-
-          const uploadResult = await FileSystem.uploadAsync(
-            url,
-            secilenFotoUri,
-            {
-              httpMethod: "POST",
-              headers: {
-                "Content-Type": "image/jpeg",
-                Authorization: `Bearer ${token}`,
-                ...(await appCheckBasligi()),
-              },
-            }
-          );
-
-          if (uploadResult.status !== 200) {
-            throw new Error(
-              `Yükleme başarısız! Sunucu kodu: ${uploadResult.status}`
-            );
-          }
-
-          const data = JSON.parse(uploadResult.body);
-          const erisimAnahtari = String(data?.downloadTokens || "")
-            .split(",")[0]
-            .trim();
-          const indirmeURL = `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodedYol}?alt=media&token=${erisimAnahtari}`;
-          if (!profilFotoGecerliMi(user.uid, indirmeURL)) {
-            throw new Error("Beklenmeyen yükleme yanıtı.");
-          }
-
-          const kullaniciRef = doc(db, "kullanicilar", user.uid);
-          await updateDoc(kullaniciRef, { profilFoto: indirmeURL });
-          await AsyncStorage.setItem("profilFoto", indirmeURL);
-          setProfilFoto(indirmeURL);
+        if (uploadResult.status !== 200) {
+          throw new Error(`Yükleme başarısız! Sunucu kodu: ${uploadResult.status}`);
         }
-      } catch (error) {
-        console.log("Fotoğraf yükleme hatası:", error);
-        Alert.alert("Hata", "Fotoğraf buluta yüklenirken sorun oluştu.");
-        setProfilFoto(null);
-      } finally {
-        setFotoYukleniyor(false);
+
+        const data = JSON.parse(uploadResult.body);
+        const erisimAnahtari = String(data?.downloadTokens || "").split(",")[0].trim();
+        const indirmeURL = `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodedYol}?alt=media&token=${erisimAnahtari}`;
+        if (!profilFotoGecerliMi(user.uid, indirmeURL)) {
+          throw new Error("Beklenmeyen yükleme yanıtı.");
+        }
+
+        const kullaniciRef = doc(db, "kullanicilar", user.uid);
+        await updateDoc(kullaniciRef, { profilFoto: indirmeURL });
+        await AsyncStorage.setItem("profilFoto", indirmeURL);
+        setProfilFoto(indirmeURL);
       }
+    } catch (error) {
+      console.log("Fotoğraf yükleme hatası:", error?.message);
+      Alert.alert("Hata", "Fotoğraf yüklenirken sorun oluştu. Önceki fotoğrafın korunuyor.");
+      setProfilFoto(oncekiFoto);
+    } finally {
+      setFotoYukleniyor(false);
     }
   };
 
@@ -898,6 +1076,8 @@ export default function ProfileScreen() {
             style={styles.avatarContainer}
             onPress={fotoAksiyonMenusu}
             disabled={fotoYukleniyor}
+            accessibilityRole="button"
+            accessibilityLabel={profilFoto ? "Profil fotoğrafını büyüt" : "Profil fotoğrafı ekle"}
           >
             {profilFoto ? (
               <Image source={{ uri: profilFoto }} style={styles.avatarImage} />
@@ -1621,6 +1801,18 @@ export default function ProfileScreen() {
             </View>
           </View>
         </Modal>
+
+        <ProfilFotoGoruntuleyici
+          gorunur={(fotoGoruntuleyiciAcik && !!profilFoto) || !!onizlemeUri}
+          foto={profilFoto}
+          onizleme={onizlemeUri}
+          onizlemeOnayla={onizlemeOnayla}
+          onizlemeIptal={onizlemeIptal}
+          kapat={() => setFotoGoruntuleyiciAcik(false)}
+          degistir={goruntuleyicidenDegistir}
+          kaldir={goruntuleyicidenKaldir}
+          yukleniyor={fotoYukleniyor}
+        />
 
         <VeliBaglantiPenceresi
           gorunur={veliPenceresiGorunur}

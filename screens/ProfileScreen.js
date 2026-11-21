@@ -102,6 +102,13 @@ const SINIFLAR = [
   "Mezun",
 ];
 
+// Bilinen roller; rol alanı olmayan eski hesaplar öğrenci sayılır (sunucudaki kuralla aynı)
+const BILINEN_ROLLER = ["ogrenci", "veli", "yonetici"];
+const rolNormalize = (deger) =>
+  deger == null ? "ogrenci" : BILINEN_ROLLER.includes(deger) ? deger : "bilinmiyor";
+const ROL_ADLARI = { ogrenci: "Öğrenci", veli: "Veli", yonetici: "Yönetici" };
+const rolEtiketi = (rol) => ROL_ADLARI[rol] || "Kullanıcı";
+
 export default function ProfileScreen() {
   const user = auth.currentUser;
   const insets = useSafeAreaInsets();
@@ -113,7 +120,9 @@ export default function ProfileScreen() {
   const { tema, temaModu } = useTheme();
   const isGercektenKaranlik = tema.arkaplan === colors.dark.arkaplan;
 
-  const [rol, setRol] = useState("ogrenci");
+  // Rol yüklenene kadar null: öğrenciye özel işler (kota, rozet kaydı) ve kartlar rol kesinleşmeden çalışmaz.
+  // Asıl kaynak Firestore profilidir; telefonda saklanan değer yalnızca ilk görüntü için kullanılır.
+  const [rol, setRol] = useState(null);
   const [sinifModalGorunur, setSinifModalGorunur] = useState(false);
   const [seciliSinif, setSeciliSinif] = useState("Sınıf Seçilmedi");
 
@@ -189,7 +198,7 @@ export default function ProfileScreen() {
       if (!user) return;
 
       const kayitliRol = await AsyncStorage.getItem("kullaniciRolu");
-      setRol(kayitliRol || "ogrenci");
+      setRol(rolNormalize(kayitliRol));
 
       const kayitliSinif = await AsyncStorage.getItem("seciliSinif");
       if (SINIFLAR.includes(kayitliSinif)) setSeciliSinif(kayitliSinif);
@@ -229,6 +238,8 @@ export default function ProfileScreen() {
             if (typeof data.baglantiKodu === "string") {
               setBaglantiKodu(data.baglantiKodu);
             }
+            setRol(rolNormalize(data.rol));
+
             // Kod sunucuda üretilir ve kaydı sunucuda doğrulanır (eski hesaplar da burada taşınır)
             const ogrenciMi = (data.rol ?? "ogrenci") === "ogrenci";
             if (ogrenciMi && !kodKontrolEdildi.current) {
@@ -806,7 +817,7 @@ export default function ProfileScreen() {
   })();
 
   const getAvatarHarf = () =>
-    gorunenIsim(adSoyad, user?.email, rol === "veli" ? "Veli" : "Öğrenci")
+    gorunenIsim(adSoyad, user?.email, rolEtiketi(rol))
       .charAt(0)
       .toLocaleUpperCase("tr-TR");
 
@@ -971,7 +982,7 @@ export default function ProfileScreen() {
                   {gorunenIsim(
                     adSoyad,
                     user?.email,
-                    rol === "veli" ? "Veli" : "Öğrenci"
+                    rolEtiketi(rol)
                   )}
                 </Text>
                 <View style={{ marginLeft: 8 }}>

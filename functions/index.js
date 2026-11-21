@@ -206,6 +206,9 @@ exports.lisansKontrol = onSchedule(
   async () => {
     const kapatilan = await kurum.lisansKontrol();
     console.log("Kapatılan kurumlar:", kapatilan.join(", ") || "yok");
+    // Eski sürümle hesaplanmış özetler (katılım öncesi soruları da sayan) bir kez yeniden hesaplanır
+    const guncellenen = await ozet.ozetleriGuncelle();
+    console.log("Güncellenen özet:", guncellenen);
   }
 );
 

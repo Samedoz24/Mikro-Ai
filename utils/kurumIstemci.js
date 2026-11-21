@@ -56,6 +56,8 @@ const HATA_MESAJLARI = {
   "kod-uretilemedi": "Kayıt kodu üretilemedi. Lütfen tekrar dene.",
   "ogrenci-yok": "Bu öğrenci artık dershanede kayıtlı değil.",
   "soru-yok": "Bu soru bulunamadı.",
+  "uyelik-oncesi":
+    "Bu soru öğrenci dershaneye katılmadan önce gönderilmiş; yalnızca katılımdan sonraki sorular görüntülenebilir.",
   "eposta-yok": "Hesabında e-posta adresi bulunamadı.",
   "eposta-gecersiz": "Geçerli bir e-posta adresi yaz.",
   "zaten-yonetici": "Bu adres zaten dershanenin yöneticisi.",

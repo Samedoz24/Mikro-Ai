@@ -14,6 +14,18 @@ const GUN_MS = 86400000;
 const DERS_ADI_SINIRI = 40;
 const KONU_ADI_SINIRI = 60;
 const EN_COK_KONU = 20;
+// Özet biçimi sürümü. 2: yalnızca dershaneye katıldıktan sonraki sorular sayılır. Gece görevi, eski
+// sürümle hesaplanmış özetleri bir kez yeniden hesaplar (ozetleriGuncelle).
+const OZET_SURUMU = 2;
+
+const zamanMs = (deger) => {
+  if (deger && typeof deger.toMillis === "function") return deger.toMillis();
+  if (typeof deger === "string") {
+    const ms = Date.parse(deger);
+    return Number.isFinite(ms) ? ms : null;
+  }
+  return null;
+};
 
 const gunBicimi = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Istanbul" });
 const gunAnahtari = (ms) => gunBicimi.format(new Date(ms)); // YYYY-MM-DD, Türkiye saati
@@ -84,13 +96,22 @@ const ozetYenile = async (uid) => {
   const kurumId = userSnap.exists ? userSnap.data().kurumId : null;
   if (!kurumId) return false;
 
-  const sorular = (await db().collection("sorular").where("kullaniciUid", "==", uid).get()).docs.map((d) =>
-    d.data()
-  );
-  const alanlar = ozetHesapla(sorular);
-
   const uyeRef = db().doc(`kurumlar/${kurumId}/uyeler/${uid}`);
   const ozetRef = db().doc(`kurumlar/${kurumId}/ozet/${uid}`);
+
+  // Yalnızca üyelik başladıktan sonraki sorular sayılır (öğrenciye katılırken söylenen budur).
+  // Katılma zamanı okunamıyorsa hiçbir soru sayılmaz; zamanı okunamayan soru da sayılmaz.
+  const uyeOn = await uyeRef.get();
+  if (!uyeOn.exists) return false;
+  const baslangic = zamanMs(uyeOn.data().katilma);
+  const sorular = (await db().collection("sorular").where("kullaniciUid", "==", uid).get()).docs
+    .map((d) => d.data())
+    .filter((soru) => {
+      const ms = zamanMs(soru.tarih);
+      return baslangic !== null && ms !== null && ms >= baslangic;
+    });
+  const alanlar = ozetHesapla(sorular);
+
   // Üyelik kontrolü ve yazma aynı işlemde: aynı anda ayrılan öğrencinin özeti geri oluşmaz
   return db().runTransaction(async (tx) => {
     const [uyeSnap, ozetSnap] = await Promise.all([tx.get(uyeRef), tx.get(ozetRef)]);
@@ -104,6 +125,7 @@ const ozetYenile = async (uid) => {
       // Yeni katılan öğrenci "pasif" sayılmasın diye katılma zamanı da özette durur
       katilma: uyeSnap.data().katilma ?? null,
       grupId,
+      surum: OZET_SURUMU,
       guncelleme: FieldValue.serverTimestamp(),
     };
     tx.set(ozetRef, veri);
@@ -116,4 +138,22 @@ const ozetYenile = async (uid) => {
   });
 };
 
-module.exports = { ozetHesapla, ozetYenile, gunAnahtari, konuBul, grupOzetRef };
+// Eski sürümle hesaplanmış özetleri yeniden hesaplar (gece görevi). Güncel olanlara dokunmaz; bir kez
+// çalıştıktan sonra yapacak işi kalmaz. Hata veren öğrenci atlanır, diğerleri devam eder.
+const ozetleriGuncelle = async () => {
+  let guncellenen = 0;
+  for (const kurumRef of await db().collection("kurumlar").listDocuments()) {
+    const ozetler = await kurumRef.collection("ozet").get();
+    for (const ozet of ozetler.docs) {
+      if (ozet.data().surum === OZET_SURUMU) continue;
+      try {
+        if (await ozetYenile(ozet.id)) guncellenen++;
+      } catch (hata) {
+        console.error("ozet-guncellenemedi", kurumRef.id, ozet.id, hata?.message);
+      }
+    }
+  }
+  return guncellenen;
+};
+
+module.exports = { ozetHesapla, ozetYenile, ozetleriGuncelle, gunAnahtari, konuBul, grupOzetRef, OZET_SURUMU };

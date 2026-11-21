@@ -169,8 +169,9 @@ export default function KurumKarti({ uid, tema }) {
             {kurumAdi || "Bağlı dershane"}
           </Text>
           <Text style={[styles.aciklama, { color: tema.ikincilMetin }]}>
-            Dershane müdürün sorularını ve çözümlerini, öğretmenlerin ise soru
-            sayın ve ders dağılımın gibi istatistiklerini görebilir. Müdürün
+            Dershane müdürün, katıldıktan sonra gönderdiğin soruları ve
+            çözümleri; öğretmenlerin ise bu dönemdeki soru sayın ve ders
+            dağılımın gibi istatistiklerini görebilir. Müdürün
             sorularına her erişimi kaydedilir ve kayıtlar 12 ay saklanır.
             İstediğin zaman ayrılabilirsin.
           </Text>
@@ -390,9 +391,10 @@ export default function KurumKarti({ uid, tema }) {
               <Text
                 style={[styles.bilgilendirme, { color: tema.ikincilMetin }]}
               >
-                Dershaneye bağlanırsan:{"\n"}• Dershane müdürü gönderdiğin
-                soruları ve çözümleri görebilir.{"\n"}• Öğretmenler soru sayın,
-                ders dağılımın gibi istatistikleri görebilir.{"\n"}• Dershanenin
+                Dershaneye bağlanırsan:{"\n"}• Dershane müdürü, katıldıktan
+                sonra gönderdiğin soruları ve çözümleri görebilir; daha önceki
+                soruların görünmez.{"\n"}• Öğretmenler katıldıktan sonraki soru
+                sayın, ders dağılımın gibi istatistikleri görebilir.{"\n"}• Dershanenin
                 sağladığı premium haklarından yararlanırsın.{"\n"}• İstediğin
                 zaman Profil ekranından ayrılabilirsin; ayrılınca erişim
                 kapanır.{"\n"}• 18 yaşından küçüksen velinin bilgisi dahilinde

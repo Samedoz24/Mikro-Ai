@@ -65,6 +65,33 @@ const erisimiKaydet = async (yonetici, kurumRef, ogrenciUid, tur, simdi = Date.n
   });
 };
 
+// ---------------------------------------------------------------------------
+// Üyelik başlangıcı: müdür yalnızca öğrencinin dershaneye KATILDIKTAN SONRA gönderdiği soruları görür.
+// Sorunun zamanı sunucunun yazdığı "tarih" alanından gelir; okunamıyorsa soru gösterilmez (gizlilik tarafı).
+// ---------------------------------------------------------------------------
+const zamanMs = (deger) => {
+  if (deger && typeof deger.toMillis === "function") return deger.toMillis();
+  if (typeof deger === "string" || deger instanceof Date) {
+    const ms = new Date(deger).getTime();
+    return Number.isFinite(ms) ? ms : null;
+  }
+  return null;
+};
+
+// Öğrencinin bu kurumdaki üyelik başlangıcı (ms). Üye değilse not-found; katılma zamanı yoksa
+// hiçbir soru gösterilmez (sonsuz).
+const uyelikBaslangici = async (kurumRef, ogrenciUid) => {
+  const uye = await kurumRef.collection("uyeler").doc(ogrenciUid).get();
+  if (!uye.exists) throw new HttpsError("not-found", "ogrenci-yok");
+  const ms = zamanMs(uye.data().katilma);
+  return ms === null ? Number.POSITIVE_INFINITY : ms;
+};
+
+const uyelikSonrasiMi = (veri, baslangicMs) => {
+  const ms = zamanMs(veri?.tarih);
+  return ms !== null && ms >= baslangicMs;
+};
+
 const sahiplikKontrol = async (soruId) => {
   const snap = await db().doc(`sorular/${soruId}`).get();
   const veri = snap.data();
@@ -196,14 +223,24 @@ const ilkDosya = async (yollar) => {
 const ogrenciSorulariGetir = async (uid, token, veri) => {
   const ogrenciUid = uidKontrol(veri?.uid);
   const { kurumRef, eposta } = await mudurDogrula(uid, token);
+  const baslangic = await uyelikBaslangici(kurumRef, ogrenciUid);
   await erisimiKaydet({ uid, eposta }, kurumRef, ogrenciUid, "soru-listesi");
 
-  const snap = await db()
-    .collection("sorular")
-    .where("kullaniciUid", "==", ogrenciUid)
-    .limit(EN_FAZLA_SORU)
-    .get();
-  return { sorular: snap.docs.map((d) => sorulariHazirla(d.id, d.data())) };
+  // Belge kimliğine göre sayfalı tarama (ek dizin gerektirmez); yalnızca üyelik sonrası sorular alınır
+  const sorular = [];
+  let imlec = null;
+  while (sorular.length < EN_FAZLA_SORU) {
+    let sorgu = db().collection("sorular").where("kullaniciUid", "==", ogrenciUid).orderBy("__name__").limit(TOPLU_BOYUT);
+    if (imlec) sorgu = sorgu.startAfter(imlec);
+    const sayfa = await sorgu.get();
+    if (sayfa.empty) break;
+    imlec = sayfa.docs[sayfa.docs.length - 1];
+    for (const d of sayfa.docs) {
+      if (uyelikSonrasiMi(d.data(), baslangic)) sorular.push(sorulariHazirla(d.id, d.data()));
+    }
+    if (sayfa.size < TOPLU_BOYUT) break;
+  }
+  return { sorular: sorular.slice(0, EN_FAZLA_SORU) };
 };
 
 // Bir sorunun çözümü ve fotoğrafı. Girdi: { soruId }
@@ -211,6 +248,10 @@ const soruCozumuGetir = async (uid, token, veri) => {
   const soruId = soruKimligiKontrol(veri?.soruId);
   const { kurumRef, eposta } = await mudurDogrula(uid, token);
   const soru = await sahiplikKontrol(soruId);
+  // Üyelikten önceki soru: reddedilir, erişim kaydı da yazılmaz (veri verilmedi)
+  if (!uyelikSonrasiMi(soru.veri, await uyelikBaslangici(kurumRef, soru.ogrenciUid))) {
+    throw new HttpsError("permission-denied", "uyelik-oncesi");
+  }
   await erisimiKaydet({ uid, eposta }, kurumRef, soru.ogrenciUid, "soru-detay");
 
   const belge = soru.veri;
@@ -274,6 +315,9 @@ const soruFotografiGetir = async (uid, token, veri) => {
   const soruId = soruKimligiKontrol(veri?.soruId);
   const { kurumRef, eposta } = await mudurDogrula(uid, token);
   const soru = await sahiplikKontrol(soruId);
+  if (!uyelikSonrasiMi(soru.veri, await uyelikBaslangici(kurumRef, soru.ogrenciUid))) {
+    throw new HttpsError("permission-denied", "uyelik-oncesi");
+  }
   await erisimiKaydet({ uid, eposta }, kurumRef, soru.ogrenciUid, "soru-listesi");
   const yol = fotoYolu(soru.veri.fotoLink, soru.ogrenciUid);
   if (!yol) return { fotograf: null };
@@ -366,4 +410,6 @@ module.exports = {
   silinenOgrencileriAnonimlestir,
   erisimiKaydet,
   fotoYolu,
+  uyelikSonrasiMi,
+  zamanMs,
 };

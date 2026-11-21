@@ -146,7 +146,7 @@ const kurumaKatil = async (uid, veri) => {
   });
 
   await db().doc(`kurumDenemeleri/${uid}`).delete().catch(() => {});
-  // Katılmadan önce sorulan sorular da özete yansısın; başarısız olursa soru tetikleyicisi telafi eder
+  // İlk özet oluşturulur (yalnızca katılımdan sonraki sorular sayılır); başarısız olursa soru tetikleyicisi telafi eder
   if (!sonuc.zatenUye) await ozetYenile(uid).catch((hata) => console.error("ozet-yenile", hata));
   return sonuc;
 };

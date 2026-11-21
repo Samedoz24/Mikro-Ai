@@ -132,3 +132,35 @@ export const dersTahminEt = ({ topic, question } = {}) => {
   if (birinci.puan >= 2 && birinci.puan >= ikinci.puan * 1.5) return birinci.ders;
   return null;
 };
+
+// ---------------------------------------------------------------------------
+// Geçmiş Sorular kategori sırası: "Tümü" önce; sonra en çok soru sorulan ders. Eşitlikte son sorusu daha
+// yeni olan önce, o da eşitse DERSLER sırası. Hiç soru olmayan dersler sabit sırada sonda; "Diğer" her zaman
+// en sonda. DERSLER dışındaki ders adları da kendi kategorisiyle gösterilir. Saf fonksiyon (yalnızca sıralar).
+// zamanBul(soru) → ms (sıralama içindir; okunamazsa 0)
+// ---------------------------------------------------------------------------
+export const kategoriSiralamasi = (sorular, zamanBul = () => 0) => {
+  const istatistik = new Map(); // ders -> { adet, son }
+  for (const soru of Array.isArray(sorular) ? sorular : []) {
+    const ders = dersBul(soru);
+    const ms = Number(zamanBul(soru)) || 0;
+    const kayit = istatistik.get(ders) || { adet: 0, son: 0 };
+    kayit.adet += 1;
+    if (ms > kayit.son) kayit.son = ms;
+    istatistik.set(ders, kayit);
+  }
+  const sabitSira = (ders) => {
+    const i = DERSLER.indexOf(ders);
+    return i === -1 ? DERSLER.length : i;
+  };
+  const tumDersler = [...new Set([...DERSLER, ...istatistik.keys()])].filter((d) => d !== "Diğer");
+  tumDersler.sort((a, b) => {
+    const A = istatistik.get(a) || { adet: 0, son: 0 };
+    const B = istatistik.get(b) || { adet: 0, son: 0 };
+    if (B.adet !== A.adet) return B.adet - A.adet;
+    if (B.son !== A.son) return B.son - A.son;
+    if (sabitSira(a) !== sabitSira(b)) return sabitSira(a) - sabitSira(b);
+    return a.localeCompare(b, "tr");
+  });
+  return ["Tümü", ...tumDersler, "Diğer"];
+};

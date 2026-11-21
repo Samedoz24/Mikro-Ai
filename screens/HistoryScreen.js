@@ -56,7 +56,7 @@ import {
   kesinSonuc,
 } from "../utils/cozumYukleyici";
 import { soruBlokHtml, belgeHtml } from "../utils/pdfIcerik";
-import { DERSLER, dersBul } from "../utils/ders";
+import { DERSLER, dersBul, kategoriSiralamasi } from "../utils/ders";
 
 const ekranGenisligi = Dimensions.get("window").width;
 const ekranYuksekligi = Dimensions.get("window").height;
@@ -151,26 +151,11 @@ export default function HistoryScreen() {
     return () => abonelik();
   }, []);
 
+  // Kategoriler: "Tümü", sonra en çok soru sorulan ders (eşitlikte son sorusu daha yeni olan), "Diğer" sonda
   useEffect(() => {
-    if (sorular.length > 0) {
-      const enSonSoru = sorular[0];
-      const enSonDers = dersBul(enSonSoru);
-
-      if (enSonDers && enSonDers !== "Tümü" && enSonDers !== "Diğer") {
-        const yeniSiralama = ["Tümü", enSonDers];
-
-        temelKategoriler.forEach((kategori) => {
-          if (kategori !== enSonDers && !yeniSiralama.includes(kategori)) {
-            yeniSiralama.push(kategori);
-          }
-        });
-        setDinamikKategoriler(yeniSiralama);
-      } else {
-        setDinamikKategoriler(["Tümü", ...temelKategoriler]);
-      }
-    } else {
-      setDinamikKategoriler(["Tümü", ...temelKategoriler]);
-    }
+    const zaman = (soru) =>
+      typeof soru?.tarih?.toMillis === "function" ? soru.tarih.toMillis() : Date.parse(soru?.tarih) || 0;
+    setDinamikKategoriler(kategoriSiralamasi(sorular, zaman));
   }, [sorular]);
 
   const filtrelenmisSorular =

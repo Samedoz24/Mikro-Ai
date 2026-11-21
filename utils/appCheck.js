@@ -9,6 +9,8 @@
 //    her isteğe otomatik ekler. Belge doğrulaması Google tarafından yapılır.
 //  - Burada hiçbir gizli anahtar yoktur; belge kısa ömürlüdür ve otomatik yenilenir.
 
+import { Platform } from "react-native";
+import * as Application from "expo-application";
 import { getApp as yerelUygulama } from "@react-native-firebase/app";
 import {
   initializeAppCheck as yerelAppCheckBaslat,
@@ -30,6 +32,20 @@ const bitisZamani = (belge) => {
   return Date.now() + VARSAYILAN_OMUR_MS;
 };
 
+// YALNIZCA geliştirme sürümünde ve YALNIZCA iOS simülatöründe: Apple App Attest simülatörde çalışmaz;
+// Firebase'in resmi "debug" sağlayıcısına geçilir. Gizli kod koda yazılmaz: simülatördeki Firebase kendi
+// rastgele kodunu üretip simülatörün içinde saklar; geliştirici bu kodu Console'da "debug token" olarak tanıtır.
+// Simülatör tespiti: simülatör Apple bildirim sunucusuna (APNs) kaydolamaz, ortam değeri null döner.
+// Mağaza sürümünde __DEV__ false olduğundan bu kod hiç çalışmaz (derlemede tamamen atılır).
+const simulatordeHataAyiklamaSaglayicisi = async (yerel) => {
+  if (!__DEV__ || Platform.OS !== "ios") return;
+  const apnsOrtami = await Application.getIosPushNotificationServiceEnvironmentAsync();
+  if (apnsOrtami !== null) return; // gerçek cihaz: App Attest kullanılmaya devam eder
+  const hataAyiklama = new ReactNativeFirebaseAppCheckProvider();
+  hataAyiklama.configure({ apple: { provider: "debug" }, android: { provider: "debug" } });
+  await yerel.initializeAppCheck({ provider: hataAyiklama, isTokenAutoRefreshEnabled: true });
+};
+
 let baslatildi = false;
 
 // firebaseConfig.js'te, Firestore/Storage/Functions/Auth kullanılmadan önce bir kez çağrılır
@@ -47,6 +63,12 @@ export const appCheckBaslat = (jsUygulamasi) => {
     provider: saglayici,
     isTokenAutoRefreshEnabled: true,
   });
+
+  if (__DEV__) {
+    simulatordeHataAyiklamaSaglayicisi(yerel).catch((e) =>
+      console.log("Simülatör App Check ayarı yapılamadı:", e?.message)
+    );
+  }
 
   initializeAppCheck(jsUygulamasi, {
     provider: new CustomProvider({

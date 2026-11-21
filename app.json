@@ -95,7 +95,8 @@
         }
       ],
       "expo-sharing",
-      "./withDisableForceDark.js"
+      "./withDisableForceDark.js",
+      "./withPodsDeploymentTarget.js"
     ],
     "extra": {
       "eas": {

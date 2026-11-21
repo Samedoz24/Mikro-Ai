@@ -104,6 +104,42 @@ const SEVIYELER = {
 };
 const SEVIYE_SIRASI = ["kolay", "orta", "zor"];
 
+// Şık öneki: "B) 1", "B. 1", "B - 1", "B: 1" (harften sonra ayraç şart; "e" gibi tek harfli değerler önek sayılmaz)
+const SIK_ONEKI = /^\s*([A-Za-z])\s*[).:\-–]\s*/;
+const karsilastirmaMetni = (metin) =>
+  String(metin ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLocaleLowerCase("tr-TR");
+
+// Şık metni kendi harfiyle başlıyorsa önek atılır ("A) 0" → "0"); başka harfle başlıyorsa dokunulmaz
+const sikOnekiniAt = (harf, metin) => {
+  const eslesme = SIK_ONEKI.exec(metin);
+  if (eslesme && eslesme[1].toUpperCase() === harf) {
+    const kalan = metin.slice(eslesme[0].length).trim();
+    return kalan || metin;
+  }
+  return metin;
+};
+
+// Değer, şıklardan TAM OLARAK birinin metnine eşitse o şıkkın harfi; değilse null
+const metindenHarf = (secenekler, deger) => {
+  const aranan = karsilastirmaMetni(deger);
+  if (!aranan) return null;
+  const eslesenler = Object.entries(secenekler).filter(([, m]) => karsilastirmaMetni(m) === aranan);
+  return eslesenler.length === 1 ? eslesenler[0][0] : null;
+};
+
+// Doğru şıkkın harfi. Sıra: tek büyük harf ("B") → ayraçlı önek ("B) 1") → değerle şık metni eşleşmesi
+// ("1", "e") → cevap alanıyla eşleşme. Belirlenemezse null (tahmin edilmez).
+const dogruSecenegiBul = (secenekler, ham, cevap) => {
+  const harfler = Object.keys(secenekler);
+  if (/^[A-Z]$/.test(ham) && harfler.includes(ham)) return ham;
+  const onek = SIK_ONEKI.exec(ham);
+  if (onek && harfler.includes(onek[1].toUpperCase())) return onek[1].toUpperCase();
+  return metindenHarf(secenekler, ham) || metindenHarf(secenekler, cevap) || null;
+};
+
 // Bir benzer soruyu tek biçime getirir:
 //  { seviye, soru, adimlar[], cevap, secenekler | null, dogruSecenek | null }
 // Yeni biçim şıksızdır (soru + adımlar + cevap), eski biçim A/B/C/D şıklıdır.
@@ -137,19 +173,31 @@ const pratikHazirla = (kaynak, varsayilanSeviye) => {
     );
   }
 
-  const dogruSecenek = secenekler
-    ? metneCevir(kaynak.correct_option ?? kaynak.dogruSecenek).trim()
-    : "";
+  const cevap = metneCevir(kaynak.answer ?? kaynak.cevap ?? kaynak.correct_answer).trim();
+
+  let dogruSecenek = null;
+  if (secenekler) {
+    // Şık metnindeki tekrarlanan harf ("A) 0" → "0"); harf ayrıca dairede gösterilir
+    secenekler = Object.fromEntries(
+      Object.entries(secenekler).map(([harf, metin]) => [harf, sikOnekiniAt(harf, metin)])
+    );
+    dogruSecenek = dogruSecenegiBul(
+      secenekler,
+      metneCevir(kaynak.correct_option ?? kaynak.dogruSecenek).trim(),
+      cevap
+    );
+    // Doğru şık kesin belirlenemezse test gösterilmez (öğrenci her cevabı "yanlış" görmesin);
+    // soru, adımları ve cevabıyla "Çözümü Göster" biçiminde sunulur.
+    if (!dogruSecenek) secenekler = null;
+  }
 
   return {
     seviye,
     soru,
     adimlar: metinDizisi(kaynak.steps ?? kaynak.adimlar ?? kaynak.cardSteps),
-    cevap: metneCevir(
-      kaynak.answer ?? kaynak.cevap ?? kaynak.correct_answer
-    ).trim(),
+    cevap,
     secenekler,
-    dogruSecenek: dogruSecenek || null,
+    dogruSecenek,
   };
 };
 

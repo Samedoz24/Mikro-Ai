@@ -24,9 +24,9 @@ export const OGRENCI_MADDELERI = [
       "Çözümü bir öğrenme yardımcısı olarak kullan; tek ve kesin kaynak olarak kabul etme. Emin olmadığın durumlarda öğretmenine danış.",
   },
   {
-    ikon: "checkmark-circle-outline",
+    ikon: "alert-circle-outline",
     metin:
-      "Sorunun cevabını biliyorsan işaretlemen, çözümün kontrol edilmesine yardımcı olur.",
+      "Cevabı yalnızca doğru olduğundan kesin olarak eminsen işaretle. Yanlış şıkkı işaretlersen yapay zekâ bu bilgiden etkilenip hatalı bir çözüm üretebilir; bu durumun sorumluluğu tamamen sana aittir. Emin değilsen \"Bilinmiyor\"u seç.",
   },
   {
     ikon: "camera-outline",

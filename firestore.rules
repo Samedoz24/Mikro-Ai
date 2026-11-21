@@ -42,11 +42,14 @@ service cloud.firestore {
         ogrenciUid in get(/databases/$(database)/documents/kullanicilar/$(request.auth.uid)).data.get('bagliOgrenciIdleri', []);
     }
 
-    // Soru belgesinin sahibi: uid ya da e-posta eşleşmesi
+    // Soru belgesinin sahibi: uid eşleşmesi ya da (eski sistem) DOĞRULANMIŞ e-posta eşleşmesi.
+    // Doğrulama şartı: başkasının e-postasıyla açılan (doğrulanmamış) hesap o kişinin eski sorularına
+    // ulaşamaz. Eski sorulara sahiplerinin kimliği sunucuda eklendi (functions/goc.js).
     function soruSahibi(soru) {
       return girisli() &&
         (soru.kullaniciUid == request.auth.uid ||
-         soru.kullaniciEposta == request.auth.token.email);
+         (request.auth.token.email_verified == true
+          && soru.kullaniciEposta == request.auth.token.email));
     }
 
     // Kurum etkin mi? Askıya alınan ya da kapatılan kurumun yöneticileri, claim'leri belirteçte kalsa bile

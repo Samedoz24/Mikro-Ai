@@ -264,10 +264,7 @@ function MainApp() {
   useEffect(() => {
     if (!kullanici || kullaniciRolu !== "ogrenci") return;
 
-    const q = query(
-      collection(db, "sorular"),
-      where("kullaniciEposta", "==", kullanici.email)
-    );
+    const q = query(collection(db, "sorular"), where("kullaniciUid", "==", kullanici.uid));
 
     const abonelik = onSnapshot(q, (snapshot) => {
       let okunmamisAdet = 0;

@@ -303,12 +303,9 @@ export default function ProfileScreen() {
   }, [user]);
 
   useEffect(() => {
-    if (!user?.email) return;
+    if (!user?.uid) return;
 
-    const q = query(
-      collection(db, "sorular"),
-      where("kullaniciEposta", "==", user.email)
-    );
+    const q = query(collection(db, "sorular"), where("kullaniciUid", "==", user.uid));
 
     const abonelik = onSnapshot(
       q,

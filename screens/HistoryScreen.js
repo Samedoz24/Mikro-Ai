@@ -124,10 +124,10 @@ export default function HistoryScreen() {
   const [dersSecimiAcik, setDersSecimiAcik] = useState(false);
 
   useEffect(() => {
-    const q = query(
-      collection(db, "sorular"),
-      where("kullaniciEposta", "==", auth.currentUser?.email || "")
-    );
+    // Sorular sahibinin kimliğiyle sorgulanır (eski sorulara kimlik sunucuda eklendi: functions/goc.js)
+    const uid = auth.currentUser?.uid;
+    if (!uid) return undefined;
+    const q = query(collection(db, "sorular"), where("kullaniciUid", "==", uid));
 
     const abonelik = onSnapshot(
       q,

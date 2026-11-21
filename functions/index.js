@@ -11,6 +11,7 @@ const veli = require("./veli");
 const kota = require("./kota");
 const veliBaglanti = require("./veliBaglanti");
 const hesapTemizlik = require("./hesapTemizlik");
+const goc = require("./goc");
 
 initializeApp();
 
@@ -206,6 +207,9 @@ exports.lisansKontrol = onSchedule(
   async () => {
     const kapatilan = await kurum.lisansKontrol();
     console.log("Kapatılan kurumlar:", kapatilan.join(", ") || "yok");
+    // Tek seferlik: yalnızca e-postayla sahiplenilmiş eski sorulara sahibinin kimliği yazılır (goc.js)
+    const gocSonucu = await goc.eskiSorularaKimlikEkle();
+    console.log("Eski sorulara kimlik:", JSON.stringify(gocSonucu));
     // Eski sürümle hesaplanmış özetler (katılım öncesi soruları da sayan) bir kez yeniden hesaplanır
     const guncellenen = await ozet.ozetleriGuncelle();
     console.log("Güncellenen özet:", guncellenen);

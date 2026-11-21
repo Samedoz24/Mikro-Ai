@@ -147,12 +147,13 @@ export const kullaniciVerileriniSil = async (user) => {
     console.log("Kurumdan ayrılma (hesap silme):", e?.code, e?.message);
   }
 
-  // 1) Sorular: belgeler + her sorunun fotoğrafı. Hem kullanıcı kimliğiyle (yeni sistem, her soruda var)
-  //    hem e-postayla (eski sistem) aranır; e-posta alanı boş ya da farklı olan sorular da kalmaz.
+  // 1) Sorular: belgeler + her sorunun fotoğrafı. Kimlikle aranır (eski sorulara kimlik sunucuda eklendi);
+  //    e-postası DOĞRULANMIŞ hesaplarda e-postayla da aranır (kurallar e-posta eşleşmesini yalnızca
+  //    doğrulanmış e-postaya açar; doğrulanmamışta sorgu reddedilip silmeyi durdururdu).
   const sorularAnlik = [
     getDocs(query(collection(db, "sorular"), where("kullaniciUid", "==", uid))),
   ];
-  if (eposta) {
+  if (eposta && user.emailVerified) {
     sorularAnlik.push(
       getDocs(query(collection(db, "sorular"), where("kullaniciEposta", "==", eposta)))
     );

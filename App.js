@@ -49,7 +49,12 @@ import { yoneticiOl, kurumHataMesaji } from "./utils/kurumIstemci";
 import { YAS_ONAYI_SURUMU } from "./utils/yasalMetinler";
 import { PremiumProvider } from "./PremiumContext";
 import { dersiTamamla, digerDersiDuzelt } from "./utils/dersTamamla";
-import { dersBul, dersBilgisiVar, yeniCozumMu, digerYerineDers } from "./utils/ders";
+import {
+  dersBul,
+  dersBilgisiVar,
+  yeniCozumMu,
+  digerYerineDers,
+} from "./utils/ders";
 import ErrorBoundary from "./ErrorBoundary";
 import { adSoyadTemizle } from "./utils/profilDogrulama";
 
@@ -264,7 +269,10 @@ function MainApp() {
   useEffect(() => {
     if (!kullanici || kullaniciRolu !== "ogrenci") return;
 
-    const q = query(collection(db, "sorular"), where("kullaniciUid", "==", kullanici.uid));
+    const q = query(
+      collection(db, "sorular"),
+      where("kullaniciUid", "==", kullanici.uid)
+    );
 
     const abonelik = onSnapshot(q, (snapshot) => {
       let okunmamisAdet = 0;
@@ -277,7 +285,10 @@ function MainApp() {
       snapshot.docChanges().forEach((change) => {
         if (change.type === "modified") {
           const veri = change.doc.data();
-          if (yeniCozumMu(veri) && !bildirilenSorular.current.has(change.doc.id)) {
+          if (
+            yeniCozumMu(veri) &&
+            !bildirilenSorular.current.has(change.doc.id)
+          ) {
             bildirilenSorular.current.add(change.doc.id);
             const dersAdi = dersBilgisiVar(veri) ? dersBul(veri) : "";
             sendQuestionSolvedNotification(dersAdi);
@@ -345,88 +356,88 @@ function MainApp() {
   return (
     <PremiumProvider premiumMu={premiumMu} rol={kullaniciRolu}>
       <DuyuruContext.Provider value={duyuruKutusu}>
-      <Tab.Navigator
-        // Sayfalar anında değişir; yalnızca alt menüdeki gösterge kayar (AltMenu)
-        tabBar={(props) => (
-          <AltMenu {...props} tema={tema} rozetStili={ROZET_STILI} />
-        )}
-        screenOptions={{
-          animation: "none",
-          headerShown: false,
-          tabBarHideOnKeyboard: true,
-        }}
-      >
-        {kullaniciRolu === "ogrenci" ? (
-          <>
-            <Tab.Screen
-              name="Ana Sayfa"
-              component={HomeScreen}
-              options={{ title: "Kamera" }}
-            />
-            <Tab.Screen
-              name="Hata Defteri"
-              component={HistoryScreen}
-              options={{
-                title: "Geçmiş Sorular",
-                tabBarBadge: rozetDegeri(okunmamisSayisi),
-                tabBarAccessibilityLabel: sekmeEtiketi(
-                  "Geçmiş Sorular",
-                  okunmamisSayisi
-                ),
-              }}
-            />
-            <Tab.Screen
-              name="Profil"
-              component={ProfileScreen}
-              options={{
-                title: "Hesabım",
-                tabBarBadge: rozetDegeri(duyuruKutusu.okunmamis),
-                tabBarAccessibilityLabel: sekmeEtiketi(
-                  "Hesabım",
-                  duyuruKutusu.okunmamis,
-                  "yeni duyuru"
-                ),
-              }}
-            />
-          </>
-        ) : kullaniciRolu === "yonetici" ? (
-          <>
-            <Tab.Screen
-              name="Genel Bakış"
-              component={GenelBakisEkrani}
-              options={{ title: "Genel Bakış" }}
-            />
-            <Tab.Screen
-              name="Öğrenciler"
-              component={OgrenciListesiEkrani}
-              options={{ title: "Öğrenciler" }}
-            />
-            <Tab.Screen
-              name="Yönetim"
-              component={YoneticiAnaEkran}
-              options={{ title: "Dershane" }}
-            />
-            <Tab.Screen
-              name="Profil"
-              component={ProfileScreen}
-              options={{ title: "Hesabım" }}
-            />
-          </>
-        ) : (
-          <>
-            <Tab.Screen
-              name="Veli Paneli"
-              component={ParentDashboard}
-              options={{ title: "Yönetim Paneli" }}
-            />
-            <Tab.Screen
-              name="Profil"
-              component={ProfileScreen}
-              options={{ title: "Hesabım" }}
-            />
-          </>
-        )}
-      </Tab.Navigator>
+        <Tab.Navigator
+          // Sayfalar anında değişir; yalnızca alt menüdeki gösterge kayar (AltMenu)
+          tabBar={(props) => (
+            <AltMenu {...props} tema={tema} rozetStili={ROZET_STILI} />
+          )}
+          screenOptions={{
+            animation: "none",
+            headerShown: false,
+            tabBarHideOnKeyboard: true,
+          }}
+        >
+          {kullaniciRolu === "ogrenci" ? (
+            <>
+              <Tab.Screen
+                name="Ana Sayfa"
+                component={HomeScreen}
+                options={{ title: "Kamera" }}
+              />
+              <Tab.Screen
+                name="Hata Defteri"
+                component={HistoryScreen}
+                options={{
+                  title: "Geçmiş Sorular",
+                  tabBarBadge: rozetDegeri(okunmamisSayisi),
+                  tabBarAccessibilityLabel: sekmeEtiketi(
+                    "Geçmiş Sorular",
+                    okunmamisSayisi
+                  ),
+                }}
+              />
+              <Tab.Screen
+                name="Profil"
+                component={ProfileScreen}
+                options={{
+                  title: "Hesabım",
+                  tabBarBadge: rozetDegeri(duyuruKutusu.okunmamis),
+                  tabBarAccessibilityLabel: sekmeEtiketi(
+                    "Hesabım",
+                    duyuruKutusu.okunmamis,
+                    "yeni duyuru"
+                  ),
+                }}
+              />
+            </>
+          ) : kullaniciRolu === "yonetici" ? (
+            <>
+              <Tab.Screen
+                name="Genel Bakış"
+                component={GenelBakisEkrani}
+                options={{ title: "Genel Bakış" }}
+              />
+              <Tab.Screen
+                name="Öğrenciler"
+                component={OgrenciListesiEkrani}
+                options={{ title: "Öğrenciler" }}
+              />
+              <Tab.Screen
+                name="Yönetim"
+                component={YoneticiAnaEkran}
+                options={{ title: "Dershane" }}
+              />
+              <Tab.Screen
+                name="Profil"
+                component={ProfileScreen}
+                options={{ title: "Hesabım" }}
+              />
+            </>
+          ) : (
+            <>
+              <Tab.Screen
+                name="Veli Paneli"
+                component={ParentDashboard}
+                options={{ title: "Yönetim Paneli" }}
+              />
+              <Tab.Screen
+                name="Profil"
+                component={ProfileScreen}
+                options={{ title: "Hesabım" }}
+              />
+            </>
+          )}
+        </Tab.Navigator>
       </DuyuruContext.Provider>
     </PremiumProvider>
   );

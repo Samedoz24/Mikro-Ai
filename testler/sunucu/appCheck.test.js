@@ -71,8 +71,17 @@ const cagir = (fn, basliklar = {}) =>
   const callable = Object.entries(fonksiyonlar).filter(([, f]) => f?.__endpoint?.callableTrigger);
   const digerleri = Object.entries(fonksiyonlar).filter(([, f]) => !f?.__endpoint?.callableTrigger);
 
-  esit("callable fonksiyon sayısı", callable.length, 32);
-  esit("callable olmayan (zamanlanmış/tetikleyici) sayısı", digerleri.length, 5);
+  esit("callable fonksiyon sayısı", callable.length, 33);
+  // Callable olmayanlar ADIYLA sabit: zamanlanmış görevler, veritabanı tetikleyicileri ve TEK bir HTTP ucu
+  // (abonelikBildirimi: RevenueCat sunucusu çağırır, App Check taşıyamaz; imza + gizli başlıkla korunur,
+  // testler/sunucu/abonelik.test.js). Yeni bir korumasız uç eklenirse bu kontrol hata verir.
+  esit(
+    "callable olmayan fonksiyonlar (adıyla)",
+    digerleri.map(([ad]) => ad).sort(),
+    ["abonelikBildirimi", "erisimKayitlariniTemizle", "isimOzetiniGuncelle", "lisansKontrol", "soruOzetiniGuncelle", "veliBaglantilariniTemizle"]
+  );
+  const httpUclari = digerleri.filter(([, f]) => f?.__endpoint?.httpsTrigger).map(([ad]) => ad);
+  esit("App Check'siz HTTP ucu yalnızca abonelikBildirimi", httpUclari, ["abonelikBildirimi"]);
 
   for (const [ad, fn] of callable) {
     // 1) Belge yok → reddedilir

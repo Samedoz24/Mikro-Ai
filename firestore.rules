@@ -280,5 +280,11 @@ service cloud.firestore {
     match /ayarlar/{ayarId} {
       allow read, write: if false;
     }
+
+    // Mağaza aboneliği eşitleme kaydı (son sorgu zamanı, hız sınırı): yalnızca sunucu. İstemci yazabilseydi
+    // sorgu zamanını ileri alıp abonelik bitişinin/iadesinin kaydedilmesini engelleyebilirdi.
+    match /abonelikEsitleme/{uid} {
+      allow read, write: if false;
+    }
   }
 }

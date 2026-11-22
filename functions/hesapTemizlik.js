@@ -54,7 +54,9 @@ const dosyalariSil = async (uid) => {
 };
 
 // onceki: silinmeden önceki profil verisi (yalnızca kurumId ve rol okunur)
-const silinenHesabiTemizle = async (uid, onceki) => {
+// revenueCatSil: (uid) => Promise — mağaza müşteri kaydını siler (KVKK). Hata verirse tetikleyici yeniden dener;
+// önceki adımlar tekrar çalıştırılabilir olduğundan sorun olmaz.
+const silinenHesabiTemizle = async (uid, onceki, { revenueCatSil } = {}) => {
   if (typeof uid !== "string" || !UID_BICIMI.test(uid)) return null;
 
   const sonuc = { veli: 0, kod: 0, kurum: false, soru: 0 };
@@ -69,6 +71,8 @@ const silinenHesabiTemizle = async (uid, onceki) => {
 
   sonuc.soru = await sorulariSil(uid);
   await dosyalariSil(uid);
+  await db().doc(`abonelikEsitleme/${uid}`).delete();
+  if (typeof revenueCatSil === "function") sonuc.revenueCat = await revenueCatSil(uid);
   return sonuc;
 };
 

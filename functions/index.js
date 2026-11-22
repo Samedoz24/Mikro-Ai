@@ -1,5 +1,6 @@
 const { initializeApp } = require("firebase-admin/app");
-const { onCall } = require("firebase-functions/v2/https");
+const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
+const { defineSecret, defineString } = require("firebase-functions/params");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onDocumentWritten, onDocumentDeleted } = require("firebase-functions/v2/firestore");
 const kurum = require("./kurum");
@@ -13,6 +14,7 @@ const veliBaglanti = require("./veliBaglanti");
 const hesapTemizlik = require("./hesapTemizlik");
 const goc = require("./goc");
 const temizlik = require("./temizlik");
+const abonelik = require("./abonelik");
 
 initializeApp();
 
@@ -20,6 +22,19 @@ initializeApp();
 // Belgesiz ya da geçersiz belgeli istekler fonksiyon koduna ulaşmadan reddedilir (kurcalanmış programlar, botlar).
 // Bu ayar yalnızca callable fonksiyonları etkiler; zamanlanmış görevler ve veritabanı tetikleyicileri etkilenmez.
 const ORTAK = { region: "europe-west1", maxInstances: 10, enforceAppCheck: true };
+
+// RevenueCat (mağaza aboneliği). Anahtarlar Secret Manager'da; kodda/git'te yoktur. Değerleri hesap sahibi
+// "firebase functions:secrets:set <AD>" ile kendisi girer. Okuma anahtarı yalnızca müşteri okuma, silme anahtarı
+// yalnızca müşteri silme yetkisiyle oluşturulur (en az yetki). Proje kimliği gizli değildir (.env dosyasında).
+const RC_OKUMA_ANAHTARI = defineSecret("RC_OKUMA_ANAHTARI");
+const RC_SILME_ANAHTARI = defineSecret("RC_SILME_ANAHTARI");
+const RC_BILDIRIM_YETKI = defineSecret("RC_BILDIRIM_YETKI");
+const RC_BILDIRIM_IMZA = defineSecret("RC_BILDIRIM_IMZA");
+const RC_PROJE_KIMLIGI = defineString("RC_PROJE_KIMLIGI");
+
+const revenueCatOku = (uid) =>
+  abonelik.musteriGetir(uid, { projeId: RC_PROJE_KIMLIGI.value(), anahtar: RC_OKUMA_ANAHTARI.value() });
+const revenueCatEsitle = (uid) => abonelik.abonelikEsitle(uid, { getir: revenueCatOku });
 
 // Gece görevleri: Cloud Run bazen soğuk başlatmada örnek bulamayıp isteği reddeder ("aborted after waiting too long
 // for an available instance"). Görev kodumuza hiç ulaşmadan başarısız olur; bu yüzden hata alırsa 5 kez denenir.
@@ -249,9 +264,52 @@ exports.isimOzetiniGuncelle = onDocumentWritten(
 // Uygulamanın temizliği yarıda kalsa bile hiçbir şey ortada kalmaz. Ayrıntı ve güvenlik notu: hesapTemizlik.js
 // Tekrar çalıştırılabilir; geçici hata olursa Firebase yeniden dener. (Ad, daha önce yayınlanan fonksiyonla aynı kalır.)
 exports.veliBaglantilariniTemizle = onDocumentDeleted(
-  { document: "kullanicilar/{uid}", region: "europe-west1", maxInstances: 5, retry: true, timeoutSeconds: 300 },
+  {
+    document: "kullanicilar/{uid}",
+    region: "europe-west1",
+    maxInstances: 5,
+    retry: true,
+    timeoutSeconds: 300,
+    secrets: [RC_SILME_ANAHTARI],
+  },
   async (event) => {
-    const sonuc = await hesapTemizlik.silinenHesabiTemizle(event.params.uid, event.data?.data());
+    const sonuc = await hesapTemizlik.silinenHesabiTemizle(event.params.uid, event.data?.data(), {
+      revenueCatSil: (uid) =>
+        abonelik.musteriSil(uid, { projeId: RC_PROJE_KIMLIGI.value(), anahtar: RC_SILME_ANAHTARI.value() }),
+    });
     console.log("Silinen hesap temizlendi:", JSON.stringify(sonuc));
   }
 );
+
+// ---------------------------------------------------------------- mağaza aboneliği (RevenueCat)
+
+// RevenueCat bildirimi. Uygulamadan değil RevenueCat sunucusundan gelir: App Check uygulanamaz; bunun yerine
+// Authorization başlığı + HMAC imza (Secret Manager) doğrulanır. İçeriğe güvenilmez, durum REST API'den okunur.
+exports.abonelikBildirimi = onRequest(
+  {
+    region: "europe-west1",
+    maxInstances: 5,
+    timeoutSeconds: 60,
+    secrets: [RC_OKUMA_ANAHTARI, RC_BILDIRIM_YETKI, RC_BILDIRIM_IMZA],
+  },
+  (req, res) =>
+    abonelik.bildirimIsle(req, res, {
+      yetkiGizli: RC_BILDIRIM_YETKI.value(),
+      imzaGizli: RC_BILDIRIM_IMZA.value(),
+      esitle: revenueCatEsitle,
+    })
+);
+
+// Uygulama satın alma / geri yükleme sonrası çağırır: YALNIZCA çağıranın kendi aboneliği eşitlenir
+// (istemciden kimlik alınmaz). App Check + giriş zorunlu; kullanıcı başına 10 saniyede bir.
+exports.abonelikYenile = onCall({ ...ORTAK, secrets: [RC_OKUMA_ANAHTARI] }, async (request) => {
+  const uid = kurum.girisliUid(request);
+  if (!(await abonelik.yenilemeHakkiKullan(uid))) throw new HttpsError("resource-exhausted", "cok-sik");
+  try {
+    const sonuc = await revenueCatEsitle(uid);
+    return { premium: sonuc.premium === true, abonelik: sonuc.abonelik === true };
+  } catch (hata) {
+    console.error("abonelikYenile:", hata?.message);
+    throw new HttpsError("unavailable", "abonelik-dogrulanamadi");
+  }
+});

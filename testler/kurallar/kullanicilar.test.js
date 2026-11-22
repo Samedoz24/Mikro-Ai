@@ -208,7 +208,7 @@ const dene = async (ad, fn) => {
     assertSucceeds(updateDoc(doc(gercekVeli, "kullanicilar/gercekVeli"), { whatsappNo: "5551112233" })));
 
   // ---------------------------------------------------------------- istemciye kapalı koleksiyonlar
-  for (const yol of ["kotaSayaclari/h_ali", "ayarlar/kota", "cihazHaklari/x", "platformYoneticileri/a@b.com"]) {
+  for (const yol of ["kotaSayaclari/h_ali", "ayarlar/kota", "cihazHaklari/x", "platformYoneticileri/a@b.com", "abonelikEsitleme/ali"]) {
     await dene(`${yol} okunamaz`, () => assertFails(getDoc(doc(ali, yol))));
     await dene(`${yol} yazılamaz`, () => assertFails(setDoc(doc(ali, yol), { sayi: 0 })));
   }

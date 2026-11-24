@@ -4,7 +4,7 @@
 // Silme sürerken pencere kapatılamaz ve düğmeler kilitlidir.
 
 import React, { useRef } from "react";
-import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../ThemeContext";
 import AltPencere from "./AltPencere";
@@ -69,6 +69,16 @@ export default function HesapSilPenceresi({
           </View>
         ))}
       </View>
+
+      {Platform.OS === "ios" && (
+        <View style={[stiller.abonelikUyari, { backgroundColor: tema.kutuArkaplan, borderColor: tema.kutuCerceve }]}>
+          <Ionicons name="card-outline" size={18} color={tema.metin} style={{ marginRight: 10, marginTop: 1 }} />
+          <Text style={[stiller.satirYazi, { color: tema.metin }]}>
+            Premium aboneliğin varsa hesabını silmek aboneliği <Text style={{ fontWeight: "700" }}>iptal etmez</Text>.
+            Ücretlendirilmemek için önce iPhone'da Ayarlar → Apple Hesabı → Abonelikler bölümünden iptal et.
+          </Text>
+        </View>
+      )}
 
       <Text style={[stiller.dogrulama, { color: tema.ikincilMetin }]}>
         {DOGRULAMA_METNI[yontem] || DOGRULAMA_METNI.password}
@@ -152,6 +162,7 @@ const stiller = StyleSheet.create({
   liste: { borderWidth: 1, borderRadius: 14, paddingVertical: 6, paddingHorizontal: 14 },
   satir: { flexDirection: "row", alignItems: "center", paddingVertical: 8 },
   satirYazi: { flex: 1, fontSize: 14, lineHeight: 19 },
+  abonelikUyari: { flexDirection: "row", alignItems: "flex-start", borderWidth: 1, borderRadius: 14, padding: 12, marginTop: 12 },
   dogrulama: { fontSize: 13, textAlign: "center", lineHeight: 19, marginTop: 14, marginBottom: 12 },
   kutu: { borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 14, height: 50, fontSize: 16, marginBottom: 12 },
   onayBaslik: { fontSize: 14, fontWeight: "600", textAlign: "center", marginBottom: 8 },

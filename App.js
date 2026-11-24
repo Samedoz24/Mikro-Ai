@@ -48,6 +48,7 @@ import { rozetDegeri, sekmeEtiketi } from "./utils/sekmeAyarlari";
 import { yoneticiOl, kurumHataMesaji } from "./utils/kurumIstemci";
 import { YAS_ONAYI_SURUMU } from "./utils/yasalMetinler";
 import { PremiumProvider } from "./PremiumContext";
+import { magazaKullanicisiniAyarla, magazaOturumunuKapat } from "./utils/magaza";
 import { dersiTamamla, digerDersiDuzelt } from "./utils/dersTamamla";
 import {
   dersBul,
@@ -229,6 +230,19 @@ function MainApp() {
 
     return () => abonelik();
   }, []);
+
+  // Mağaza (RevenueCat) oturumu: yalnızca yaş/şart onayını vermiş öğrenci için, kimlik = Firebase uid.
+  // Oturum kapanınca (çıkış, hesap silme ya da oturumun düşmesi) mağaza oturumu da kapatılır.
+  useEffect(() => {
+    if (!kullanici) {
+      magazaOturumunuKapat();
+      return;
+    }
+    if (onayGerekli || kullaniciRolu !== "ogrenci") return;
+    magazaKullanicisiniAyarla(kullanici.uid).catch((e) =>
+      console.log("Mağaza oturumu açılamadı:", e?.code)
+    );
+  }, [kullanici, onayGerekli, kullaniciRolu]);
 
   // Premium durumu canlı izlenir: satın alma sonrası sunucu güncelleyince arayüz yenilenir
   useEffect(() => {

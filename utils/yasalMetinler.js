@@ -154,6 +154,7 @@ export const KULLANIM_KOSULLARI_ICERIK = `
 
   <h2>💎 Abonelik Şartları</h2>
   <p>Abonelikler ve ödeme işlemleri doğrudan App Store veya Play Store üzerinden yönetilir. İptal ve iade süreçleri ilgili mağaza politikalarına tabidir.</p>
+  <p>Satın alma ve aboneliğin doğrulanması için abonelik ve satın alma bilgileriniz, hesabınızla eşleşen bir kullanıcı kimlik numarasıyla birlikte abonelik altyapısı sağlayıcımız RevenueCat'e (ABD) iletilir. Adınız, e-posta adresiniz gibi bilgiler bu sağlayıcıyla paylaşılmaz. Ödeme bilgileriniz (kart vb.) yalnızca Apple'dadır; bize ya da RevenueCat'e iletilmez. Hesabınızı sildiğinizde RevenueCat'teki kaydınız da silinir; ancak App Store aboneliğinizi Apple hesap ayarlarınızdan ayrıca iptal etmeniz gerekir.</p>
 `;
 
 // Dershane yöneticileri (müdür ve öğretmen) için. Hukuki incelemeden geçirilmeden yayına alınmamalıdır.

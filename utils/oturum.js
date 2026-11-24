@@ -10,6 +10,7 @@ import { signOut } from "firebase/auth";
 import { auth } from "../firebaseConfig";
 import { cozumOnbelleginiTemizle } from "./cozumYukleyici";
 import { cancelAllNotifications } from "./notificationManager";
+import { magazaOturumunuKapat } from "./magaza";
 
 // Kullanıcıya ait sabit anahtarlar
 const KULLANICI_ANAHTARLARI = [
@@ -61,5 +62,11 @@ export const oturumuKapat = async () => {
     console.log("Yerel veri temizlenemedi:", e?.message);
   }
   await googleOturumunuKapat();
+  // Mağaza (RevenueCat) kimliği bırakılır: sonraki kişi önceki kişinin kimliğiyle satın alma yapamaz
+  try {
+    await magazaOturumunuKapat();
+  } catch (e) {
+    console.log("Mağaza oturumu kapatılamadı:", e?.message);
+  }
   await signOut(auth);
 };

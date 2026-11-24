@@ -23,6 +23,7 @@ import { auth, db, storage } from "../firebaseConfig";
 import { appleKimligiAl, APPLE_IPTAL } from "./appleGiris";
 import { yerelKullaniciVerisiniTemizle, googleOturumunuKapat } from "./oturum";
 import { kurumdanAyril } from "./kurumIstemci";
+import { magazaOturumunuKapat } from "./magaza";
 
 // Kullanıcının işlem iptal etmesi (Google penceresini kapatma) gibi hata olmayan çıkışlar için
 export const SILME_IPTAL = "hesap-silme/iptal";
@@ -225,5 +226,12 @@ export const hesabiTamamenSil = async (user, sifre) => {
   }
 
   await googleOturumunuKapat();
+  // Mağaza (RevenueCat) kimliği bırakılır. Sunucudaki RevenueCat kaydını, kullanıcı belgesi silinince
+  // sunucu siler (veliBaglantilariniTemizle). Apple aboneliğini yalnızca kullanıcı iptal edebilir.
+  try {
+    await magazaOturumunuKapat();
+  } catch (e) {
+    console.log("Mağaza oturumu kapatılamadı:", e?.message);
+  }
   await yerelVeriyiTemizle();
 };

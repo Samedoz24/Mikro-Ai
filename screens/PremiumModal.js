@@ -24,6 +24,7 @@ import {
   PLAN_ADLARI,
   SATIN_ALMA_IPTAL,
   SATIN_ALMA_HAZIR_DEGIL,
+  SATIN_ALMA_BEKLEMEDE,
 } from "../utils/premiumPlanlari";
 import {
   KULLANIM_KOSULLARI_URL,
@@ -125,14 +126,21 @@ export default function PremiumModal({ gorunur, neden, onKapat }) {
     if (!seciliPlan || islemde || !satinAlinabilir) return;
     setIslemde(true);
     try {
-      await satinAl(seciliPlan);
+      const sonuc = await satinAl(seciliPlan);
       onKapat();
       Alert.alert(
         "Teşekkürler!",
-        "Premium üyeliğin etkinleştiriliyor. Birkaç saniye içinde aktif olacak."
+        sonuc?.premium
+          ? "Premium üyeliğin aktif."
+          : "Ödemen alındı. Premium üyeliğin birkaç dakika içinde etkinleşecek."
       );
     } catch (hata) {
-      if (hata?.code !== SATIN_ALMA_IPTAL) {
+      if (hata?.code === SATIN_ALMA_BEKLEMEDE) {
+        Alert.alert(
+          "Onay Bekleniyor",
+          "Satın alma onay bekliyor (örneğin aile onayı). Onaylandığında Premium kendiliğinden etkinleşir."
+        );
+      } else if (hata?.code !== SATIN_ALMA_IPTAL) {
         console.log("Satın alma hatası:", hata?.code, hata?.message);
         Alert.alert(
           "Satın Alma Tamamlanamadı",
@@ -148,11 +156,20 @@ export default function PremiumModal({ gorunur, neden, onKapat }) {
     if (islemde) return;
     setIslemde(true);
     try {
-      await satinAlimlariGeriYukle();
-      Alert.alert(
-        "Satın Alımlar Kontrol Edildi",
-        "Aktif bir aboneliğin varsa Premium birkaç saniye içinde etkinleşir."
-      );
+      const sonuc = await satinAlimlariGeriYukle();
+      if (sonuc?.dogrulandi && sonuc.abonelik) {
+        Alert.alert("Geri Yüklendi", "Premium üyeliğin aktif.");
+      } else if (sonuc?.dogrulandi) {
+        Alert.alert(
+          "Abonelik Bulunamadı",
+          "Bu Apple hesabında aktif bir Premium aboneliği bulunamadı."
+        );
+      } else {
+        Alert.alert(
+          "Satın Alımlar Kontrol Edildi",
+          "Aktif bir aboneliğin varsa Premium birkaç dakika içinde etkinleşir."
+        );
+      }
     } catch (hata) {
       Alert.alert(
         "Geri Yüklenemedi",
@@ -290,6 +307,11 @@ export default function PremiumModal({ gorunur, neden, onKapat }) {
                           aylık ≈ {plan.aylikFiyatYazi}
                         </Text>
                       ) : null}
+                      {plan.deneme ? (
+                        <Text style={[styles.planDeneme, { color: altin }]}>
+                          {plan.deneme}
+                        </Text>
+                      ) : null}
                     </Pressable>
                   );
                 })}
@@ -347,9 +369,15 @@ export default function PremiumModal({ gorunur, neden, onKapat }) {
             </TouchableOpacity>
 
             <Text style={[styles.yasalMetin, { color: altan }]}>
-              Abonelik, seçtiğin sürenin sonunda otomatik olarak yenilenir.
-              İstediğin zaman App Store / Google Play hesap ayarlarından iptal
-              edebilirsin. Ödeme, satın alma onayında hesabından tahsil edilir.
+              Ödeme, satın alma onayında Apple hesabından tahsil edilir.
+              Abonelik, dönem bitiminden en az 24 saat önce iptal edilmezse aynı
+              süre ve fiyatla otomatik olarak yenilenir; yenileme ücreti dönem
+              bitiminden önceki 24 saat içinde tahsil edilir.
+              {planlar.some((plan) => plan.deneme)
+                ? " Ücretsiz deneme ya da tanıtım fiyatı varsa, bitiminden en az 24 saat önce iptal edilmezse abonelik normal fiyatla başlar."
+                : ""}{" "}
+              Aboneliğini App Store hesap ayarlarından yönetebilir ve iptal
+              edebilirsin.
             </Text>
 
             {(KULLANIM_KOSULLARI_URL || GIZLILIK_POLITIKASI_URL) && (
@@ -468,6 +496,7 @@ const styles = StyleSheet.create({
   planAdi: { fontSize: 14, fontWeight: "600", marginBottom: 8, marginTop: 4 },
   planFiyat: { fontSize: 18, fontWeight: "900" },
   planAylik: { fontSize: 11, marginTop: 4 },
+  planDeneme: { fontSize: 11, fontWeight: "700", marginTop: 4, textAlign: "center" },
   onizlemeNotu: { fontSize: 11, marginBottom: 10, fontStyle: "italic" },
   satinAlButon: {
     width: "100%",

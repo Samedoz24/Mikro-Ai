@@ -25,16 +25,19 @@ const ORTAK = { region: "europe-west1", maxInstances: 10, enforceAppCheck: true 
 
 // RevenueCat (mağaza aboneliği). Anahtarlar Secret Manager'da; kodda/git'te yoktur. Değerleri hesap sahibi
 // "firebase functions:secrets:set <AD>" ile kendisi girer. Okuma anahtarı yalnızca müşteri okuma, silme anahtarı
-// yalnızca müşteri silme yetkisiyle oluşturulur (en az yetki). Proje kimliği gizli değildir (.env dosyasında).
+// yalnızca müşteri silme yetkisiyle oluşturulur (en az yetki). Proje kimliği ve "premium" yetkisinin dahili kimliği
+// (entl...) gizli değildir (.env dosyasında).
 const RC_OKUMA_ANAHTARI = defineSecret("RC_OKUMA_ANAHTARI");
 const RC_SILME_ANAHTARI = defineSecret("RC_SILME_ANAHTARI");
 const RC_BILDIRIM_YETKI = defineSecret("RC_BILDIRIM_YETKI");
 const RC_BILDIRIM_IMZA = defineSecret("RC_BILDIRIM_IMZA");
 const RC_PROJE_KIMLIGI = defineString("RC_PROJE_KIMLIGI");
+const RC_YETKI_KIMLIGI = defineString("RC_YETKI_KIMLIGI");
 
 const revenueCatOku = (uid) =>
   abonelik.musteriGetir(uid, { projeId: RC_PROJE_KIMLIGI.value(), anahtar: RC_OKUMA_ANAHTARI.value() });
-const revenueCatEsitle = (uid) => abonelik.abonelikEsitle(uid, { getir: revenueCatOku });
+const revenueCatEsitle = (uid) =>
+  abonelik.abonelikEsitle(uid, { getir: revenueCatOku, yetkiKimligi: RC_YETKI_KIMLIGI.value() });
 
 // Gece görevleri: Cloud Run bazen soğuk başlatmada örnek bulamayıp isteği reddeder ("aborted after waiting too long
 // for an available instance"). Görev kodumuza hiç ulaşmadan başarısız olur; bu yüzden hata alırsa 5 kez denenir.

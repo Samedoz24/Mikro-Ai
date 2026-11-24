@@ -24,7 +24,10 @@ const { premiumGuncellemesi } = require("./premium");
 
 const db = () => getFirestore();
 
-const YETKI_ADI = "premium"; // RevenueCat'te tanımlanacak yetki (entitlement) kimliği
+// RevenueCat yetkisi (entitlement): panelde adı (lookup key) "premium". REST API v2 ise müşteri kaydında yetkiyi
+// adıyla değil DAHİLİ kimliğiyle ("entl..." biçiminde) döndürür; bu kimlik .env'deki RC_YETKI_KIMLIGI'dir.
+// Kimlik yoksa / biçimsizse eşitleme hiç yapılmaz (yanlış ayarla premium verilmez, alınmaz).
+const YETKI_KIMLIGI_BICIMI = /^entl[A-Za-z0-9]{1,60}$/;
 const IMZA_TOLERANSI_SN = 5 * 60;
 const EN_FAZLA_GOVDE = 64 * 1024; // RevenueCat bildirimleri birkaç KB'dir
 const EN_FAZLA_KIMLIK = 20;
@@ -84,11 +87,18 @@ const bildirimKimlikleri = (olay) => {
   return [...new Set(adaylar.filter((k) => typeof k === "string" && UID_BICIMI.test(k)))].slice(0, EN_FAZLA_KIMLIK);
 };
 
+const yetkiKimligiKontrol = (yetkiKimligi) => {
+  if (typeof yetkiKimligi !== "string" || !YETKI_KIMLIGI_BICIMI.test(yetkiKimligi)) {
+    throw new Error("revenuecat-yetki-kimligi-yok");
+  }
+};
+
 // RevenueCat müşteri kaydından abonelik: { aktif: true, bitis: Date } ya da null
-const abonelikHesapla = (musteri, simdi = Date.now()) => {
+const abonelikHesapla = (musteri, yetkiKimligi, simdi = Date.now()) => {
+  yetkiKimligiKontrol(yetkiKimligi);
   const kalemler = musteri?.active_entitlements?.items;
   if (!Array.isArray(kalemler)) return null;
-  const yetki = kalemler.find((k) => k?.entitlement_id === YETKI_ADI);
+  const yetki = kalemler.find((k) => k?.entitlement_id === yetkiKimligi);
   const bitis = Number(yetki?.expires_at);
   if (!Number.isFinite(bitis) || bitis <= simdi) return null; // süresiz ya da bitmiş: abonelik sayılmaz
   return { aktif: true, bitis: new Date(Math.min(bitis, simdi + EN_UZUN_ABONELIK_MS)) };
@@ -140,14 +150,15 @@ const musteriSil = async (uid, { projeId, anahtar, fetchFn = fetch }) => {
 
 // RevenueCat'teki güncel durumu kullanıcı belgesine yazar. Sorgu zamanı saklanır: daha önce başlamış ama geç biten
 // bir sorgu, daha yeni bir sorgunun sonucunu ezemez (sırasız bildirim / eşzamanlı çağrı).
-const abonelikEsitle = async (uid, { getir, simdi = () => Date.now() }) => {
+const abonelikEsitle = async (uid, { getir, yetkiKimligi, simdi = () => Date.now() }) => {
+  yetkiKimligiKontrol(yetkiKimligi); // ayar eksikse fırlatılır: hiçbir şey okunmaz / yazılmaz
   if (typeof uid !== "string" || !UID_BICIMI.test(uid)) return { durum: "gecersiz-kimlik" };
   const kullaniciRef = db().doc(`kullanicilar/${uid}`);
   if (!(await kullaniciRef.get()).exists) return { durum: "kullanici-yok" }; // gereksiz API çağrısı yapılmaz
 
   const sorguMs = simdi();
   const musteri = await getir(uid); // hata: fırlatılır, hiçbir şey yazılmaz
-  const abonelik = abonelikHesapla(musteri, sorguMs);
+  const abonelik = abonelikHesapla(musteri, yetkiKimligi, sorguMs);
   const esitlemeRef = db().doc(`abonelikEsitleme/${uid}`);
 
   return db().runTransaction(async (tx) => {
@@ -208,7 +219,7 @@ const bildirimIsle = async (req, res, { yetkiGizli, imzaGizli, esitle, simdiMs =
 };
 
 module.exports = {
-  YETKI_ADI,
+  YETKI_KIMLIGI_BICIMI,
   yetkiDogrula,
   imzaDogrula,
   bildirimKimlikleri,

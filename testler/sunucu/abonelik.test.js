@@ -42,6 +42,7 @@ const SIMDI = Date.now();
 const imzala = (govde, t = Math.floor(SIMDI / 1000), gizli = GIZLI_IMZA) =>
   `t=${t},v1=${crypto.createHmac("sha256", gizli).update(`${t}.${govde}`).digest("hex")}`;
 const GUN = 24 * 60 * 60 * 1000;
+const YETKI = "entl1a2b3c4d5e"; // "premium" yetkisinin RevenueCat dahili kimliği (API v2 bunu döndürür)
 
 // --- sahte RevenueCat REST API
 const musteriler = new Map(); // uid -> active_entitlements.items
@@ -56,7 +57,8 @@ const sahteFetch = async (adres, ayar) => {
   return { status: 200, json: async () => ({ object: "customer", id: uid, active_entitlements: { object: "list", items: musteriler.get(uid) } }) };
 };
 const getir = (uid) => a.musteriGetir(uid, { projeId: "projeX", anahtar: "okuma-anahtari", fetchFn: sahteFetch });
-const esitle = (uid, simdi) => a.abonelikEsitle(uid, { getir, simdi: simdi ? () => simdi : undefined });
+const esitle = (uid, simdi, yetkiKimligi = YETKI) =>
+  a.abonelikEsitle(uid, { getir, yetkiKimligi, simdi: simdi ? () => simdi : undefined });
 
 // --- sahte HTTP isteği / yanıtı
 // yetkiYok: true → Authorization başlığı hiç gönderilmez (varsayılan değer devreye girmesin diye ayrı bayrak)
@@ -131,17 +133,22 @@ const kullanici = (uid) => db.doc(`kullanicilar/${uid}`).get().then((d) => (d.ex
 
   // ================================================================ 4) RevenueCat cevabından abonelik (saf)
   const kalem = (id, ms) => ({ active_entitlements: { items: [{ object: "customer.active_entitlement", entitlement_id: id, expires_at: ms }] } });
-  esit("geçerli premium", a.abonelikHesapla(kalem("premium", SIMDI + 30 * GUN), SIMDI)?.aktif, true);
-  esit("bitmiş premium", a.abonelikHesapla(kalem("premium", SIMDI - 1000), SIMDI), null);
-  esit("başka yetki sayılmaz", a.abonelikHesapla(kalem("baska", SIMDI + 30 * GUN), SIMDI), null);
-  esit("süresiz (null) sayılmaz", a.abonelikHesapla(kalem("premium", null), SIMDI), null);
-  esit("metin tarih sayılmaz", a.abonelikHesapla(kalem("premium", "yarin"), SIMDI), null);
-  esit("müşteri yok", a.abonelikHesapla(null, SIMDI), null);
-  const uzun = a.abonelikHesapla(kalem("premium", SIMDI + 5000 * GUN), SIMDI);
+  esit("geçerli premium", a.abonelikHesapla(kalem(YETKI, SIMDI + 30 * GUN), YETKI, SIMDI)?.aktif, true);
+  esit("bitmiş premium", a.abonelikHesapla(kalem(YETKI, SIMDI - 1000), YETKI, SIMDI), null);
+  esit("başka yetki sayılmaz", a.abonelikHesapla(kalem("entlbaska99", SIMDI + 30 * GUN), YETKI, SIMDI), null);
+  esit("süresiz (null) sayılmaz", a.abonelikHesapla(kalem(YETKI, null), YETKI, SIMDI), null);
+  esit("metin tarih sayılmaz", a.abonelikHesapla(kalem(YETKI, "yarin"), YETKI, SIMDI), null);
+  esit("müşteri yok", a.abonelikHesapla(null, YETKI, SIMDI), null);
+  const uzun = a.abonelikHesapla(kalem(YETKI, SIMDI + 5000 * GUN), YETKI, SIMDI);
   esit("absürt uzun bitiş 400 güne kısılır", uzun.bitis.getTime() <= SIMDI + 400 * GUN, true);
+  // API v2 yetkiyi adıyla ("premium") değil dahili kimliğiyle döndürür: ad eşleşmesi premium vermez
+  esit("yetki adı (lookup key) kimlik yerine sayılmaz", a.abonelikHesapla(kalem("premium", SIMDI + 30 * GUN), YETKI, SIMDI), null);
+  esit("yetki kimliği yoksa fırlatır", await firlatirMi(async () => a.abonelikHesapla(kalem(YETKI, SIMDI + GUN), undefined, SIMDI)), true);
+  esit("yetki kimliği olarak 'premium' kabul edilmez", await firlatirMi(async () => a.abonelikHesapla(kalem("premium", SIMDI + GUN), "premium", SIMDI)), true);
+  esit("biçimsiz yetki kimliği kabul edilmez", await firlatirMi(async () => a.abonelikHesapla(kalem(YETKI, SIMDI + GUN), "entl/../x", SIMDI)), true);
 
   // ================================================================ 5) REST API çağrıları
-  musteriler.set("kullaniciA", [{ entitlement_id: "premium", expires_at: SIMDI + 30 * GUN }]);
+  musteriler.set("kullaniciA", [{ entitlement_id: YETKI, expires_at: SIMDI + 30 * GUN }]);
   const m = await getir("kullaniciA");
   esit("v2 adresi ve Bearer anahtar", [istekler[0].adres, istekler[0].yetki], ["https://api.revenuecat.com/v2/projects/projeX/customers/kullaniciA", "Bearer okuma-anahtari"]);
   esit("müşteri okunur", m.id, "kullaniciA");
@@ -158,7 +165,7 @@ const kullanici = (uid) => db.doc(`kullanicilar/${uid}`).get().then((d) => (d.ex
   // ================================================================ 6) eşitleme (emülatör)
   await temizle();
   await db.doc("kullanicilar/kullaniciA").set({ rol: "ogrenci", premiumMu: false });
-  musteriler.set("kullaniciA", [{ entitlement_id: "premium", expires_at: SIMDI + 30 * GUN }]);
+  musteriler.set("kullaniciA", [{ entitlement_id: YETKI, expires_at: SIMDI + 30 * GUN }]);
   esit("satın alma → güncellendi", (await esitle("kullaniciA")).durum, "guncellendi");
   let k = await kullanici("kullaniciA");
   esit("premium açıldı", k.premiumMu, true);
@@ -172,7 +179,7 @@ const kullanici = (uid) => db.doc(`kullanicilar/${uid}`).get().then((d) => (d.ex
   esit("abonelik kaynağı silinir", k.premiumKaynaklari === undefined, true);
 
   await db.doc("kullanicilar/kullaniciA").update({ premiumKaynaklari: { kurum: true }, premiumMu: true });
-  musteriler.set("kullaniciA", [{ entitlement_id: "premium", expires_at: SIMDI + 30 * GUN }]);
+  musteriler.set("kullaniciA", [{ entitlement_id: YETKI, expires_at: SIMDI + 30 * GUN }]);
   await esitle("kullaniciA");
   musteriler.set("kullaniciA", []);
   await esitle("kullaniciA");
@@ -191,7 +198,7 @@ const kullanici = (uid) => db.doc(`kullanicilar/${uid}`).get().then((d) => (d.ex
   await db.doc("kullanicilar/kullaniciA").set({ rol: "ogrenci", premiumMu: false });
   musteriler.set("kullaniciA", []);
   await esitle("kullaniciA", SIMDI + 10000);
-  musteriler.set("kullaniciA", [{ entitlement_id: "premium", expires_at: SIMDI + 30 * GUN }]);
+  musteriler.set("kullaniciA", [{ entitlement_id: YETKI, expires_at: SIMDI + 30 * GUN }]);
   esit("eski sorgu yeniyi ezemez", (await esitle("kullaniciA", SIMDI)).durum, "eski-sorgu");
   esit("eski sorgudan sonra premium hâlâ kapalı", (await kullanici("kullaniciA")).premiumMu, false);
 
@@ -204,10 +211,17 @@ const kullanici = (uid) => db.doc(`kullanicilar/${uid}`).get().then((d) => (d.ex
   esit("API hatasında mevcut durum korunur", (await kullanici("kullaniciA")).premiumMu, true);
   esit("API hatasında eşitleme kaydı yazılmaz", (await db.doc("abonelikEsitleme/kullaniciA").get()).exists, false);
 
+  // Yetki kimliği ayarı eksikse: API'ye gidilmez, hiçbir şey yazılmaz (premium ne verilir ne alınır)
+  const istekSayisi = istekler.length;
+  esit("yetki kimliği ayarı yoksa eşitleme fırlatır", await firlatirMi(() => esitle("kullaniciA", undefined, "")), true);
+  esit("yetki kimliği ayarı yoksa API çağrılmaz", istekler.length, istekSayisi);
+  esit("yetki kimliği ayarı yoksa durum korunur", (await kullanici("kullaniciA")).premiumMu, true);
+  esit("yetki kimliği ayarı yoksa eşitleme kaydı yazılmaz", (await db.doc("abonelikEsitleme/kullaniciA").get()).exists, false);
+
   // ================================================================ 7) bildirim alıcısı (HTTP)
   await temizle();
   await db.doc("kullanicilar/kullaniciA").set({ rol: "ogrenci", premiumMu: false });
-  musteriler.set("kullaniciA", [{ entitlement_id: "premium", expires_at: SIMDI + 30 * GUN }]);
+  musteriler.set("kullaniciA", [{ entitlement_id: YETKI, expires_at: SIMDI + 30 * GUN }]);
   const gercekEsitle = (uid) => esitle(uid);
   let r = await istekYap({ govde: olay(), esitleFn: gercekEsitle });
   esit("geçerli bildirim → 200", r.kod, 200);
@@ -215,7 +229,7 @@ const kullanici = (uid) => db.doc(`kullanicilar/${uid}`).get().then((d) => (d.ex
 
   await temizle();
   await db.doc("kullanicilar/kullaniciA").set({ rol: "ogrenci", premiumMu: false });
-  musteriler.set("kullaniciA", [{ entitlement_id: "premium", expires_at: SIMDI + 30 * GUN }]);
+  musteriler.set("kullaniciA", [{ entitlement_id: YETKI, expires_at: SIMDI + 30 * GUN }]);
   r = await istekYap({ govde: olay(), imza: imzala(olay(), undefined, "saldirganin-anahtari-0123456789"), esitleFn: gercekEsitle });
   esit("sahte imza → 401", r.kod, 401);
   esit("sahte imza → hiçbir şey yazılmaz", (await kullanici("kullaniciA")).premiumMu, false);

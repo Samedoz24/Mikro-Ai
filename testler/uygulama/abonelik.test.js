@@ -89,7 +89,8 @@ const TEKLIF = {
   current: {
     availablePackages: [
       paket("$rc_annual", "ANNUAL", urun("yillik_urun", 1999, { aylik: "166,58 ₺", giris: { price: 0, priceString: "0 ₺", cycles: 1, periodUnit: "DAY", periodNumberOfUnits: 7 } })),
-      paket("$rc_weekly", "WEEKLY", urun("haftalik_urun", 99)),
+      paket("$rc_weekly", "WEEKLY", urun("haftalik_urun", 400, { aylik: "1.733 ₺" })),
+      paket("$rc_lifetime", "LIFETIME", urun("omur_boyu", 9999)),
       paket("$rc_monthly", "MONTHLY", urun("aylik_urun", 349, { aylik: "349 ₺" })),
       paket("$rc_monthly_kopya", "MONTHLY", urun("aylik_kopya", 299)),
       paket("$rc_three_month", "THREE_MONTH", urun("uc_aylik_urun", 799, { aylik: "266,33 ₺" })),
@@ -165,21 +166,25 @@ const sifirla = (ek = {}) => {
   await m.magazaKullanicisiniAyarla("uidA");
   esit("aynı kullanıcı: tekrar configure / logIn yok", globalThis.__rc.olaylar, []);
 
-  // 5) Planlar: paket türüne göre, sıralı; haftalık, kopya ve fiyatsız paket elenir; deneme yalnızca uygun olana
+  // 5) Planlar: paket türüne göre, sıralı; ömür boyu, kopya ve fiyatsız paket elenir; deneme yalnızca uygun olana
   sifirla();
   const p1 = await m.planlariGetir();
-  esit("plan kimlikleri", p1.planlar.map((p) => p.id), ["aylik", "uc_aylik", "yillik"]);
+  const plan = (liste, id) => liste.find((x) => x.id === id);
+  esit("plan kimlikleri", p1.planlar.map((p) => p.id), ["haftalik", "aylik", "uc_aylik", "yillik"]);
   esit("satın alınabilir", [p1.onizleme, p1.satinAlinabilir], [false, true]);
-  esit("aylıkta aylık fiyat satırı yok", p1.planlar[0].aylikFiyatYazi, null);
-  esit("yıllık: mağaza fiyatı", [p1.planlar[2].fiyat, p1.planlar[2].fiyatYazi, p1.planlar[2].aylikFiyatYazi], [1999, "1999 ₺", "166,58 ₺"]);
-  esit("yıllık: deneme metni", p1.planlar[2].deneme, "İlk 7 gün ücretsiz");
+  esit("aylıkta aylık fiyat satırı yok", plan(p1.planlar, "aylik").aylikFiyatYazi, null);
+  esit("haftalıkta aylık fiyat satırı yok", plan(p1.planlar, "haftalik").aylikFiyatYazi, null);
+  esit("haftalıkta tasarruf yok", m.tasarrufYuzdesi(p1.planlar, "haftalik"), 0);
+  esit("3 aylıkta aylık fiyat satırı var", plan(p1.planlar, "uc_aylik").aylikFiyatYazi, "266,33 ₺");
+  esit("yıllık: mağaza fiyatı", [plan(p1.planlar, "yillik").fiyat, plan(p1.planlar, "yillik").fiyatYazi, plan(p1.planlar, "yillik").aylikFiyatYazi], [1999, "1999 ₺", "166,58 ₺"]);
+  esit("yıllık: deneme metni", plan(p1.planlar, "yillik").deneme, "İlk 7 gün ücretsiz");
   esit("tasarruf yüzdesi (yıllık)", m.tasarrufYuzdesi(p1.planlar, "yillik"), 52);
 
   sifirla({ uygunluk: { yillik_urun: { status: 1 } } });
-  esit("deneme hakkı yoksa metin yok", (await m.planlariGetir()).planlar[2].deneme, null);
+  esit("deneme hakkı yoksa metin yok", plan((await m.planlariGetir()).planlar, "yillik").deneme, null);
   sifirla({ uygunlukHatasi: true });
   const p2 = await m.planlariGetir();
-  esit("uygunluk öğrenilemezse metin yok ama planlar var", [p2.planlar.length, p2.planlar[2].deneme], [3, null]);
+  esit("uygunluk öğrenilemezse metin yok ama planlar var", [p2.planlar.length, plan(p2.planlar, "yillik").deneme], [4, null]);
 
   sifirla({ teklifler: { current: null } });
   esit("teklif yok (yayın): boş, önizleme yok", await m.planlariGetir(), { planlar: [], onizleme: false, satinAlinabilir: false });
@@ -240,7 +245,11 @@ const sifirla = (ek = {}) => {
   sifirla({ satinAlmaHatasi: Object.assign(new Error("magaza"), { code: "2" }) });
   esit("diğer hata aynen iletilir", await hataKodu(() => m.satinAl("aylik")), "2");
   sifirla();
-  esit("bilinmeyen plan", await hataKodu(() => m.satinAl("haftalik")), m.SATIN_ALMA_HAZIR_DEGIL);
+  esit("listede olmayan plan (fiyatsız 6 aylık)", await hataKodu(() => m.satinAl("alti_aylik")), m.SATIN_ALMA_HAZIR_DEGIL);
+  esit("bilinmeyen plan", await hataKodu(() => m.satinAl("omur_boyu")), m.SATIN_ALMA_HAZIR_DEGIL);
+  sifirla();
+  await m.satinAl("haftalik");
+  esit("haftalık satın alınabilir", globalThis.__rc.olaylar, ["satinAl:$rc_weekly", "sunucu:abonelikYenile"]);
 
   // 13) Geri yükleme: mağaza → sunucu
   sifirla({ sunucuCevabi: { premium: false, abonelik: false } });

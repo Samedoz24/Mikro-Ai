@@ -23,9 +23,10 @@ import {
   DENEME_UYGUN,
 } from "./magaza";
 
-export const PLAN_SIRASI = ["aylik", "iki_aylik", "uc_aylik", "alti_aylik", "yillik"];
+export const PLAN_SIRASI = ["haftalik", "aylik", "iki_aylik", "uc_aylik", "alti_aylik", "yillik"];
 
 export const PLAN_ADLARI = {
+  haftalik: "Haftalık",
   aylik: "1 Aylık",
   iki_aylik: "2 Aylık",
   uc_aylik: "3 Aylık",
@@ -35,8 +36,10 @@ export const PLAN_ADLARI = {
 
 const AY_SAYISI = { aylik: 1, iki_aylik: 2, uc_aylik: 3, alti_aylik: 6, yillik: 12 };
 
-// RevenueCat paket türü → plan kimliği. Listede olmayan türler (haftalık, ömür boyu, özel) gösterilmez.
+// RevenueCat paket türü → plan kimliği. Listede olmayan türler (ömür boyu, özel) gösterilmez.
+// Haftalık planda tasarruf yüzdesi gösterilmez (AY_SAYISI'nda yok).
 const PAKET_PLANI = {
+  [PAKET_TURU.WEEKLY]: "haftalik",
   [PAKET_TURU.MONTHLY]: "aylik",
   [PAKET_TURU.TWO_MONTH]: "iki_aylik",
   [PAKET_TURU.THREE_MONTH]: "uc_aylik",
@@ -110,7 +113,7 @@ export const teklifiPlanlaraCevir = (teklif, uygunluk = {}) => {
       id,
       fiyat: Number(urun.price),
       fiyatYazi: urun.priceString,
-      aylikFiyatYazi: id !== "aylik" ? urun.pricePerMonthString || null : null,
+      aylikFiyatYazi: AY_SAYISI[id] > 1 ? urun.pricePerMonthString || null : null,
       deneme: uygun ? denemeMetni(urun.introPrice) : null,
     });
   }

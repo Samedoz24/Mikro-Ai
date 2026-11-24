@@ -266,7 +266,12 @@ export default function PremiumModal({ gorunur, neden, onKapat }) {
                 dene.
               </Text>
             ) : (
-              <View style={styles.planSatiri}>
+              <View
+                style={[
+                  styles.planSatiri,
+                  planlar.length > 3 && styles.planIzgara,
+                ]}
+              >
                 {planlar.map((plan) => {
                   const secili = plan.id === seciliPlan;
                   const tasarruf = tasarrufYuzdesi(planlar, plan.id);
@@ -278,6 +283,7 @@ export default function PremiumModal({ gorunur, neden, onKapat }) {
                       accessibilityState={{ selected: secili }}
                       style={[
                         styles.planKutu,
+                        planlar.length > 3 && styles.planKutuIzgara,
                         {
                           borderColor: secili ? altin : p.kartCerceve,
                           backgroundColor: secili ? p.kartSecili : p.kart,
@@ -476,6 +482,9 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     paddingTop: 10,
   },
+  // 4 ve daha fazla planda 2×2 ızgara (fiyatlar dar kutulara sığsın)
+  planIzgara: { flexWrap: "wrap", rowGap: 18 },
+  planKutuIzgara: { flex: 0, flexBasis: "47%", flexGrow: 1 },
   planKutu: {
     flex: 1,
     borderWidth: 2,

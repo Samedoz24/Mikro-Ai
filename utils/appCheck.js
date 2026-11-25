@@ -36,7 +36,8 @@ const bitisZamani = (belge) => {
 // Firebase'in resmi "debug" sağlayıcısına geçilir. Gizli kod koda yazılmaz: simülatördeki Firebase kendi
 // rastgele kodunu üretip simülatörün içinde saklar; geliştirici bu kodu Console'da "debug token" olarak tanıtır.
 // Simülatör tespiti: simülatör Apple bildirim sunucusuna (APNs) kaydolamaz, ortam değeri null döner.
-// Mağaza sürümünde __DEV__ false olduğundan bu kod hiç çalışmaz (derlemede tamamen atılır).
+// Mağaza sürümünde __DEV__ false olduğundan bu kod hiç çalışmaz: hem çağrı yeri hem fonksiyonun ilk satırı
+// __DEV__ ile korunur (fonksiyonun kendisi pakette kalabilir; Release paketi denetiminde doğrulandı, 25 Kasım).
 const simulatordeHataAyiklamaSaglayicisi = async (yerel) => {
   if (!__DEV__ || Platform.OS !== "ios") return;
   const apnsOrtami = await Application.getIosPushNotificationServiceEnvironmentAsync();

@@ -43,6 +43,7 @@ import useAltMenuBoslugu from "../utils/altMenu";
 // 🚀 YENİ: Gerçek karanlık mod kontrolü için
 import { colors } from "../theme";
 import { cozumYukle, kesinSonuc } from "../utils/cozumYukleyici";
+import { INCELEME_MESAJI, incelemedeMi } from "../utils/soruDurumu";
 import { dersBul } from "../utils/ders";
 import {
   veliBagla,
@@ -356,6 +357,13 @@ export default function ParentDashboard() {
     setTamEkranModu(false);
     setCozumYukleniyor(true);
     setCozumHatasi(false);
+
+    // Yapay zekânın güvenle çözemediği soru: dosya olsa bile çözüm gösterilmez
+    if (incelemedeMi(soru)) {
+      setSeciliSoru((prev) => ({ ...prev, cozumDetayi: null, cozumKartiLink: null }));
+      setCozumYukleniyor(false);
+      return;
+    }
 
     try {
       const sonuc = await cozumYukle(soru, soru.kullaniciEposta);
@@ -1068,6 +1076,8 @@ export default function ParentDashboard() {
                         ? "Çözüm şu an yüklenemedi. Lütfen bağlantını kontrol edip daha sonra tekrar dene."
                         : seciliSoru?.durum === "Çözüldü"
                         ? "Bu sorunun çözüm detayı şu an hazır değil. Birkaç dakika sonra tekrar dene."
+                        : incelemedeMi(seciliSoru)
+                        ? INCELEME_MESAJI
                         : "Yapay zeka analiz dosyası bekleniyor..."}
                     </Text>
                     {(cozumHatasi || seciliSoru?.durum === "Çözüldü") && (

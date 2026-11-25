@@ -25,6 +25,7 @@ export default function SoruIncelemesi({ soru, tema, onGeri }) {
   const [kartLinki, setKartLinki] = useState(null);
   const [foto, setFoto] = useState(null);
   const [hata, setHata] = useState(false);
+  const [inceleme, setInceleme] = useState(false);
   const [tamEkran, setTamEkran] = useState(false);
   const canli = useRef(true);
 
@@ -46,6 +47,7 @@ export default function SoruIncelemesi({ soru, tema, onGeri }) {
       setKartLinki(sonuc?.kartResmi || null);
       setFoto(sonuc?.fotograf || null);
       setHata(!duzgun && !!sonuc?.hata);
+      setInceleme(sonuc?.inceleme === true);
     } catch (e) {
       console.log("Çözüm yüklenemedi:", e?.code || e?.message);
       if (canli.current) setHata(true);
@@ -265,7 +267,9 @@ export default function SoruIncelemesi({ soru, tema, onGeri }) {
             <Text style={[styles.durumYazi, { color: tema.metin }]}>
               {hata
                 ? "Çözüm şu an yüklenemedi. Bağlantıyı kontrol edip tekrar dene."
-                : soru.cozuldu
+                : inceleme
+                  ? "Yapay zekâ bu soruyu güvenle çözemedi; soru inceleniyor. Çözüm hazır olunca burada görünecek."
+                  : soru.cozuldu
                   ? "Bu sorunun çözüm detayı şu an hazır değil. Birkaç dakika sonra tekrar dene."
                   : "Bu soru için yapay zekâ çözümü henüz hazırlanmadı."}
             </Text>

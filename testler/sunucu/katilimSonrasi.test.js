@@ -87,6 +87,23 @@ const iso = (ms) => new Date(ms).toISOString();
   const foto = await erisim.soruFotografiGetir(M, TOKEN, { soruId: "sonra2" });
   esit("sonrası fotoğraf isteği verilir (fotoğraf yok)", foto, { fotograf: null });
 
+  // İnceleme Gerekli: dosya/gömülü çözüm olsa bile çözüm verilmez, işaret döner
+  await db.doc("sorular/inceleme1").set({
+    kullaniciUid: O, tarih: iso(katilma + 4 * GUN), ders: "Kimya", durum: "İnceleme Gerekli",
+    cozumDetayi: { cardTitle: "Yanlış olabilecek çözüm" },
+  });
+  const incelemeDetay = await erisim.soruCozumuGetir(M, TOKEN, { soruId: "inceleme1" });
+  esit("inceleme: çözüm verilmez", [incelemeDetay.cozum, incelemeDetay.kartResmi, incelemeDetay.inceleme], [null, null, true]);
+  await db.doc("sorular/cozuldu1").set({
+    kullaniciUid: O, tarih: iso(katilma + 4 * GUN), ders: "Kimya", durum: "Çözüldü",
+    cozumDetayi: { cardTitle: "Çözüm" },
+  });
+  const cozulduDetay = await erisim.soruCozumuGetir(M, TOKEN, { soruId: "cozuldu1" });
+  esit("çözüldü: çözüm verilir", [cozulduDetay.cozum?.cardTitle, cozulduDetay.inceleme], ["Çözüm", false]);
+  // Sonraki sayımları etkilemesin diye bu iki deneme sorusu silinir
+  await db.doc("sorular/inceleme1").delete();
+  await db.doc("sorular/cozuldu1").delete();
+
   // Başka kurumun öğrencisinin sorusu: üye değil → reddedilir
   await hataBekle("üye olmayan öğrencinin sorusu", () => erisim.soruCozumuGetir(M, TOKEN, { soruId: "baskasi" }), "ogrenci-yok");
 

@@ -13,6 +13,7 @@ const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestor
 const { getStorage } = require("firebase-admin/storage");
 const { HttpsError } = require("firebase-functions/v2/https");
 const { mudurDogrula } = require("./kurum");
+const { INCELEME_DURUMU } = require("./kota");
 
 const db = () => getFirestore();
 
@@ -255,6 +256,8 @@ const soruCozumuGetir = async (uid, token, veri) => {
   await erisimiKaydet({ uid, eposta }, kurumRef, soru.ogrenciUid, "soru-detay");
 
   const belge = soru.veri;
+  // Yapay zekânın güvenle çözemediği soru: çözüm (varsa bile) verilmez; inceleme bitince "Çözüldü" olur
+  const inceleme = belge.durum === INCELEME_DURUMU;
   let cozum = null;
   if (belge.cozumDetayi && typeof belge.cozumDetayi === "object") cozum = belge.cozumDetayi;
   else if (typeof belge.cozumDetayi === "string" && belge.cozumDetayi.trim().startsWith("{")) {
@@ -262,8 +265,9 @@ const soruCozumuGetir = async (uid, token, veri) => {
       cozum = JSON.parse(belge.cozumDetayi);
     } catch (e) {}
   }
+  if (inceleme) cozum = null;
   let hata = false;
-  if (!cozum) {
+  if (!cozum && !inceleme) {
     const yollar = adayYollar(soruId, belge, "cozumDetayi", "json", belge.jsonPath).filter((y) =>
       yolOgrenciyeAitMi(y, belge)
     );
@@ -290,7 +294,7 @@ const soruCozumuGetir = async (uid, token, veri) => {
   const kartYollari = adayYollar(soruId, belge, "solution-cards", "png", belge.firebasePath).filter((y) =>
     yolOgrenciyeAitMi(y, belge)
   );
-  const kart = await ilkDosya(kartYollari);
+  const kart = inceleme ? { dosya: null, hata: false } : await ilkDosya(kartYollari);
 
   let fotograf = null;
   const fYol = fotoYolu(belge.fotoLink, soru.ogrenciUid);
@@ -307,6 +311,7 @@ const soruCozumuGetir = async (uid, token, veri) => {
     kartResmi: veriAdresi(kart.dosya),
     fotograf,
     hata: hata || !!kart.hata,
+    inceleme,
   };
 };
 

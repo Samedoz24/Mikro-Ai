@@ -189,6 +189,13 @@ export default function HistoryScreen() {
       }
     }
 
+    // Yapay zekânın güvenle çözemediği soru: dosya olsa bile çözüm gösterilmez, inceleme mesajı görünür
+    if (incelemedeMi(soru)) {
+      setSeciliSoru((prev) => ({ ...prev, cozumDetayi: null, cozumKartiLink: null }));
+      setCozumYukleniyor(false);
+      return;
+    }
+
     try {
       const sonuc = await cozumYukle(soru, auth.currentUser?.email);
       setSeciliSoru((prev) => ({

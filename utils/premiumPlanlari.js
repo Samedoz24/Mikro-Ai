@@ -50,6 +50,8 @@ const PAKET_PLANI = {
 export const SATIN_ALMA_IPTAL = "satin-alma/iptal";
 export const SATIN_ALMA_HAZIR_DEGIL = "satin-alma/hazir-degil";
 export const SATIN_ALMA_BEKLEMEDE = "satin-alma/beklemede";
+// Bu Apple hesabındaki aktif abonelik başka bir Sormix hesabına bağlı (Restore behavior: aktif abonelik taşınmaz)
+export const SATIN_ALMA_BASKA_HESAPTA = "satin-alma/baska-hesapta";
 
 const hata = (kod, mesaj) => {
   const h = new Error(mesaj);
@@ -191,6 +193,9 @@ export const satinAl = async (planId) => {
     if (e?.code === HATA_KODU.PAYMENT_PENDING_ERROR) {
       throw hata(SATIN_ALMA_BEKLEMEDE, "Satın alma onay bekliyor.");
     }
+    if (e?.code === HATA_KODU.RECEIPT_ALREADY_IN_USE_ERROR) {
+      throw hata(SATIN_ALMA_BASKA_HESAPTA, "Abonelik başka bir hesaba bağlı.");
+    }
     throw e;
   }
   return sunucudaYenile(uid);
@@ -204,6 +209,13 @@ export const satinAlimlariGeriYukle = async () => {
   } catch (e) {
     throw hata(SATIN_ALMA_HAZIR_DEGIL, "Mağaza oturumu doğrulanamadı.");
   }
-  await satinAlimlariYenidenYukle();
+  try {
+    await satinAlimlariYenidenYukle();
+  } catch (e) {
+    if (e?.code === HATA_KODU.RECEIPT_ALREADY_IN_USE_ERROR) {
+      throw hata(SATIN_ALMA_BASKA_HESAPTA, "Abonelik başka bir hesaba bağlı.");
+    }
+    throw e;
+  }
   return sunucudaYenile(uid);
 };

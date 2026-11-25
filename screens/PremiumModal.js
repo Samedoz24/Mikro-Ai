@@ -25,6 +25,7 @@ import {
   SATIN_ALMA_IPTAL,
   SATIN_ALMA_HAZIR_DEGIL,
   SATIN_ALMA_BEKLEMEDE,
+  SATIN_ALMA_BASKA_HESAPTA,
 } from "../utils/premiumPlanlari";
 import {
   KULLANIM_KOSULLARI_URL,
@@ -44,6 +45,12 @@ const METINLER = {
     baslik: "Premium'a Geç",
     alt: "Günde 50 soru sor ve hata defterini PDF olarak indir.",
   },
+};
+
+const BASKA_HESAPTA = {
+  baslik: "Abonelik Başka Hesapta",
+  metin:
+    "Bu Apple hesabındaki Premium aboneliği başka bir Sormix hesabına bağlı. O hesapla giriş yaparak kullanabilirsin. Yardım için: cesa@cesaai.tech",
 };
 
 const AVANTAJLAR = [
@@ -135,7 +142,9 @@ export default function PremiumModal({ gorunur, neden, onKapat }) {
           : "Ödemen alındı. Premium üyeliğin birkaç dakika içinde etkinleşecek."
       );
     } catch (hata) {
-      if (hata?.code === SATIN_ALMA_BEKLEMEDE) {
+      if (hata?.code === SATIN_ALMA_BASKA_HESAPTA) {
+        Alert.alert(BASKA_HESAPTA.baslik, BASKA_HESAPTA.metin);
+      } else if (hata?.code === SATIN_ALMA_BEKLEMEDE) {
         Alert.alert(
           "Onay Bekleniyor",
           "Satın alma onay bekliyor (örneğin aile onayı). Onaylandığında Premium kendiliğinden etkinleşir."
@@ -162,7 +171,7 @@ export default function PremiumModal({ gorunur, neden, onKapat }) {
       } else if (sonuc?.dogrulandi) {
         Alert.alert(
           "Abonelik Bulunamadı",
-          "Bu Apple hesabında aktif bir Premium aboneliği bulunamadı."
+          "Bu Apple hesabında bu Sormix hesabına bağlı aktif bir Premium aboneliği bulunamadı. Aboneliğin başka bir Sormix hesabındaysa o hesapla giriş yap."
         );
       } else {
         Alert.alert(
@@ -171,6 +180,10 @@ export default function PremiumModal({ gorunur, neden, onKapat }) {
         );
       }
     } catch (hata) {
+      if (hata?.code === SATIN_ALMA_BASKA_HESAPTA) {
+        Alert.alert(BASKA_HESAPTA.baslik, BASKA_HESAPTA.metin);
+        return;
+      }
       Alert.alert(
         "Geri Yüklenemedi",
         hata?.code === SATIN_ALMA_HAZIR_DEGIL

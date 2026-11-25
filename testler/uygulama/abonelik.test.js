@@ -20,7 +20,7 @@ const SAHTELER = {
     export const LOG_LEVEL = { INFO: "INFO", WARN: "WARN" };
     const Purchases = {
       PACKAGE_TYPE: { MONTHLY: "MONTHLY", TWO_MONTH: "TWO_MONTH", THREE_MONTH: "THREE_MONTH", SIX_MONTH: "SIX_MONTH", ANNUAL: "ANNUAL", WEEKLY: "WEEKLY", LIFETIME: "LIFETIME" },
-      PURCHASES_ERROR_CODE: { PURCHASE_CANCELLED_ERROR: "1", PAYMENT_PENDING_ERROR: "20" },
+      PURCHASES_ERROR_CODE: { PURCHASE_CANCELLED_ERROR: "1", RECEIPT_ALREADY_IN_USE_ERROR: "7", PAYMENT_PENDING_ERROR: "20" },
       INTRO_ELIGIBILITY_STATUS: { INTRO_ELIGIBILITY_STATUS_UNKNOWN: 0, INTRO_ELIGIBILITY_STATUS_INELIGIBLE: 1, INTRO_ELIGIBILITY_STATUS_ELIGIBLE: 2 },
       setLogLevel: async (l) => { rc().olaylar.push("log:" + l); },
       configure: ({ apiKey, appUserID }) => { rc().olaylar.push("configure:" + appUserID); rc().anahtar = apiKey; rc().kimlik = appUserID; },
@@ -36,7 +36,7 @@ const SAHTELER = {
         if (rc().satinAlmaHatasi) throw rc().satinAlmaHatasi;
         return {};
       },
-      restorePurchases: async () => { rc().olaylar.push("geriYukle"); return {}; },
+      restorePurchases: async () => { rc().olaylar.push("geriYukle"); if (rc().geriYuklemeHatasi) throw rc().geriYuklemeHatasi; return {}; },
     };
     export default Purchases;`,
   "firebase/functions": `
@@ -251,12 +251,44 @@ const sifirla = (ek = {}) => {
   await m.satinAl("haftalik");
   esit("haftalık satın alınabilir", globalThis.__rc.olaylar, ["satinAl:$rc_weekly", "sunucu:abonelikYenile"]);
 
+  // 12b) Abonelik başka hesaba bağlı (kod 7): doğru hata, sunucuya sorulmaz
+  sifirla({ satinAlmaHatasi: { code: "7" } });
+  esit("satın almada başka hesapta", await hataKodu(() => m.satinAl("aylik")), m.SATIN_ALMA_BASKA_HESAPTA);
+  esit("başka hesapta: sunucu çağrılmadı", globalThis.__rc.olaylar.includes("sunucu:abonelikYenile"), false);
+  sifirla({ geriYuklemeHatasi: { code: "7" } });
+  esit("geri yüklemede başka hesapta", await hataKodu(() => m.satinAlimlariGeriYukle()), m.SATIN_ALMA_BASKA_HESAPTA);
+  esit("geri yükleme başka hesapta: sunucu çağrılmadı", globalThis.__rc.olaylar.includes("sunucu:abonelikYenile"), false);
+  sifirla({ geriYuklemeHatasi: Object.assign(new Error("ag"), { code: "10" }) });
+  esit("geri yüklemede diğer hata aynen iletilir", await hataKodu(() => m.satinAlimlariGeriYukle()), "10");
+
   // 13) Geri yükleme: mağaza → sunucu
   sifirla({ sunucuCevabi: { premium: false, abonelik: false } });
   esit("geri yükleme sonucu", await m.satinAlimlariGeriYukle(), { dogrulandi: true, premium: false, abonelik: false });
   esit("geri yükleme sırası", globalThis.__rc.olaylar, ["geriYukle", "sunucu:abonelikYenile"]);
 
-  // 14) Çıkış: SDK kimliği bırakılır; sonrasında giriş yoksa hiçbir işlem başlamaz
+  // 13b) Normal çıkış: SDK kimliği BIRAKILMAZ (anonim kimliğe yenileme bildirilmesin); işlemler yine kapalı
+  const kimlikOnce = globalThis.__rc.kimlik;
+  sifirla();
+  await m.magazaGirisiniUnut();
+  esit("normal çıkış: logOut yok", globalThis.__rc.olaylar, []);
+  esit("normal çıkış: SDK kimliği aynı kaldı", globalThis.__rc.kimlik, kimlikOnce);
+  const oncekiKullanici = globalThis.__auth.currentUser;
+  globalThis.__auth.currentUser = null;
+  esit("normal çıkış sonrası satın alma yok", await hataKodu(() => m.satinAl("aylik")), m.SATIN_ALMA_HAZIR_DEGIL);
+  esit("normal çıkış sonrası geri yükleme yok", await hataKodu(() => m.satinAlimlariGeriYukle()), m.SATIN_ALMA_HAZIR_DEGIL);
+  esit("normal çıkış sonrası mağaza işlemi yok", globalThis.__rc.olaylar, []);
+  globalThis.__auth.currentUser = oncekiKullanici;
+  sifirla();
+  await m.satinAl("aylik");
+  esit("aynı kişi tekrar girince logIn gerekmez", globalThis.__rc.olaylar, ["satinAl:$rc_monthly", "sunucu:abonelikYenile"]);
+  await m.magazaGirisiniUnut();
+  globalThis.__auth.currentUser = { uid: "uidBaska" };
+  sifirla();
+  await m.satinAl("aylik");
+  esit("başka kişi girince önce logIn, sonra satın alma", globalThis.__rc.olaylar, ["logIn:uidBaska", "satinAl:$rc_monthly", "sunucu:abonelikYenile"]);
+  globalThis.__auth.currentUser = oncekiKullanici;
+
+  // 14) Hesap silme: SDK kimliği bırakılır; sonrasında giriş yoksa hiçbir işlem başlamaz
   sifirla();
   await m.magazaOturumunuKapat();
   esit("çıkış: logOut", globalThis.__rc.olaylar, ["logOut"]);

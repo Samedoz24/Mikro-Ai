@@ -48,7 +48,7 @@ import { rozetDegeri, sekmeEtiketi } from "./utils/sekmeAyarlari";
 import { yoneticiOl, kurumHataMesaji } from "./utils/kurumIstemci";
 import { YAS_ONAYI_SURUMU } from "./utils/yasalMetinler";
 import { PremiumProvider } from "./PremiumContext";
-import { magazaKullanicisiniAyarla, magazaOturumunuKapat } from "./utils/magaza";
+import { magazaKullanicisiniAyarla, magazaGirisiniUnut } from "./utils/magaza";
 import { dersiTamamla, digerDersiDuzelt } from "./utils/dersTamamla";
 import {
   dersBul,
@@ -232,10 +232,10 @@ function MainApp() {
   }, []);
 
   // Mağaza (RevenueCat) oturumu: yalnızca yaş/şart onayını vermiş öğrenci için, kimlik = Firebase uid.
-  // Oturum kapanınca (çıkış, hesap silme ya da oturumun düşmesi) mağaza oturumu da kapatılır.
+  // Oturum kapanınca doğrulanmış mağaza kimliği unutulur (SDK kimliği bırakılmaz; hesap silmede hesapSilici bırakır).
   useEffect(() => {
     if (!kullanici) {
-      magazaOturumunuKapat();
+      magazaGirisiniUnut();
       return;
     }
     if (onayGerekli || kullaniciRolu !== "ogrenci") return;

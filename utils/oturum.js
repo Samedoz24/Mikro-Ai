@@ -10,7 +10,7 @@ import { signOut } from "firebase/auth";
 import { auth } from "../firebaseConfig";
 import { cozumOnbelleginiTemizle } from "./cozumYukleyici";
 import { cancelAllNotifications } from "./notificationManager";
-import { magazaOturumunuKapat } from "./magaza";
+import { magazaGirisiniUnut } from "./magaza";
 
 // Kullanıcıya ait sabit anahtarlar
 const KULLANICI_ANAHTARLARI = [
@@ -62,9 +62,10 @@ export const oturumuKapat = async () => {
     console.log("Yerel veri temizlenemedi:", e?.message);
   }
   await googleOturumunuKapat();
-  // Mağaza (RevenueCat) kimliği bırakılır: sonraki kişi önceki kişinin kimliğiyle satın alma yapamaz
+  // Mağaza (RevenueCat): doğrulanmış kimlik unutulur; SDK kimliği bırakılmaz (utils/magaza.js açıklaması).
+  // Sonraki kişi önceki kişinin kimliğiyle satın alma yapamaz: satın alma öncesi kimlik yeniden doğrulanır.
   try {
-    await magazaOturumunuKapat();
+    await magazaGirisiniUnut();
   } catch (e) {
     console.log("Mağaza oturumu kapatılamadı:", e?.message);
   }

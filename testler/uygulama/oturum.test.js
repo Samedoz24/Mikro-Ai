@@ -27,7 +27,8 @@ const SAHTELER = {
   "./notificationManager": `
     export const cancelAllNotifications = async () => { globalThis.__olaylar.push("bildirimIptal"); if (globalThis.__bildirimHatasi) throw new Error("b"); };`,
   "./magaza": `
-    export const magazaOturumunuKapat = async () => { globalThis.__olaylar.push("magazaCikis"); if (globalThis.__magazaHatasi) throw new Error("m"); };`,
+    export const magazaGirisiniUnut = async () => { globalThis.__olaylar.push("magazaUnut"); if (globalThis.__magazaHatasi) throw new Error("m"); };
+    export const magazaOturumunuKapat = async () => { globalThis.__olaylar.push("magazaLogOut"); };`,
 };
 
 const sahteEklenti = {
@@ -79,7 +80,7 @@ const cikti = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "mikro-oturum-")),
   await oturum.oturumuKapat();
   esit("yalnızca tema tercihi kalır", [...globalThis.__depo.keys()], ["kullaniciTemaTercihi"]);
   esit("sıra: bildirim → önbellek → yerel sil → Google → mağaza → çıkış", globalThis.__olaylar, [
-    "bildirimIptal", "cozumTemizle", "multiRemove", "googleCikis", "magazaCikis", "signOut",
+    "bildirimIptal", "cozumTemizle", "multiRemove", "googleCikis", "magazaUnut", "signOut",
   ]);
 
   // 2) Yerel silme hata verse bile oturum kapanır
@@ -103,6 +104,7 @@ const cikti = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "mikro-oturum-")),
   await oturum.oturumuKapat();
   esit("mağaza hatası: veri yine silindi", [...globalThis.__depo.keys()], ["kullaniciTemaTercihi"]);
   esit("mağaza hatası: çıkış yapıldı", globalThis.__olaylar.at(-1), "signOut");
+  esit("normal çıkışta RevenueCat kimliği bırakılmaz (logOut yok)", globalThis.__olaylar.includes("magazaLogOut"), false);
 
   // 4) Anahtar listesi okunamazsa sabit anahtarlar ve çözüm önbelleği yine silinir
   doldur();

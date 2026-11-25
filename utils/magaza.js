@@ -7,7 +7,13 @@
 // - RevenueCat kullanıcı kimliği = Firebase uid. Satın alma ve geri yükleme, SDK'daki kimlik o an girişli
 //   kullanıcının uid'siyle birebir aynı değilse başlatılmaz (anonim kimliğe ya da ortak telefonda önceki kişiye
 //   satın alma yazılmasın).
-// - Çıkışta ve hesap silinince SDK oturumu kapatılır.
+// - Normal çıkışta SDK kimliği BIRAKILMAZ (magazaGirisiniUnut): bırakılsaydı SDK anonim kimliğe geçer, giriş
+//   ekranındayken gelen yenilemeler anonim kimliğe bildirilir ve abonelik gerçek sahibinden kopabilirdi
+//   (25 Kasım sandbox testinde görüldü). Satın alma yine de yalnızca girişli kullanıcı için başlar; başka biri
+//   giriş yapınca SDK kimliği önce ona çevrilir (logIn). Hesap silinince kimlik bırakılır (magazaOturumunuKapat):
+//   silinen kullanıcının RevenueCat kaydı yeniden oluşmasın.
+// - RevenueCat'te Restore behavior = "Transfer if there are no active subscriptions": aktif abonelik sahibinden
+//   ne anonim kimliğe ne başka hesaba geçer.
 // - RevenueCat'e uid dışında kişisel bilgi (ad, e-posta vb.) gönderilmez.
 // - Yayın sürümünde SDK günlükleri yalnızca uyarı/hata düzeyindedir.
 
@@ -63,7 +69,15 @@ export const magazaKullanicisiniAyarla = (uid) =>
     return true;
   });
 
-// Çıkış / hesap silme: SDK kimliği bırakılır (anonim olur), sonraki kişi önceki kişinin kimliğiyle işlem yapamaz.
+// Normal çıkış: yalnızca doğrulanmış kimlik unutulur, SDK kimliğine dokunulmaz (yukarıdaki açıklama).
+// Sonraki satın alma / geri yükleme öncesi kimlik yeniden doğrulanır; başka biri giriş yaptıysa logIn yapılır.
+export const magazaGirisiniUnut = () =>
+  sirayla(async () => {
+    aktifUid = null;
+  });
+
+// Hesap silme: SDK kimliği bırakılır (anonim olur); silinen kullanıcının kimliğiyle RevenueCat'e bir daha
+// bildirim gitmez, kaydı yeniden oluşmaz.
 export const magazaOturumunuKapat = () =>
   sirayla(async () => {
     aktifUid = null;

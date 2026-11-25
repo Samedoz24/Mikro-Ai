@@ -148,11 +148,11 @@ async function seriHatirlatmasiniKur(simdi) {
     seri >= 2
       ? {
           title: "🔥 Serin Bozulmak Üzere!",
-          body: "Günlük serini kaybetmemek için bugün Mikro AI'ya uğraman yeterli.",
+          body: "Günlük serini kaybetmemek için bugün Sormix'e uğraman yeterli.",
         }
       : {
           title: "📚 Bugün Bir Soru Çözelim mi?",
-          body: "Takıldığın bir sorunun fotoğrafını çek, Mikro AI adım adım anlatsın.",
+          body: "Takıldığın bir sorunun fotoğrafını çek, Sormix adım adım anlatsın.",
         };
 
   await iptalEt(KIMLIK.seri);
@@ -165,7 +165,7 @@ async function geriKazanimBildirimleriniKur(simdi) {
     KIMLIK.gun3,
     {
       title: "🤖 Seni Özledik!",
-      body: "Çözemediğin bir soru mu var? Kameranı aç, Mikro AI anında anlatsın.",
+      body: "Çözemediğin bir soru mu var? Kameranı aç, Sormix anında anlatsın.",
     },
     zamanUret(simdi, 3, GERI_KAZANIM_SAATI)
   );
@@ -175,7 +175,7 @@ async function geriKazanimBildirimleriniKur(simdi) {
     KIMLIK.gun7,
     {
       title: "📖 Bir Haftadır Yoksun",
-      body: "Takıldığın bir soru olursa Mikro AI yanında. Fotoğrafını çekip gönder.",
+      body: "Takıldığın bir soru olursa Sormix yanında. Fotoğrafını çekip gönder.",
     },
     zamanUret(simdi, 7, GERI_KAZANIM_SAATI)
   );

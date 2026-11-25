@@ -4,7 +4,7 @@
 // Onay metni/şartları değiştiğinde artırılır; kullanıcıdan yeniden onay istemek için kullanılır.
 export const YAS_ONAYI_SURUMU = 1;
 
-// Mikro AI'yı kullanabilmek için asgari yaş
+// Sormix'i kullanabilmek için asgari yaş
 export const ASGARI_YAS = 13;
 
 // Web sitesi yayına girince doldurulacak. Doluysa satın alma ekranında bağlantı olarak gösterilir.
@@ -122,7 +122,7 @@ export const htmlSablonUret = (isDark, baslik, altBaslik, icerikHtml) => {
         <h1>${baslik}</h1>
       </div>
       ${icerikHtml}
-      <div class="footer-note">Mikro AI Eğitim Teknolojileri</div>
+      <div class="footer-note">Sormix</div>
     </body>
     </html>
   `;
@@ -130,11 +130,11 @@ export const htmlSablonUret = (isDark, baslik, altBaslik, icerikHtml) => {
 
 export const KULLANIM_KOSULLARI_ICERIK = `
   <div class="card">
-    <p>Mikro AI platformuna hoş geldiniz. Bu belge, uygulamamızı kullanırken uyulması gereken kuralları ve veri güvenliği esaslarını içerir.</p>
+    <p>Sormix platformuna hoş geldiniz. Bu belge, uygulamamızı kullanırken uyulması gereken kuralları ve veri güvenliği esaslarını içerir.</p>
   </div>
 
   <h2>👤 Yaş Şartı</h2>
-  <p>Mikro AI'yı kullanabilmek için en az <span class="highlight">${ASGARI_YAS} yaşını</span> doldurmuş olmanız gerekir. 18 yaşından küçük kullanıcıların uygulamayı velisinin ya da yasal temsilcisinin bilgisi dahilinde kullanması beklenir. Veli hesabı oluşturmak için 18 yaşını doldurmuş olmak gerekir.</p>
+  <p>Sormix'i kullanabilmek için en az <span class="highlight">${ASGARI_YAS} yaşını</span> doldurmuş olmanız gerekir. 18 yaşından küçük kullanıcıların uygulamayı velisinin ya da yasal temsilcisinin bilgisi dahilinde kullanması beklenir. Veli hesabı oluşturmak için 18 yaşını doldurmuş olmak gerekir.</p>
 
   <h2>🔒 Gizlilik ve Veri Güvenliği</h2>
   <p>Yüklediğiniz fotoğraflar ve verileriniz, aktarım sırasında ve depolamada şifrelenerek güvenli sunucularda saklanır. Gönderdiğiniz soru fotoğrafları, çözüm üretmek amacıyla yapay zeka hizmetleriyle işlenir. Verileriniz reklam veya pazarlama amacıyla üçüncü taraflarla paylaşılmaz.</p>
@@ -160,7 +160,7 @@ export const KULLANIM_KOSULLARI_ICERIK = `
 // Dershane yöneticileri (müdür ve öğretmen) için. Hukuki incelemeden geçirilmeden yayına alınmamalıdır.
 export const YONETICI_KOSULLARI_ICERIK = `
   <div class="card">
-    <p>Bu belge, Mikro AI'da bir dershanenin müdürü ya da öğretmeni olarak oturum açan kullanıcılar için geçerlidir.</p>
+    <p>Bu belge, Sormix'te bir dershanenin müdürü ya da öğretmeni olarak oturum açan kullanıcılar için geçerlidir.</p>
   </div>
 
   <h2>🏫 Yetki ve Hesap</h2>

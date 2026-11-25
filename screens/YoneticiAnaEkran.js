@@ -230,7 +230,7 @@ export default function YoneticiAnaEkran() {
               </Text>
               <Text style={[styles.kucukYazi, { color: tema.ikincilMetin }]}>
                 Öğrencilerin dershane bağlantısı ve premium hakları sona erdi.
-                Yeniden başlamak için Mikro AI ekibiyle iletişime geç.
+                Yeniden başlamak için Sormix ekibiyle iletişime geç.
               </Text>
             </View>
           )}
@@ -255,7 +255,7 @@ export default function YoneticiAnaEkran() {
                 ]}
               >
                 Lisans süresi yaklaşıyor. Kesinti olmaması için yenilemek üzere
-                Mikro AI ekibiyle iletişime geç.
+                Sormix ekibiyle iletişime geç.
               </Text>
             )}
           </View>

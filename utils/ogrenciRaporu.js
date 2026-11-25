@@ -26,7 +26,7 @@ const TURKCE_ASCII = {
   Ü: "U",
 };
 
-// Paylaşılan dosyanın adı: "Mikro-Rapor-Ali-Yilmaz-2026-10-31.pdf" (yalnızca güvenli karakterler)
+// Paylaşılan dosyanın adı: "Sormix-Rapor-Ali-Yilmaz-2026-10-31.pdf" (yalnızca güvenli karakterler)
 export const raporDosyaAdi = (isim, simdi = Date.now()) => {
   const ad =
     String(isim ?? "")
@@ -36,7 +36,7 @@ export const raporDosyaAdi = (isim, simdi = Date.now()) => {
       .slice(0, 40)
       .replace(/-+$/g, "") || "Ogrenci";
   const tarih = new Date(simdi + 3 * 3600000).toISOString().slice(0, 10);
-  return `Mikro-Rapor-${ad}-${tarih}.pdf`;
+  return `Sormix-Rapor-${ad}-${tarih}.pdf`;
 };
 
 // Son gunSayisi günün kaçında en az bir soru sorulduğu
@@ -185,6 +185,6 @@ export const ogrenciRaporuHtml = ({ kurumAdi, satir, simdi = Date.now() }) => {
   <h2>En çok sorduğu konular</h2>
   ${konularHtml}
 
-  <div class="footer">Bu rapor, öğrencinin Mikro AI uygulamasındaki kullanımına ait otomatik istatistiklerden oluşturulmuştur. Soru içerikleri ve çözümler rapora dahil değildir. Kişisel veri içerdiğinden yalnızca öğrenci ve velisiyle paylaşılmalıdır.</div>
+  <div class="footer">Bu rapor, öğrencinin Sormix uygulamasındaki kullanımına ait otomatik istatistiklerden oluşturulmuştur. Soru içerikleri ve çözümler rapora dahil değildir. Kişisel veri içerdiğinden yalnızca öğrenci ve velisiyle paylaşılmalıdır.</div>
 </body></html>`;
 };

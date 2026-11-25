@@ -1,4 +1,4 @@
-// Firebase App Check: her Firebase isteğine "bu istek gerçek Mikro uygulamasından, gerçek bir cihazdan
+// Firebase App Check: her Firebase isteğine "bu istek gerçek Sormix uygulamasından, gerçek bir cihazdan
 // geliyor" belgesi eklenir. Sunucu ve Firebase (Firestore, Storage, Functions) belgesiz istekleri
 // reddedebilir; böylece kurcalanmış programlar ve botlar sunucuya ulaşamaz.
 //

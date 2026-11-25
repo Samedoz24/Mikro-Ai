@@ -43,7 +43,7 @@ export default function VeliBaglantiPenceresi({ gorunur, kapat, kod, onKodYenile
   const paylas = () => {
     if (!kod) return;
     Share.share({
-      message: `Mikro veli bağlantı kodum: ${kod}\nMikro veli hesabında öğrenci eklerken bu kodu girebilirsin.`,
+      message: `Sormix veli bağlantı kodum: ${kod}\nSormix veli hesabında öğrenci eklerken bu kodu girebilirsin.`,
     }).catch(() => {});
   };
 

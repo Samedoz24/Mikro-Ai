@@ -820,7 +820,7 @@ export default function ProfileScreen() {
           setBildirimAktif(onceki);
           Alert.alert(
             "İzin Gerekli",
-            "Bildirim almak için telefon ayarlarından Mikro'ya bildirim izni vermelisin.",
+            "Bildirim almak için telefon ayarlarından Sormix'e bildirim izni vermelisin.",
             [
               { text: "Vazgeç", style: "cancel" },
               {
@@ -904,7 +904,7 @@ export default function ProfileScreen() {
 
   const bizeUlasin = () => {
     Linking.openURL(
-      "mailto:destek@mikroai.com?subject=Mikro AI Destek Talebi&body=Merhaba, şöyle bir konu hakkında yardıma ihtiyacım var: "
+      "mailto:cesa@cesaai.tech?subject=Sormix Destek Talebi&body=Merhaba, şöyle bir konu hakkında yardıma ihtiyacım var: "
     ).catch(() => {
       Alert.alert(
         "Hata",
@@ -917,7 +917,7 @@ export default function ProfileScreen() {
     try {
       await Share.share({
         message:
-          "Mikro AI ile çözemediğim soru kalmadı! 🚀 Yapay zeka destekli bu harika eğitim uygulaması çok yakında App Store ve Google Play'de. Hazır ol!",
+          "Sormix ile çözemediğim soru kalmadı! 🚀 Yapay zekâ destekli bu eğitim uygulaması çok yakında App Store'da. Hazır ol!",
       });
     } catch (error) {
       console.log("Paylaşım hatası:", error);
@@ -985,7 +985,7 @@ export default function ProfileScreen() {
   const acNasilKullanilir = () => {
     const icerik = `
       <div class="card">
-        <p>Mikro AI, çözemediğin soruları saniyeler içinde analiz eden ve sana özel adım adım çözüm yolları üreten akıllı eğitim asistanındır.</p>
+        <p>Sormix, çözemediğin soruları saniyeler içinde analiz eden ve sana özel adım adım çözüm yolları üreten akıllı eğitim asistanındır.</p>
       </div>
       
       <h2>📸 1. Soruyu Gönder</h2>

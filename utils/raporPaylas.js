@@ -7,7 +7,9 @@ import * as FileSystem from "expo-file-system/legacy";
 // telefonda kalmamalı: PDF üretim çıktısı hemen silinir. Paylaşılan kopya iOS'ta paylaşma bitince
 // silinir; Android'de paylaşma penceresi açılır açılmaz söz tamamlandığından (hedef uygulama dosyayı
 // o sırada okuyor olabilir) silme bir sonraki rapora ertelenir.
-const ONEK = "Mikro-Rapor-";
+const ONEK = "Sormix-Rapor-";
+// Ad değişikliğinden (Mikro → Sormix) önce kalmış geçici raporlar da temizlenir
+const ESKI_ONEKLER = [ONEK, "Mikro-Rapor-"];
 
 const sil = async (yol) => {
   if (!yol) return;
@@ -25,7 +27,7 @@ const eskileriTemizle = async () => {
     );
     await Promise.all(
       adlar
-        .filter((ad) => ad.startsWith(ONEK))
+        .filter((ad) => ESKI_ONEKLER.some((o) => ad.startsWith(o)))
         .map((ad) => sil(FileSystem.cacheDirectory + ad))
     );
   } catch (e) {

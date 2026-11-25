@@ -30,7 +30,7 @@ const SLIDES = [
     id: "1",
     baslik: "Sorunu Çek, Gönder",
     aciklama:
-      "Çözemediğin sorunun fotoğrafını çekip sisteme yüklemen yeterli. Gerisini Mikro Özel Hocan halleder.",
+      "Çözemediğin sorunun fotoğrafını çekip sisteme yüklemen yeterli. Gerisini Sormix halleder.",
     animasyon: kameraAnim,
   },
   {

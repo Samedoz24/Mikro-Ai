@@ -89,7 +89,7 @@ export default function YasOnayScreen({ kullanici, rol, onOnaylandi }) {
     : [
         {
           ikon: "person-outline",
-          metin: `Mikro AI'yı kullanmak için ${ASGARI_YAS} yaşını doldurmuş olmalısın.`,
+          metin: `Sormix'i kullanmak için ${ASGARI_YAS} yaşını doldurmuş olmalısın.`,
         },
         {
           ikon: "people-outline",
@@ -173,7 +173,7 @@ export default function YasOnayScreen({ kullanici, rol, onOnaylandi }) {
         <Text style={[styles.altBaslik, { color: tema.ikincilMetin }]}>
           {yoneticiMi
             ? "Dershane yönetici hesabını kullanmadan önce aşağıdaki bilgileri okuyup onaylaman gerekiyor."
-            : "Mikro AI'yı güvenle kullanabilmen için aşağıdaki bilgileri okuyup onaylaman gerekiyor."}
+            : "Sormix'i güvenle kullanabilmen için aşağıdaki bilgileri okuyup onaylaman gerekiyor."}
         </Text>
 
         <View

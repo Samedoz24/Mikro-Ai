@@ -64,10 +64,10 @@ export const bosKoltuk = (koltuk, uyeSayisi) =>
 // Müdürün öğrencilere göndereceği hazır katılım metni
 export const ogrenciDavetMetni = (kurumAdi, kod) =>
   [
-    `🏫 ${kurumAdi || "Dershanemiz"} — Mikro AI`,
+    `🏫 ${kurumAdi || "Dershanemiz"} — Sormix`,
     "",
     "Soru çözücü uygulamaya dershane hesabınla katılabilirsin:",
-    "1. Mikro AI uygulamasını telefonuna indir ve Öğrenci olarak giriş yap.",
+    "1. Sormix uygulamasını telefonuna indir ve Öğrenci olarak giriş yap.",
     '2. Hesabım sayfasında "Dershane Kodu Gir" bölümünü aç.',
     `3. Dershane kodunu yaz: ${kod}`,
     '4. Bilgilendirmeyi okuyup onayla ve "Bağlan"a bas.',
@@ -78,10 +78,10 @@ export const ogrenciDavetMetni = (kurumAdi, kod) =>
 // Müdürün davet ettiği öğretmene göndereceği hazır mesaj
 export const ogretmenDavetMetni = (kurumAdi, eposta) =>
   [
-    `🏫 ${kurumAdi || "Dershanemiz"} — Mikro AI öğretmen daveti`,
+    `🏫 ${kurumAdi || "Dershanemiz"} — Sormix öğretmen daveti`,
     "",
-    "Seni dershanemizin Mikro AI hesabına öğretmen olarak ekledik:",
-    "1. Mikro AI uygulamasını telefonuna indir.",
+    "Seni dershanemizin Sormix hesabına öğretmen olarak ekledik:",
+    "1. Sormix uygulamasını telefonuna indir.",
     "2. Giriş ekranında Yönetici sekmesini seç.",
     `3. ${eposta} adresiyle giriş yap (Google ile Giriş Yap önerilir).`,
     "",

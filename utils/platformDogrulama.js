@@ -119,8 +119,8 @@ export const formuDenetle = (
 
 // Oluşturulan dershane için müdüre iletilecek mesaj
 export const mudurMesaji = ({ ad, mudurEposta, kurumKodu }) =>
-  `${ad} için Mikro yönetici hesabın hazır.\n\n` +
-  `1) Mikro uygulamasını indir.\n` +
+  `${ad} için Sormix yönetici hesabın hazır.\n\n` +
+  `1) Sormix uygulamasını indir.\n` +
   `2) Giriş ekranında "Yönetici" sekmesini seç ve ${mudurEposta} e-posta adresinle giriş yap (e-postanı doğrulaman gerekir).\n` +
   `3) Dershane sekmesinden öğrencilerine verebileceğin kayıt kodunu görürsün: ${kurumKodu}`;
 

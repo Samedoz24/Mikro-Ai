@@ -57,7 +57,8 @@ import {
 } from "../utils/cozumYukleyici";
 import { soruBlokHtml, belgeHtml } from "../utils/pdfIcerik";
 import { DERSLER, dersBul, kategoriSiralamasi, yeniCozumMu } from "../utils/ders";
-import { INCELEME_MESAJI, incelemedeMi } from "../utils/soruDurumu";
+import { INCELEME_MESAJI, incelemedeMi, iptalMi, iptalMesaji } from "../utils/soruDurumu";
+import { soruIncelemeKarariVer } from "../utils/kotaIstemci";
 
 const ekranGenisligi = Dimensions.get("window").width;
 const ekranYuksekligi = Dimensions.get("window").height;
@@ -69,7 +70,9 @@ const pdfCozumVerisi = async (soru, eposta) => {
       cozum: null,
       mesaj: incelemedeMi(soru)
         ? "🔍 " + INCELEME_MESAJI
-        : "⏳ Bu soru henüz yapay zeka tarafından çözülmedi veya beklemede.",
+        : iptalMi(soru)
+          ? "✖ " + iptalMesaji(soru)
+          : "⏳ Bu soru henüz yapay zeka tarafından çözülmedi veya beklemede.",
     };
   }
   const { cozumDetayi, hata } = await cozumYukle(soru, eposta);
@@ -125,6 +128,7 @@ export default function HistoryScreen() {
   const [secilenSik, setSecilenSik] = useState(null);
   const [pratikCozumGorunur, setPratikCozumGorunur] = useState(false);
   const [dersSecimiAcik, setDersSecimiAcik] = useState(false);
+  const [kararIsleniyor, setKararIsleniyor] = useState(false);
 
   useEffect(() => {
     // Sorular sahibinin kimliğiyle sorgulanır (eski sorulara kimlik sunucuda eklendi: functions/goc.js)
@@ -153,6 +157,54 @@ export default function HistoryScreen() {
 
     return () => abonelik();
   }, []);
+
+  // Açık sorunun güncel hâli (durum, karar): çözüm akışı durumu değiştirirse pencere de güncel kalır
+  const canliSoru = sorular.find((s) => s.id === seciliSoru?.id) || seciliSoru;
+
+  // "İnceleme Gerekli" soruda öğrencinin kararı. İptal ve hak iadesi sunucuda yapılır (soruIncelemeKarari).
+  const kararGonder = async (karar) => {
+    if (!canliSoru?.id || kararIsleniyor) return;
+    setKararIsleniyor(true);
+    try {
+      const sonuc = await soruIncelemeKarariVer(canliSoru.id, karar);
+      if (karar === "devam") {
+        setSeciliSoru((onceki) => ({ ...onceki, kullaniciKarari: "devam" }));
+        Alert.alert("Tamam", "Soruyu çözmeye devam ediyoruz. Çözüm hazır olunca bildireceğiz.");
+      } else {
+        const iadeEdildi = sonuc?.iade === "iade-edildi";
+        setSeciliSoru((onceki) => ({ ...onceki, durum: "İptal Edildi", hakIadeEdildi: iadeEdildi }));
+        Alert.alert(
+          "Soru İptal Edildi",
+          iadeEdildi
+            ? "Soru hakkın iade edildi."
+            : sonuc?.iade === "gun-gecti"
+              ? "Bu soru önceki bir güne ait olduğu için günlük soru hakkın zaten yenilenmişti."
+              : "Bu soru için iade edilecek bir hak bulunamadı."
+        );
+      }
+    } catch (hata) {
+      console.log("İnceleme kararı gönderilemedi:", hata?.code, hata?.message);
+      Alert.alert(
+        "İşlem Yapılamadı",
+        hata?.message === "durum-uygun-degil"
+          ? "Bu sorunun durumu değişti; soru şu an yeniden çözülüyor olabilir. Biraz sonra tekrar bak."
+          : "İşlem şu an yapılamadı. Lütfen bağlantını kontrol edip tekrar dene."
+      );
+    } finally {
+      setKararIsleniyor(false);
+    }
+  };
+
+  const iptalOnayi = () => {
+    Alert.alert(
+      "Soru iptal edilsin mi?",
+      "Bu soru artık çözülmeyecek. Soru bugün sorulduysa soru hakkın iade edilir.",
+      [
+        { text: "Vazgeç", style: "cancel" },
+        { text: "İptal Et ve İade Et", style: "destructive", onPress: () => kararGonder("iptal") },
+      ]
+    );
+  };
 
   // Kategoriler: "Tümü", sonra en çok soru sorulan ders (eşitlikte son sorusu daha yeni olan), "Diğer" sonda
   useEffect(() => {
@@ -190,7 +242,7 @@ export default function HistoryScreen() {
     }
 
     // Yapay zekânın güvenle çözemediği soru: dosya olsa bile çözüm gösterilmez, inceleme mesajı görünür
-    if (incelemedeMi(soru)) {
+    if (incelemedeMi(soru) || iptalMi(soru)) {
       setSeciliSoru((prev) => ({ ...prev, cozumDetayi: null, cozumKartiLink: null }));
       setCozumYukleniyor(false);
       return;
@@ -581,7 +633,9 @@ export default function HistoryScreen() {
                             ? "✅ Çözüldü"
                             : incelemedeMi(item)
                               ? "🔍 İnceleniyor"
-                              : "⏳ " + item.durum}
+                              : iptalMi(item)
+                                ? "✖ İptal edildi"
+                                : "⏳ " + item.durum}
                       </Text>
                     </View>
                     <Ionicons
@@ -986,13 +1040,47 @@ export default function HistoryScreen() {
                     >
                       {cozumHatasi
                         ? "Çözüm şu an yüklenemedi. Lütfen bağlantını kontrol edip daha sonra tekrar dene."
-                        : seciliSoru?.durum === "Çözüldü"
+                        : canliSoru?.durum === "Çözüldü"
                         ? "Bu sorunun çözüm detayı şu an hazır değil. Birkaç dakika sonra tekrar dene."
-                        : incelemedeMi(seciliSoru)
-                        ? INCELEME_MESAJI
+                        : incelemedeMi(canliSoru)
+                        ? canliSoru?.kullaniciKarari === "devam"
+                          ? INCELEME_MESAJI + " Çözmeye devam etmemizi istedin."
+                          : INCELEME_MESAJI
+                        : iptalMi(canliSoru)
+                        ? iptalMesaji(canliSoru)
                         : "Yapay zeka analiz dosyası bekleniyor..."}
                     </Text>
-                    {(cozumHatasi || seciliSoru?.durum === "Çözüldü") && (
+                    {incelemedeMi(canliSoru) && !cozumHatasi && (
+                      <View style={styles.kararSatiri}>
+                        <TouchableOpacity
+                          onPress={iptalOnayi}
+                          disabled={kararIsleniyor}
+                          activeOpacity={0.85}
+                          accessibilityRole="button"
+                          accessibilityLabel="Çözme, soru hakkımı iade et"
+                          style={[styles.kararButonu, { backgroundColor: tema.hataKirmizi }, kararIsleniyor && styles.kararPasif]}
+                        >
+                          <Text style={styles.kararYazi}>Çözme, soru hakkımı iade et</Text>
+                        </TouchableOpacity>
+                        {canliSoru?.kullaniciKarari !== "devam" && (
+                          <TouchableOpacity
+                            onPress={() => kararGonder("devam")}
+                            disabled={kararIsleniyor}
+                            activeOpacity={0.85}
+                            accessibilityRole="button"
+                            accessibilityLabel="Çözmeye devam et"
+                            style={[styles.kararButonu, { backgroundColor: "#2E9E5B" }, kararIsleniyor && styles.kararPasif]}
+                          >
+                            {kararIsleniyor ? (
+                              <ActivityIndicator color="#fff" size="small" />
+                            ) : (
+                              <Text style={styles.kararYazi}>Çözmeye devam et</Text>
+                            )}
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    )}
+                    {(cozumHatasi || canliSoru?.durum === "Çözüldü") && (
                       <TouchableOpacity
                         onPress={() => soruDetayAc(seciliSoru)}
                         activeOpacity={0.85}
@@ -1383,6 +1471,18 @@ export default function HistoryScreen() {
 }
 
 const styles = StyleSheet.create({
+  kararSatiri: { flexDirection: "row", gap: 10, marginTop: 20, alignSelf: "stretch" },
+  kararButonu: {
+    flex: 1,
+    minHeight: 52,
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  kararPasif: { opacity: 0.6 },
+  kararYazi: { color: "#fff", fontWeight: "700", fontSize: 14, textAlign: "center" },
   safeArea: {
     flex: 1,
     paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,

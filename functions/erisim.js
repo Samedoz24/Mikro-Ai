@@ -13,7 +13,7 @@ const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestor
 const { getStorage } = require("firebase-admin/storage");
 const { HttpsError } = require("firebase-functions/v2/https");
 const { mudurDogrula } = require("./kurum");
-const { INCELEME_DURUMU } = require("./kota");
+const { INCELEME_DURUMU, IPTAL_DURUMU } = require("./kota");
 
 const db = () => getFirestore();
 
@@ -256,8 +256,8 @@ const soruCozumuGetir = async (uid, token, veri) => {
   await erisimiKaydet({ uid, eposta }, kurumRef, soru.ogrenciUid, "soru-detay");
 
   const belge = soru.veri;
-  // Yapay zekânın güvenle çözemediği soru: çözüm (varsa bile) verilmez; inceleme bitince "Çözüldü" olur
-  const inceleme = belge.durum === INCELEME_DURUMU;
+  // Yapay zekânın güvenle çözemediği ya da öğrencinin iptal ettiği soru: çözüm (varsa bile) verilmez
+  const inceleme = belge.durum === INCELEME_DURUMU || belge.durum === IPTAL_DURUMU;
   let cozum = null;
   if (belge.cozumDetayi && typeof belge.cozumDetayi === "object") cozum = belge.cozumDetayi;
   else if (typeof belge.cozumDetayi === "string" && belge.cozumDetayi.trim().startsWith("{")) {

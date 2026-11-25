@@ -100,6 +100,13 @@ const iso = (ms) => new Date(ms).toISOString();
   });
   const cozulduDetay = await erisim.soruCozumuGetir(M, TOKEN, { soruId: "cozuldu1" });
   esit("çözüldü: çözüm verilir", [cozulduDetay.cozum?.cardTitle, cozulduDetay.inceleme], ["Çözüm", false]);
+  await db.doc("sorular/iptal1").set({
+    kullaniciUid: O, tarih: iso(katilma + 4 * GUN), ders: "Kimya", durum: "İptal Edildi",
+    cozumDetayi: { cardTitle: "İptal edilen soru" },
+  });
+  const iptalDetay = await erisim.soruCozumuGetir(M, TOKEN, { soruId: "iptal1" });
+  esit("iptal: çözüm verilmez", [iptalDetay.cozum, iptalDetay.inceleme], [null, true]);
+  await db.doc("sorular/iptal1").delete();
   // Sonraki sayımları etkilemesin diye bu iki deneme sorusu silinir
   await db.doc("sorular/inceleme1").delete();
   await db.doc("sorular/cozuldu1").delete();

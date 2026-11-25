@@ -66,3 +66,10 @@ export const soruHataMesaji = (hata) => {
   }
   return "Soru gönderilirken bir sorun oluştu. Lütfen tekrar dene.";
 };
+
+// "İnceleme Gerekli" soruda öğrencinin kararı: "devam" ya da "iptal" (iptalde hak sunucuda iade edilir).
+// Dönüş: { durum, iade? }  (iade: "iade-edildi" | "gun-gecti" | "zaten-iade" | "kayit-yok")
+export const soruIncelemeKarariVer = async (soruId, karar) => {
+  const sonuc = await httpsCallable(functions, "soruIncelemeKarari")({ soruId, karar });
+  return sonuc.data;
+};

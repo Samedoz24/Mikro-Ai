@@ -148,6 +148,12 @@ exports.soruGonder = onCall(ORTAK, (request) =>
   kota.soruGonder(kurum.girisliUid(request), request.auth.token, request.data)
 );
 
+// "İnceleme Gerekli" soruda öğrencinin kararı: çözmeye devam / iptal + hak iadesi (aynı gün, bir kez).
+// Yalnızca sorunun sahibi, yalnızca inceleme durumunda (functions/kota.js soruIncelemeKarari).
+exports.soruIncelemeKarari = onCall(ORTAK, (request) =>
+  kota.soruIncelemeKarari(kurum.girisliUid(request), request.data)
+);
+
 // Veli–öğrenci bağlantısı (yalnızca sunucu kurar). Öğrenci kendi kodunu alır; veli kodla bağlanır/kaldırır.
 exports.baglantiKoduAl = onCall(ORTAK, (request) =>
   veliBaglanti.baglantiKoduAl(kurum.girisliUid(request))
@@ -250,17 +256,6 @@ exports.soruOzetiniGuncelle = onDocumentWritten(
   async (event) => {
     const uid = event.data?.after?.data()?.kullaniciUid || event.data?.before?.data()?.kullaniciUid;
     if (uid) await ozet.ozetYenile(uid);
-  }
-);
-
-// Çözüm akışı (n8n) bir soruyu "İnceleme Gerekli" yaparsa o sorunun harcadığı soru hakkı geri verilir (aynı gün,
-// bir kez). Durumu istemci değiştiremez (firestore.rules). Geçici hatada Firebase yeniden dener; iade tekrarlanmaz.
-exports.soruKotaIadesi = onDocumentWritten(
-  { document: "sorular/{soruId}", region: "europe-west1", maxInstances: 5, retry: true },
-  async (event) => {
-    if (!kota.iadeGerekirMi(event.data?.before?.data(), event.data?.after?.data())) return;
-    const sonuc = await kota.kotaIadeEt(event.params.soruId);
-    console.log("Soru hakkı iadesi:", sonuc.durum);
   }
 );
 

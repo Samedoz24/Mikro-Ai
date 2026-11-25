@@ -219,6 +219,11 @@ const dene = async (ad, fn) => {
   await hazirla((a) => a.set("sorular/sIade", { kullaniciUid: "ali", kullaniciEposta: "ali@ornek.com", durum: "Bekliyor" }));
   await dene("sahibi soru durumunu İnceleme Gerekli yapamaz", () =>
     assertFails(updateDoc(doc(ali, "sorular/sIade"), { durum: "İnceleme Gerekli" })));
+  await hazirla((a) => a.set("sorular/sKarar", { kullaniciUid: "ali", kullaniciEposta: "ali@ornek.com", durum: "İnceleme Gerekli" }));
+  await dene("sahibi soruyu doğrudan iptal edemez (sunucu üzerinden)", () =>
+    assertFails(updateDoc(doc(ali, "sorular/sKarar"), { durum: "İptal Edildi" })));
+  await dene("sahibi karar / iade alanı yazamaz", () =>
+    assertFails(updateDoc(doc(ali, "sorular/sKarar"), { kullaniciKarari: "iptal", hakIadeEdildi: true })));
 
   // Soru okuma: sahibi okur, başkası okuyamaz
   await hazirla((a) => a.set("sorular/s2", { kullaniciUid: "ayse", kullaniciEposta: "ayse@ornek.com", durum: "Çözüldü" }));

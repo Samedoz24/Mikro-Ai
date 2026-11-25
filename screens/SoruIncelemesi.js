@@ -267,7 +267,9 @@ export default function SoruIncelemesi({ soru, tema, onGeri }) {
             <Text style={[styles.durumYazi, { color: tema.metin }]}>
               {hata
                 ? "Çözüm şu an yüklenemedi. Bağlantıyı kontrol edip tekrar dene."
-                : inceleme
+                : inceleme && soru.durum === "İptal Edildi"
+                  ? "Öğrenci bu soruyu iptal etti."
+                  : inceleme
                   ? "Yapay zekâ bu soruyu güvenle çözemedi; soru inceleniyor. Çözüm hazır olunca burada görünecek."
                   : soru.cozuldu
                   ? "Bu sorunun çözüm detayı şu an hazır değil. Birkaç dakika sonra tekrar dene."

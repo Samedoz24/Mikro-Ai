@@ -43,7 +43,7 @@ import useAltMenuBoslugu from "../utils/altMenu";
 // 🚀 YENİ: Gerçek karanlık mod kontrolü için
 import { colors } from "../theme";
 import { cozumYukle, kesinSonuc } from "../utils/cozumYukleyici";
-import { INCELEME_MESAJI, incelemedeMi } from "../utils/soruDurumu";
+import { INCELEME_MESAJI, incelemedeMi, iptalMi } from "../utils/soruDurumu";
 import { dersBul } from "../utils/ders";
 import {
   veliBagla,
@@ -358,8 +358,8 @@ export default function ParentDashboard() {
     setCozumYukleniyor(true);
     setCozumHatasi(false);
 
-    // Yapay zekânın güvenle çözemediği soru: dosya olsa bile çözüm gösterilmez
-    if (incelemedeMi(soru)) {
+    // Yapay zekânın güvenle çözemediği ya da öğrencinin iptal ettiği soru: dosya olsa bile çözüm gösterilmez
+    if (incelemedeMi(soru) || iptalMi(soru)) {
       setSeciliSoru((prev) => ({ ...prev, cozumDetayi: null, cozumKartiLink: null }));
       setCozumYukleniyor(false);
       return;
@@ -1078,6 +1078,8 @@ export default function ParentDashboard() {
                         ? "Bu sorunun çözüm detayı şu an hazır değil. Birkaç dakika sonra tekrar dene."
                         : incelemedeMi(seciliSoru)
                         ? INCELEME_MESAJI
+                        : iptalMi(seciliSoru)
+                        ? "Öğrenci bu soruyu iptal etti."
                         : "Yapay zeka analiz dosyası bekleniyor..."}
                     </Text>
                     {(cozumHatasi || seciliSoru?.durum === "Çözüldü") && (

@@ -8,9 +8,11 @@
 //   kotaSayaclari/c_{cihaz özeti}    cihaz başına (cihaz kimliği ham saklanmaz, SHA-256 özeti saklanır)
 // İkisinden biri günlük sınıra ulaşırsa soru reddedilir. Gün, Türkiye saatine göre (UTC+3) sunucuda hesaplanır.
 //
-// İade: yapay zekâ bir soruyu güvenle çözemezse çözüm akışı (n8n, sunucu yetkisiyle) durumu "İnceleme Gerekli"
-// yapar; o sorunun harcadığı hak, soru aynı gün içindeyse BİR KEZ geri verilir (kotaIadeEt). Soru durumunu istemci
-// değiştiremez (firestore.rules), bu yüzden kullanıcı kendine hak iadesi yaptıramaz. İade için gereken bilgiler
+// İnceleme: yapay zekâ bir soruyu güvenle çözemezse çözüm akışı (n8n, sunucu yetkisiyle) durumu "İnceleme Gerekli"
+// yapar. Öğrenci seçer (soruIncelemeKarari): "devam" → soru incelemede kalır, hak iade edilmez; "iptal" → soru
+// "İptal Edildi" olur (çözüm akışı bir daha işlemez) ve harcanan hak, soru aynı gün içindeyse BİR KEZ geri verilir.
+// Soru durumunu istemci doğrudan değiştiremez (firestore.rules); karar yalnızca sunucu üzerinden, yalnızca sorunun
+// sahibi tarafından ve yalnızca "İnceleme Gerekli" durumundayken verilebilir. İade için gereken bilgiler
 // (uid, cihaz özeti, gün) soru belgesine değil, istemciye tamamen kapalı kotaKayitlari/{soruId} belgesine yazılır;
 // bu kayıtlar ertesi gece silinir (eskiKotaKayitlariniSil), hesap silinince de silinir (kotaKayitlariniSil).
 //
@@ -34,6 +36,9 @@ const EN_BUYUK_FOTO = 10 * 1024 * 1024;
 const TURKIYE_FARKI_MS = 3 * 60 * 60 * 1000;
 // Çözüm akışının (n8n) güvenle çözemediği sorular için yazdığı durum; birebir bu metin olmalı
 const INCELEME_DURUMU = "İnceleme Gerekli";
+// Öğrencinin iptal ettiği soru: çözüm akışı bu durumdaki soruyu işlemez, sonuç yazmaz
+const IPTAL_DURUMU = "İptal Edildi";
+const KARARLAR = ["devam", "iptal"];
 const TOPLU_BOYUT = 400;
 
 // Türkiye takvim günü (YYYY-AA-GG); Türkiye yaz saati uygulamaz, fark sabit UTC+3
@@ -208,36 +213,72 @@ const soruGonder = async (uid, token, veri, simdi = Date.now()) => {
   });
 };
 
-// Saf: soru güncellemesi iade gerektiriyor mu? (durum "İnceleme Gerekli"ye YENİ geçtiyse)
-const iadeGerekirMi = (once, sonra) =>
-  sonra?.durum === INCELEME_DURUMU && once?.durum !== INCELEME_DURUMU;
+const SORU_KIMLIGI_BICIMI = /^[A-Za-z0-9]{1,64}$/;
 
-// Bir sorunun harcadığı hakkı geri verir. Tekrar çalıştırılabilir: her soru için en fazla bir kez iade edilir.
-// Yalnızca sorunun sorulduğu Türkiye günü içinde iade edilir (sayaçlar her gün sıfırlanır; geçmiş günün hakkı
-// bugüne eklenmez). Sayaç asla eksiye düşmez.
-// Dönüş: { durum: "iade-edildi" | "zaten-iade" | "kayit-yok" | "gun-gecti" }
-const kotaIadeEt = async (soruId, simdi = Date.now()) => {
-  if (typeof soruId !== "string" || !/^[A-Za-z0-9]{1,64}$/.test(soruId)) return { durum: "kayit-yok" };
+// İade adımı (bir transaction içinde, tüm okumalardan sonra yazar). Her soru için en fazla bir kez; yalnızca
+// sorunun sorulduğu Türkiye günü içinde (sayaçlar her gün sıfırlanır: eski günlerden biriken soruları bugün iptal
+// ederek günlük sınırı aşmak mümkün olmasın). Sayaç asla eksiye düşmez.
+// Dönüş: "iade-edildi" | "zaten-iade" | "kayit-yok" | "gun-gecti"
+const iadeOku = async (tx, soruId) => {
   const kayitRef = db().doc(`kotaKayitlari/${soruId}`);
-  return db().runTransaction(async (tx) => {
-    const kayitSnap = await tx.get(kayitRef);
-    if (!kayitSnap.exists) return { durum: "kayit-yok" };
-    const kayit = kayitSnap.data();
-    if (kayit.iade === true) return { durum: "zaten-iade" };
-    if (kayit.gun !== turkiyeGunu(simdi)) {
-      tx.update(kayitRef, { iade: true, iadeSonucu: "gun-gecti" });
-      return { durum: "gun-gecti" };
+  const kayitSnap = await tx.get(kayitRef);
+  if (!kayitSnap.exists) return { kayitRef, kayit: null, sayaclar: [] };
+  const kayit = kayitSnap.data();
+  const refler = [db().doc(`kotaSayaclari/h_${kayit.uid}`), db().doc(`kotaSayaclari/c_${kayit.cihaz}`)];
+  const snaplar = await Promise.all(refler.map((r) => tx.get(r)));
+  return { kayitRef, kayit, sayaclar: refler.map((ref, i) => ({ ref, veri: snaplar[i].data() })) };
+};
+
+const iadeYaz = (tx, okunan, simdi) => {
+  const { kayitRef, kayit, sayaclar } = okunan;
+  if (!kayit) return "kayit-yok";
+  if (kayit.iade === true) return "zaten-iade";
+  if (kayit.gun !== turkiyeGunu(simdi)) {
+    tx.update(kayitRef, { iade: true, iadeSonucu: "gun-gecti" });
+    return "gun-gecti";
+  }
+  for (const { ref, veri } of sayaclar) {
+    if (veri && veri.gun === kayit.gun && Number.isInteger(veri.sayi) && veri.sayi > 0) {
+      tx.update(ref, { sayi: veri.sayi - 1, guncelleme: FieldValue.serverTimestamp() });
     }
-    const refler = [db().doc(`kotaSayaclari/h_${kayit.uid}`), db().doc(`kotaSayaclari/c_${kayit.cihaz}`)];
-    const sayaclar = await Promise.all(refler.map((r) => tx.get(r)));
-    sayaclar.forEach((snap, i) => {
-      const veri = snap.data();
-      if (veri && veri.gun === kayit.gun && Number.isInteger(veri.sayi) && veri.sayi > 0) {
-        tx.update(refler[i], { sayi: veri.sayi - 1, guncelleme: FieldValue.serverTimestamp() });
-      }
+  }
+  tx.update(kayitRef, { iade: true, iadeSonucu: "iade-edildi" });
+  return "iade-edildi";
+};
+
+// Öğrencinin inceleme kararı. Girdi: { soruId, karar: "devam" | "iptal" }
+// Yalnızca sorunun sahibi, yalnızca durum "İnceleme Gerekli" iken. Dönüş: { durum, iade? }
+const soruIncelemeKarari = async (uid, veri, simdi = Date.now()) => {
+  const soruId = veri?.soruId;
+  const karar = veri?.karar;
+  if (typeof soruId !== "string" || !SORU_KIMLIGI_BICIMI.test(soruId)) {
+    throw new HttpsError("invalid-argument", "soru-gecersiz");
+  }
+  if (!KARARLAR.includes(karar)) throw new HttpsError("invalid-argument", "karar-gecersiz");
+  const soruRef = db().doc(`sorular/${soruId}`);
+
+  return db().runTransaction(async (tx) => {
+    const soruSnap = await tx.get(soruRef);
+    // Var olmayan ve başkasına ait soru aynı cevabı alır (başkasının soru kimliği yoklanamasın)
+    if (!soruSnap.exists || soruSnap.get("kullaniciUid") !== uid) {
+      throw new HttpsError("not-found", "soru-yok");
+    }
+    if (soruSnap.get("durum") !== INCELEME_DURUMU) {
+      throw new HttpsError("failed-precondition", "durum-uygun-degil");
+    }
+    if (karar === "devam") {
+      tx.update(soruRef, { kullaniciKarari: "devam", kararTarihi: FieldValue.serverTimestamp() });
+      return { durum: INCELEME_DURUMU };
+    }
+    const okunan = await iadeOku(tx, soruId);
+    const iade = iadeYaz(tx, okunan, simdi);
+    tx.update(soruRef, {
+      durum: IPTAL_DURUMU,
+      kullaniciKarari: "iptal",
+      kararTarihi: FieldValue.serverTimestamp(),
+      hakIadeEdildi: iade === "iade-edildi",
     });
-    tx.update(kayitRef, { iade: true, iadeSonucu: "iade-edildi" });
-    return { durum: "iade-edildi" };
+    return { durum: IPTAL_DURUMU, iade };
   });
 };
 
@@ -263,11 +304,11 @@ const kotaKayitlariniSil = (uid) => topluSil(db().collection("kotaKayitlari").wh
 module.exports = {
   soruGonder,
   kotaDurumu,
-  kotaIadeEt,
-  iadeGerekirMi,
+  soruIncelemeKarari,
   eskiKotaKayitlariniSil,
   kotaKayitlariniSil,
   INCELEME_DURUMU,
+  IPTAL_DURUMU,
   // test için
   turkiyeGunu,
   sinirlariCoz,

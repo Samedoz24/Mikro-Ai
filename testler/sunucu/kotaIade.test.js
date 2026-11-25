@@ -1,9 +1,10 @@
-// Sunucu testi: functions/kota.js — "İnceleme Gerekli" sorularında soru hakkı iadesi.
+// Sunucu testi: functions/kota.js — "İnceleme Gerekli" sorularında öğrenci kararı ve soru hakkı iadesi.
 // Çalıştırma (proje kökünden):
 //   firebase emulators:exec --project demo-mikro --only firestore,auth,storage "node testler/sunucu/kotaIade.test.js"
 //
 // Denenenler: soruGonder iade kaydını (uid, cihaz özeti, gün) istemciye kapalı kotaKayitlari'na yazar ve soru
-// belgesine cihaz bilgisi koymaz; iade yalnızca "İnceleme Gerekli"ye YENİ geçişte, aynı gün içinde ve BİR KEZ yapılır;
+// belgesine cihaz bilgisi koymaz; inceleme kararını yalnızca sorunun sahibi ve yalnızca "İnceleme Gerekli" iken
+// verebilir; "devam" iade yapmaz; "iptal" soruyu "İptal Edildi" yapar ve hakkı aynı gün içinde BİR KEZ iade eder;
 // sayaç eksiye düşmez; başka güne ait sayaca dokunulmaz; eski kayıtlar ve silinen hesabın kayıtları silinir.
 
 process.env.GCLOUD_PROJECT = process.env.GCLOUD_PROJECT || "demo-mikro";
@@ -53,16 +54,23 @@ const temizle = async () => {
   const gun = kota.turkiyeGunu(simdi);
   const cihazId = `c_${kota.cihazOzeti(CIHAZ)}`;
 
-  // ================================================================ 1) iadeGerekirMi (saf)
-  esit("Bekliyor → İnceleme Gerekli", kota.iadeGerekirMi({ durum: "Bekliyor" }, { durum: "İnceleme Gerekli" }), true);
-  esit("İşleniyor → İnceleme Gerekli", kota.iadeGerekirMi({ durum: "İşleniyor" }, { durum: "İnceleme Gerekli" }), true);
-  esit("zaten İnceleme Gerekli (başka alan değişti)", kota.iadeGerekirMi({ durum: "İnceleme Gerekli" }, { durum: "İnceleme Gerekli" }), false);
-  esit("Çözüldü", kota.iadeGerekirMi({ durum: "Bekliyor" }, { durum: "Çözüldü" }), false);
-  esit("silinen soru", kota.iadeGerekirMi({ durum: "Bekliyor" }, undefined), false);
-  esit("yeni oluşturulan İnceleme Gerekli", kota.iadeGerekirMi(undefined, { durum: "İnceleme Gerekli" }), true);
-  esit("benzer ama farklı metin iade vermez", kota.iadeGerekirMi({ durum: "Bekliyor" }, { durum: "inceleme gerekli" }), false);
+  const hataKodu = async (fn) => {
+    try {
+      await fn();
+      return "hata-yok";
+    } catch (e) {
+      return e?.message;
+    }
+  };
+  const soruDurumu = async (id) => (await db.doc(`sorular/${id}`).get()).data();
+  const incelemeSorusu = async (id, uid, kayitGunu, sayac = 1) => {
+    await db.doc(`sorular/${id}`).set({ kullaniciUid: uid, durum: "İnceleme Gerekli", tarih: new Date(simdi).toISOString() });
+    if (kayitGunu) await db.doc(`kotaKayitlari/${id}`).set({ uid, cihaz: `oz_${uid}`, gun: kayitGunu });
+    await db.doc(`kotaSayaclari/h_${uid}`).set({ gun, sayi: sayac });
+    await db.doc(`kotaSayaclari/c_oz_${uid}`).set({ gun, sayi: sayac });
+  };
 
-  // ================================================================ 2) soruGonder iade kaydı yazar
+  // ================================================================ 1) soruGonder iade kaydı yazar
   await db.doc("kullanicilar/ogrA").set({ rol: "ogrenci" });
   const foto = `kullanicilar/ogrA/sorular/${simdi}.jpg`;
   await fotoYukle(foto);
@@ -74,34 +82,56 @@ const temizle = async () => {
   esit("soru belgesinde cihaz bilgisi yok", Object.keys(soru).some((k) => /cihaz/i.test(k)), false);
   esit("sayaçlar 1", [await sayi("h_ogrA"), await sayi(cihazId)], [1, 1]);
 
-  // ================================================================ 3) aynı gün iade: bir kez
-  esit("iade edildi", (await kota.kotaIadeEt(sonuc.soruId, simdi)).durum, "iade-edildi");
-  esit("sayaçlar 0", [await sayi("h_ogrA"), await sayi(cihazId)], [0, 0]);
-  esit("ikinci iade yapılmaz", (await kota.kotaIadeEt(sonuc.soruId, simdi)).durum, "zaten-iade");
-  esit("sayaçlar hâlâ 0 (eksiye düşmez)", [await sayi("h_ogrA"), await sayi(cihazId)], [0, 0]);
+  // ================================================================ 2) girdi ve yetki kontrolleri
+  esit("biçimsiz soru kimliği", await hataKodu(() => kota.soruIncelemeKarari("ogrA", { soruId: "../x", karar: "iptal" }, simdi)), "soru-gecersiz");
+  esit("geçersiz karar", await hataKodu(() => kota.soruIncelemeKarari("ogrA", { soruId: sonuc.soruId, karar: "sil" }, simdi)), "karar-gecersiz");
+  esit("olmayan soru", await hataKodu(() => kota.soruIncelemeKarari("ogrA", { soruId: "yokboyle", karar: "iptal" }, simdi)), "soru-yok");
+  esit("Bekliyor durumunda karar verilemez", await hataKodu(() => kota.soruIncelemeKarari("ogrA", { soruId: sonuc.soruId, karar: "iptal" }, simdi)), "durum-uygun-degil");
+  esit("reddedilen kararda sayaç değişmez", [await sayi("h_ogrA"), await sayi(cihazId)], [1, 1]);
 
-  // ================================================================ 4) sayaç zaten 0 ise eksiye düşmez
-  await db.doc("kotaKayitlari/sifir1").set({ uid: "ogrB", cihaz: "ozetB", gun });
-  await db.doc("kotaSayaclari/h_ogrB").set({ gun, sayi: 0 });
-  esit("sıfır sayaç: iade kaydı işlenir", (await kota.kotaIadeEt("sifir1", simdi)).durum, "iade-edildi");
-  esit("sıfır sayaç eksiye düşmez", await sayi("h_ogrB"), 0);
+  // Asıl soru incelemeye düşer (çözüm akışı yazar)
+  await db.doc(`sorular/${sonuc.soruId}`).update({ durum: "İnceleme Gerekli" });
+  esit("başkasının sorusu: aynı cevap (soru-yok)", await hataKodu(() => kota.soruIncelemeKarari("baskaOgr", { soruId: sonuc.soruId, karar: "iptal" }, simdi)), "soru-yok");
+  esit("başkası iptal edemedi: durum aynı", (await soruDurumu(sonuc.soruId)).durum, "İnceleme Gerekli");
 
-  // ================================================================ 5) ertesi gün iade yapılmaz
-  await db.doc("kotaKayitlari/dun1").set({ uid: "ogrC", cihaz: "ozetC", gun: kota.turkiyeGunu(simdi - GUN_MS) });
-  await db.doc("kotaSayaclari/h_ogrC").set({ gun, sayi: 2 }); // bugünün sayacı
-  esit("dünkü soru: gün geçti", (await kota.kotaIadeEt("dun1", simdi)).durum, "gun-gecti");
-  esit("bugünün sayacına dokunulmaz", await sayi("h_ogrC"), 2);
-  esit("gün geçen kayıt tekrar denenmez", (await kota.kotaIadeEt("dun1", simdi)).durum, "zaten-iade");
+  // ================================================================ 3) çözmeye devam: iade yok, durum aynı
+  esit("devam", await kota.soruIncelemeKarari("ogrA", { soruId: sonuc.soruId, karar: "devam" }, simdi), { durum: "İnceleme Gerekli" });
+  esit("devam: karar kaydedildi, durum aynı", [(await soruDurumu(sonuc.soruId)).kullaniciKarari, (await soruDurumu(sonuc.soruId)).durum], ["devam", "İnceleme Gerekli"]);
+  esit("devam: sayaçlar değişmedi", [await sayi("h_ogrA"), await sayi(cihazId)], [1, 1]);
 
-  // ================================================================ 6) sayaç başka güne aitse dokunulmaz
-  await db.doc("kotaKayitlari/esik1").set({ uid: "ogrD", cihaz: "ozetD", gun });
+  // ================================================================ 4) devamdan sonra iptal: iade (aynı gün, bir kez)
+  esit("iptal", await kota.soruIncelemeKarari("ogrA", { soruId: sonuc.soruId, karar: "iptal" }, simdi), { durum: "İptal Edildi", iade: "iade-edildi" });
+  const iptalSoru = await soruDurumu(sonuc.soruId);
+  esit("iptal: durum, karar, iade işareti", [iptalSoru.durum, iptalSoru.kullaniciKarari, iptalSoru.hakIadeEdildi], ["İptal Edildi", "iptal", true]);
+  esit("iptal: sayaçlar 0", [await sayi("h_ogrA"), await sayi(cihazId)], [0, 0]);
+  esit("ikinci iptal yapılamaz", await hataKodu(() => kota.soruIncelemeKarari("ogrA", { soruId: sonuc.soruId, karar: "iptal" }, simdi)), "durum-uygun-degil");
+  esit("iptal sonrası devam yapılamaz", await hataKodu(() => kota.soruIncelemeKarari("ogrA", { soruId: sonuc.soruId, karar: "devam" }, simdi)), "durum-uygun-degil");
+  esit("tekrarlarda sayaç değişmez", [await sayi("h_ogrA"), await sayi(cihazId)], [0, 0]);
+  // Çözüm akışı soruyu yeniden incelemeye alsa bile iade bir daha yapılmaz (kayıt işaretli)
+  await db.doc(`sorular/${sonuc.soruId}`).update({ durum: "İnceleme Gerekli" });
+  await db.doc("kotaSayaclari/h_ogrA").set({ gun, sayi: 1 });
+  esit("aynı soru tekrar incelemeye düşse de ikinci iade yok", (await kota.soruIncelemeKarari("ogrA", { soruId: sonuc.soruId, karar: "iptal" }, simdi)).iade, "zaten-iade");
+  esit("ikinci iade yapılmadı", await sayi("h_ogrA"), 1);
+
+  // ================================================================ 5) ertesi gün iptal: soru iptal, hak iade edilmez
+  await incelemeSorusu("dun1", "ogrC", kota.turkiyeGunu(simdi - GUN_MS), 2);
+  esit("dünkü soru: gün geçti", (await kota.soruIncelemeKarari("ogrC", { soruId: "dun1", karar: "iptal" }, simdi)).iade, "gun-gecti");
+  esit("dünkü soru iptal edildi, iade işareti false", [(await soruDurumu("dun1")).durum, (await soruDurumu("dun1")).hakIadeEdildi], ["İptal Edildi", false]);
+  esit("bugünün sayacına dokunulmaz", [await sayi("h_ogrC"), await sayi("c_oz_ogrC")], [2, 2]);
+
+  // ================================================================ 6) sayaç sıfırsa eksiye düşmez; başka günün sayacına dokunulmaz
+  await incelemeSorusu("sifir1", "ogrB", gun, 0);
+  await kota.soruIncelemeKarari("ogrB", { soruId: "sifir1", karar: "iptal" }, simdi);
+  esit("sıfır sayaç eksiye düşmez", [await sayi("h_ogrB"), await sayi("c_oz_ogrB")], [0, 0]);
+  await incelemeSorusu("esik1", "ogrD", gun, 3);
   await db.doc("kotaSayaclari/h_ogrD").set({ gun: kota.turkiyeGunu(simdi - GUN_MS), sayi: 3 });
-  await kota.kotaIadeEt("esik1", simdi);
-  esit("başka güne ait sayaç değişmez", await sayi("h_ogrD"), 3);
+  await kota.soruIncelemeKarari("ogrD", { soruId: "esik1", karar: "iptal" }, simdi);
+  esit("başka güne ait hesap sayacı değişmez, bugünkü cihaz sayacı azalır", [await sayi("h_ogrD"), await sayi("c_oz_ogrD")], [3, 2]);
 
-  // ================================================================ 7) geçersiz / olmayan kayıt
-  esit("olmayan kayıt", (await kota.kotaIadeEt("yokboyle", simdi)).durum, "kayit-yok");
-  esit("biçimsiz soru kimliği", (await kota.kotaIadeEt("../kotaSayaclari/h_ogrA", simdi)).durum, "kayit-yok");
+  // ================================================================ 7) iade kaydı olmayan (eski) soru: iptal edilir, iade yok
+  await incelemeSorusu("eskiSoru", "ogrG", null, 1);
+  esit("kayıtsız soru: iptal, iade yok", (await kota.soruIncelemeKarari("ogrG", { soruId: "eskiSoru", karar: "iptal" }, simdi)).iade, "kayit-yok");
+  esit("kayıtsız soru: sayaç değişmez", await sayi("h_ogrG"), 1);
 
   // ================================================================ 8) temizlik
   await db.doc("kotaKayitlari/eski2").set({ uid: "ogrE", cihaz: "x", gun: kota.turkiyeGunu(simdi - 3 * GUN_MS) });

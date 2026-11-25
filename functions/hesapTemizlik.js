@@ -20,6 +20,7 @@ const { getStorage } = require("firebase-admin/storage");
 const { veliBaglantilariniTemizle } = require("./veli");
 const { kodKayitlariniSil } = require("./veliBaglanti");
 const { uyelikSonlandir } = require("./kurum");
+const { kotaKayitlariniSil } = require("./kota");
 
 const db = () => getFirestore();
 const UID_BICIMI = /^[A-Za-z0-9]{1,128}$/;
@@ -70,6 +71,7 @@ const silinenHesabiTemizle = async (uid, onceki, { revenueCatSil } = {}) => {
   }
 
   sonuc.soru = await sorulariSil(uid);
+  await kotaKayitlariniSil(uid);
   await dosyalariSil(uid);
   await db().doc(`abonelikEsitleme/${uid}`).delete();
   if (typeof revenueCatSil === "function") sonuc.revenueCat = await revenueCatSil(uid);

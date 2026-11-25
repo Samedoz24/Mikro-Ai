@@ -238,6 +238,9 @@ exports.lisansKontrol = onSchedule(
     // Sahipsiz veri: rapor hazırlanır; yalnızca Console'dan "onaylandi" yapılınca listedekiler silinir (temizlik.js)
     const temizlikSonucu = await temizlik.sahipsizVeriAdimi();
     console.log("Sahipsiz veri:", JSON.stringify(temizlikSonucu));
+    // Soru hakkı iade kayıtları yalnızca aynı gün gerekir; eskiler silinir
+    const silinenKayit = await kota.eskiKotaKayitlariniSil();
+    console.log("Silinen eski kota kaydı:", silinenKayit);
   }
 );
 
@@ -247,6 +250,17 @@ exports.soruOzetiniGuncelle = onDocumentWritten(
   async (event) => {
     const uid = event.data?.after?.data()?.kullaniciUid || event.data?.before?.data()?.kullaniciUid;
     if (uid) await ozet.ozetYenile(uid);
+  }
+);
+
+// Çözüm akışı (n8n) bir soruyu "İnceleme Gerekli" yaparsa o sorunun harcadığı soru hakkı geri verilir (aynı gün,
+// bir kez). Durumu istemci değiştiremez (firestore.rules). Geçici hatada Firebase yeniden dener; iade tekrarlanmaz.
+exports.soruKotaIadesi = onDocumentWritten(
+  { document: "sorular/{soruId}", region: "europe-west1", maxInstances: 5, retry: true },
+  async (event) => {
+    if (!kota.iadeGerekirMi(event.data?.before?.data(), event.data?.after?.data())) return;
+    const sonuc = await kota.kotaIadeEt(event.params.soruId);
+    console.log("Soru hakkı iadesi:", sonuc.durum);
   }
 );
 

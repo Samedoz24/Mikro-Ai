@@ -78,7 +78,7 @@ const cagir = (fn, basliklar = {}) =>
   esit(
     "callable olmayan fonksiyonlar (adıyla)",
     digerleri.map(([ad]) => ad).sort(),
-    ["abonelikBildirimi", "erisimKayitlariniTemizle", "isimOzetiniGuncelle", "lisansKontrol", "soruOzetiniGuncelle", "veliBaglantilariniTemizle"]
+    ["abonelikBildirimi", "erisimKayitlariniTemizle", "isimOzetiniGuncelle", "lisansKontrol", "soruKotaIadesi", "soruOzetiniGuncelle", "veliBaglantilariniTemizle"]
   );
   const httpUclari = digerleri.filter(([, f]) => f?.__endpoint?.httpsTrigger).map(([ad]) => ad);
   esit("App Check'siz HTTP ucu yalnızca abonelikBildirimi", httpUclari, ["abonelikBildirimi"]);

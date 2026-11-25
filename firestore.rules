@@ -273,6 +273,11 @@ service cloud.firestore {
     }
 
     // Sunucu kota sayaçları ve ayarlar: istemciye tamamen kapalı (yalnızca Admin SDK)
+    // Soru hakkı iade kayıtları (uid, cihaz özeti, gün): yalnızca sunucu
+    match /kotaKayitlari/{soruId} {
+      allow read, write: if false;
+    }
+
     match /kotaSayaclari/{kayitId} {
       allow read, write: if false;
     }

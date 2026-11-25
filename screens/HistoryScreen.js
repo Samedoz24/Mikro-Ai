@@ -57,6 +57,7 @@ import {
 } from "../utils/cozumYukleyici";
 import { soruBlokHtml, belgeHtml } from "../utils/pdfIcerik";
 import { DERSLER, dersBul, kategoriSiralamasi, yeniCozumMu } from "../utils/ders";
+import { INCELEME_MESAJI, incelemedeMi } from "../utils/soruDurumu";
 
 const ekranGenisligi = Dimensions.get("window").width;
 const ekranYuksekligi = Dimensions.get("window").height;
@@ -66,7 +67,9 @@ const pdfCozumVerisi = async (soru, eposta) => {
   if (soru.durum !== "Çözüldü") {
     return {
       cozum: null,
-      mesaj: "⏳ Bu soru henüz yapay zeka tarafından çözülmedi veya beklemede.",
+      mesaj: incelemedeMi(soru)
+        ? "🔍 " + INCELEME_MESAJI
+        : "⏳ Bu soru henüz yapay zeka tarafından çözülmedi veya beklemede.",
     };
   }
   const { cozumDetayi, hata } = await cozumYukle(soru, eposta);
@@ -569,7 +572,9 @@ export default function HistoryScreen() {
                           ? "Yeni çözüm · açmak için dokun"
                           : item.durum === "Çözüldü"
                             ? "✅ Çözüldü"
-                            : "⏳ " + item.durum}
+                            : incelemedeMi(item)
+                              ? "🔍 İnceleniyor"
+                              : "⏳ " + item.durum}
                       </Text>
                     </View>
                     <Ionicons
@@ -976,6 +981,8 @@ export default function HistoryScreen() {
                         ? "Çözüm şu an yüklenemedi. Lütfen bağlantını kontrol edip daha sonra tekrar dene."
                         : seciliSoru?.durum === "Çözüldü"
                         ? "Bu sorunun çözüm detayı şu an hazır değil. Birkaç dakika sonra tekrar dene."
+                        : incelemedeMi(seciliSoru)
+                        ? INCELEME_MESAJI
                         : "Yapay zeka analiz dosyası bekleniyor..."}
                     </Text>
                     {(cozumHatasi || seciliSoru?.durum === "Çözüldü") && (

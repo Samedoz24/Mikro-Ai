@@ -8,6 +8,12 @@
 //   kotaSayaclari/c_{cihaz özeti}    cihaz başına (cihaz kimliği ham saklanmaz, SHA-256 özeti saklanır)
 // İkisinden biri günlük sınıra ulaşırsa soru reddedilir. Gün, Türkiye saatine göre (UTC+3) sunucuda hesaplanır.
 //
+// İade: yapay zekâ bir soruyu güvenle çözemezse çözüm akışı (n8n, sunucu yetkisiyle) durumu "İnceleme Gerekli"
+// yapar; o sorunun harcadığı hak, soru aynı gün içindeyse BİR KEZ geri verilir (kotaIadeEt). Soru durumunu istemci
+// değiştiremez (firestore.rules), bu yüzden kullanıcı kendine hak iadesi yaptıramaz. İade için gereken bilgiler
+// (uid, cihaz özeti, gün) soru belgesine değil, istemciye tamamen kapalı kotaKayitlari/{soruId} belgesine yazılır;
+// bu kayıtlar ertesi gece silinir (eskiKotaKayitlariniSil), hesap silinince de silinir (kotaKayitlariniSil).
+//
 // Sınırlar Firebase Console'dan değiştirilebilir: ayarlar/kota { ucretsiz: 3, premium: 50 }.
 // Belge yoksa ya da değerler geçersizse güvenli varsayılanlar kullanılır.
 
@@ -26,6 +32,9 @@ const SECIMLER = ["A", "B", "C", "D", "E", "Bilinmiyor"];
 const CIHAZ_BICIMI = /^[A-Za-z0-9-]{8,64}$/;
 const EN_BUYUK_FOTO = 10 * 1024 * 1024;
 const TURKIYE_FARKI_MS = 3 * 60 * 60 * 1000;
+// Çözüm akışının (n8n) güvenle çözemediği sorular için yazdığı durum; birebir bu metin olmalı
+const INCELEME_DURUMU = "İnceleme Gerekli";
+const TOPLU_BOYUT = 400;
 
 // Türkiye takvim günü (YYYY-AA-GG); Türkiye yaz saati uygulamaz, fark sabit UTC+3
 const turkiyeGunu = (ms = Date.now()) => new Date(ms + TURKIYE_FARKI_MS).toISOString().slice(0, 10);
@@ -174,6 +183,13 @@ const soruGonder = async (uid, token, veri, simdi = Date.now()) => {
 
     tx.set(refler.hesap, { gun, sayi: hesapKullanim + 1, guncelleme: FieldValue.serverTimestamp() });
     tx.set(refler.cihaz, { gun, sayi: cihazKullanim + 1, guncelleme: FieldValue.serverTimestamp() });
+    // İade için (yalnızca sunucu okur; ham cihaz kimliği değil özeti)
+    tx.set(db().doc(`kotaKayitlari/${soruRef.id}`), {
+      uid,
+      cihaz: cihazOzeti(cihazId),
+      gun,
+      olusturma: FieldValue.serverTimestamp(),
+    });
     tx.set(soruRef, {
       kullaniciUid: uid,
       kullaniciEposta: typeof token?.email === "string" ? token.email : null,
@@ -192,9 +208,66 @@ const soruGonder = async (uid, token, veri, simdi = Date.now()) => {
   });
 };
 
+// Saf: soru güncellemesi iade gerektiriyor mu? (durum "İnceleme Gerekli"ye YENİ geçtiyse)
+const iadeGerekirMi = (once, sonra) =>
+  sonra?.durum === INCELEME_DURUMU && once?.durum !== INCELEME_DURUMU;
+
+// Bir sorunun harcadığı hakkı geri verir. Tekrar çalıştırılabilir: her soru için en fazla bir kez iade edilir.
+// Yalnızca sorunun sorulduğu Türkiye günü içinde iade edilir (sayaçlar her gün sıfırlanır; geçmiş günün hakkı
+// bugüne eklenmez). Sayaç asla eksiye düşmez.
+// Dönüş: { durum: "iade-edildi" | "zaten-iade" | "kayit-yok" | "gun-gecti" }
+const kotaIadeEt = async (soruId, simdi = Date.now()) => {
+  if (typeof soruId !== "string" || !/^[A-Za-z0-9]{1,64}$/.test(soruId)) return { durum: "kayit-yok" };
+  const kayitRef = db().doc(`kotaKayitlari/${soruId}`);
+  return db().runTransaction(async (tx) => {
+    const kayitSnap = await tx.get(kayitRef);
+    if (!kayitSnap.exists) return { durum: "kayit-yok" };
+    const kayit = kayitSnap.data();
+    if (kayit.iade === true) return { durum: "zaten-iade" };
+    if (kayit.gun !== turkiyeGunu(simdi)) {
+      tx.update(kayitRef, { iade: true, iadeSonucu: "gun-gecti" });
+      return { durum: "gun-gecti" };
+    }
+    const refler = [db().doc(`kotaSayaclari/h_${kayit.uid}`), db().doc(`kotaSayaclari/c_${kayit.cihaz}`)];
+    const sayaclar = await Promise.all(refler.map((r) => tx.get(r)));
+    sayaclar.forEach((snap, i) => {
+      const veri = snap.data();
+      if (veri && veri.gun === kayit.gun && Number.isInteger(veri.sayi) && veri.sayi > 0) {
+        tx.update(refler[i], { sayi: veri.sayi - 1, guncelleme: FieldValue.serverTimestamp() });
+      }
+    });
+    tx.update(kayitRef, { iade: true, iadeSonucu: "iade-edildi" });
+    return { durum: "iade-edildi" };
+  });
+};
+
+const topluSil = async (sorgu) => {
+  let silinen = 0;
+  for (;;) {
+    const snap = await sorgu.limit(TOPLU_BOYUT).get();
+    if (snap.empty) return silinen;
+    const batch = db().batch();
+    snap.docs.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+    silinen += snap.size;
+  }
+};
+
+// Gece görevi: bugünden eski iade kayıtları silinir (iade yalnızca aynı gün geçerli; KVKK: gereksiz veri tutulmaz)
+const eskiKotaKayitlariniSil = (simdi = Date.now()) =>
+  topluSil(db().collection("kotaKayitlari").where("gun", "<", turkiyeGunu(simdi)));
+
+// Hesap silme: kullanıcının iade kayıtları silinir
+const kotaKayitlariniSil = (uid) => topluSil(db().collection("kotaKayitlari").where("uid", "==", uid));
+
 module.exports = {
   soruGonder,
   kotaDurumu,
+  kotaIadeEt,
+  iadeGerekirMi,
+  eskiKotaKayitlariniSil,
+  kotaKayitlariniSil,
+  INCELEME_DURUMU,
   // test için
   turkiyeGunu,
   sinirlariCoz,

@@ -208,12 +208,17 @@ const dene = async (ad, fn) => {
     assertSucceeds(updateDoc(doc(gercekVeli, "kullanicilar/gercekVeli"), { whatsappNo: "5551112233" })));
 
   // ---------------------------------------------------------------- istemciye kapalı koleksiyonlar
-  for (const yol of ["kotaSayaclari/h_ali", "ayarlar/kota", "cihazHaklari/x", "platformYoneticileri/a@b.com", "abonelikEsitleme/ali"]) {
+  for (const yol of ["kotaSayaclari/h_ali", "ayarlar/kota", "cihazHaklari/x", "platformYoneticileri/a@b.com", "abonelikEsitleme/ali", "kotaKayitlari/s1"]) {
     await dene(`${yol} okunamaz`, () => assertFails(getDoc(doc(ali, yol))));
     await dene(`${yol} yazılamaz`, () => assertFails(setDoc(doc(ali, yol), { sayi: 0 })));
   }
   await dene("soru belgesi istemciden oluşturulamaz", () =>
     assertFails(setDoc(doc(ali, "sorular/s1"), { kullaniciUid: "ali", kullaniciEposta: "ali@ornek.com", durum: "Bekliyor" })));
+
+  // Soru durumunu sahibi değiştiremez: "İnceleme Gerekli" yazıp soru hakkı iadesi yaptıramaz
+  await hazirla((a) => a.set("sorular/sIade", { kullaniciUid: "ali", kullaniciEposta: "ali@ornek.com", durum: "Bekliyor" }));
+  await dene("sahibi soru durumunu İnceleme Gerekli yapamaz", () =>
+    assertFails(updateDoc(doc(ali, "sorular/sIade"), { durum: "İnceleme Gerekli" })));
 
   // Soru okuma: sahibi okur, başkası okuyamaz
   await hazirla((a) => a.set("sorular/s2", { kullaniciUid: "ayse", kullaniciEposta: "ayse@ornek.com", durum: "Çözüldü" }));

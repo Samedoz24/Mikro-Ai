@@ -4,7 +4,7 @@
 //
 // Denenenler: soruGonder iade kaydını (uid, cihaz özeti, gün) istemciye kapalı kotaKayitlari'na yazar ve soru
 // belgesine cihaz bilgisi koymaz; inceleme kararını yalnızca sorunun sahibi ve yalnızca "İnceleme Gerekli" iken
-// verebilir; "devam" iade yapmaz; "iptal" soruyu "İptal Edildi" yapar ve hakkı aynı gün içinde BİR KEZ iade eder;
+// verebilir; "devam" soruyu BİR KEZ yeniden çözüm sırasına alır, iade yapmaz; "iptal" soruyu "İptal Edildi" yapar ve hakkı aynı gün içinde BİR KEZ iade eder;
 // sayaç eksiye düşmez; başka güne ait sayaca dokunulmaz; eski kayıtlar ve silinen hesabın kayıtları silinir.
 
 process.env.GCLOUD_PROJECT = process.env.GCLOUD_PROJECT || "demo-mikro";
@@ -94,12 +94,18 @@ const temizle = async () => {
   esit("başkasının sorusu: aynı cevap (soru-yok)", await hataKodu(() => kota.soruIncelemeKarari("baskaOgr", { soruId: sonuc.soruId, karar: "iptal" }, simdi)), "soru-yok");
   esit("başkası iptal edemedi: durum aynı", (await soruDurumu(sonuc.soruId)).durum, "İnceleme Gerekli");
 
-  // ================================================================ 3) çözmeye devam: iade yok, durum aynı
-  esit("devam", await kota.soruIncelemeKarari("ogrA", { soruId: sonuc.soruId, karar: "devam" }, simdi), { durum: "İnceleme Gerekli" });
-  esit("devam: karar kaydedildi, durum aynı", [(await soruDurumu(sonuc.soruId)).kullaniciKarari, (await soruDurumu(sonuc.soruId)).durum], ["devam", "İnceleme Gerekli"]);
-  esit("devam: sayaçlar değişmedi", [await sayi("h_ogrA"), await sayi(cihazId)], [1, 1]);
+  // ================================================================ 3) çözmeye devam: BİR KEZ yeniden çözüm sırasına, iade yok
+  esit("devam", await kota.soruIncelemeKarari("ogrA", { soruId: sonuc.soruId, karar: "devam" }, simdi), { durum: "Bekliyor" });
+  const devamSoru = await soruDurumu(sonuc.soruId);
+  esit("devam: durum Bekliyor, karar ve ek deneme işareti", [devamSoru.durum, devamSoru.kullaniciKarari, devamSoru.ekDenemeKullanildi], ["Bekliyor", "devam", true]);
+  esit("devam: sayaçlar değişmedi (iade yok)", [await sayi("h_ogrA"), await sayi(cihazId)], [1, 1]);
+  esit("Bekliyor'dayken tekrar devam denenemez", await hataKodu(() => kota.soruIncelemeKarari("ogrA", { soruId: sonuc.soruId, karar: "devam" }, simdi)), "durum-uygun-degil");
+  // Ek deneme de başarısız: çözüm akışı soruyu yeniden incelemeye alır
+  await db.doc(`sorular/${sonuc.soruId}`).update({ durum: "İnceleme Gerekli" });
+  esit("ikinci devam yapılamaz (ek deneme bir kez)", await hataKodu(() => kota.soruIncelemeKarari("ogrA", { soruId: sonuc.soruId, karar: "devam" }, simdi)), "devam-hakki-yok");
+  esit("ikinci devam reddedildi: durum aynı", (await soruDurumu(sonuc.soruId)).durum, "İnceleme Gerekli");
 
-  // ================================================================ 4) devamdan sonra iptal: iade (aynı gün, bir kez)
+  // ================================================================ 4) ek denemeden sonra iptal: iade (aynı gün, bir kez)
   esit("iptal", await kota.soruIncelemeKarari("ogrA", { soruId: sonuc.soruId, karar: "iptal" }, simdi), { durum: "İptal Edildi", iade: "iade-edildi" });
   const iptalSoru = await soruDurumu(sonuc.soruId);
   esit("iptal: durum, karar, iade işareti", [iptalSoru.durum, iptalSoru.kullaniciKarari, iptalSoru.hakIadeEdildi], ["İptal Edildi", "iptal", true]);

@@ -224,6 +224,11 @@ const dene = async (ad, fn) => {
     assertFails(updateDoc(doc(ali, "sorular/sKarar"), { durum: "İptal Edildi" })));
   await dene("sahibi karar / iade alanı yazamaz", () =>
     assertFails(updateDoc(doc(ali, "sorular/sKarar"), { kullaniciKarari: "iptal", hakIadeEdildi: true })));
+  await hazirla((a) => a.set("sorular/sEk", { kullaniciUid: "ali", kullaniciEposta: "ali@ornek.com", durum: "İnceleme Gerekli", ekDenemeKullanildi: true }));
+  await dene("sahibi ek deneme işaretini sıfırlayamaz", () =>
+    assertFails(updateDoc(doc(ali, "sorular/sEk"), { ekDenemeKullanildi: false })));
+  await dene("sahibi soruyu doğrudan Bekliyor'a alamaz", () =>
+    assertFails(updateDoc(doc(ali, "sorular/sEk"), { durum: "Bekliyor" })));
 
   // Soru okuma: sahibi okur, başkası okuyamaz
   await hazirla((a) => a.set("sorular/s2", { kullaniciUid: "ayse", kullaniciEposta: "ayse@ornek.com", durum: "Çözüldü" }));

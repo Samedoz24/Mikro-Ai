@@ -57,7 +57,14 @@ import {
 } from "../utils/cozumYukleyici";
 import { soruBlokHtml, belgeHtml } from "../utils/pdfIcerik";
 import { DERSLER, dersBul, kategoriSiralamasi, yeniCozumMu } from "../utils/ders";
-import { INCELEME_MESAJI, incelemedeMi, iptalMi, iptalMesaji } from "../utils/soruDurumu";
+import {
+  INCELEME_MESAJI,
+  EK_DENEME_SONRASI_MESAJI,
+  incelemedeMi,
+  ekDenemeVarMi,
+  iptalMi,
+  iptalMesaji,
+} from "../utils/soruDurumu";
 import { soruIncelemeKarariVer } from "../utils/kotaIstemci";
 
 const ekranGenisligi = Dimensions.get("window").width;
@@ -168,8 +175,8 @@ export default function HistoryScreen() {
     try {
       const sonuc = await soruIncelemeKarariVer(canliSoru.id, karar);
       if (karar === "devam") {
-        setSeciliSoru((onceki) => ({ ...onceki, kullaniciKarari: "devam" }));
-        Alert.alert("Tamam", "Soruyu çözmeye devam ediyoruz. Çözüm hazır olunca bildireceğiz.");
+        setSeciliSoru((onceki) => ({ ...onceki, durum: "Bekliyor", kullaniciKarari: "devam", ekDenemeKullanildi: true }));
+        Alert.alert("Tamam", "Soruyu yeniden çözüyoruz. Çözüm hazır olunca bildireceğiz.");
       } else {
         const iadeEdildi = sonuc?.iade === "iade-edildi";
         setSeciliSoru((onceki) => ({ ...onceki, durum: "İptal Edildi", hakIadeEdildi: iadeEdildi }));
@@ -188,7 +195,9 @@ export default function HistoryScreen() {
         "İşlem Yapılamadı",
         hata?.message === "durum-uygun-degil"
           ? "Bu sorunun durumu değişti; soru şu an yeniden çözülüyor olabilir. Biraz sonra tekrar bak."
-          : "İşlem şu an yapılamadı. Lütfen bağlantını kontrol edip tekrar dene."
+          : hata?.message === "devam-hakki-yok"
+            ? "Bu soru zaten bir kez yeniden çözüldü. Dilersen iptal edip soru hakkını geri alabilirsin."
+            : "İşlem şu an yapılamadı. Lütfen bağlantını kontrol edip tekrar dene."
       );
     } finally {
       setKararIsleniyor(false);
@@ -1043,9 +1052,9 @@ export default function HistoryScreen() {
                         : canliSoru?.durum === "Çözüldü"
                         ? "Bu sorunun çözüm detayı şu an hazır değil. Birkaç dakika sonra tekrar dene."
                         : incelemedeMi(canliSoru)
-                        ? canliSoru?.kullaniciKarari === "devam"
-                          ? INCELEME_MESAJI + " Çözmeye devam etmemizi istedin."
-                          : INCELEME_MESAJI
+                        ? ekDenemeVarMi(canliSoru)
+                          ? INCELEME_MESAJI
+                          : EK_DENEME_SONRASI_MESAJI
                         : iptalMi(canliSoru)
                         ? iptalMesaji(canliSoru)
                         : "Yapay zeka analiz dosyası bekleniyor..."}
@@ -1062,7 +1071,7 @@ export default function HistoryScreen() {
                         >
                           <Text style={styles.kararYazi}>Çözme, soru hakkımı iade et</Text>
                         </TouchableOpacity>
-                        {canliSoru?.kullaniciKarari !== "devam" && (
+                        {ekDenemeVarMi(canliSoru) && (
                           <TouchableOpacity
                             onPress={() => kararGonder("devam")}
                             disabled={kararIsleniyor}

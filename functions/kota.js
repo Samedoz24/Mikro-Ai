@@ -9,7 +9,10 @@
 // İkisinden biri günlük sınıra ulaşırsa soru reddedilir. Gün, Türkiye saatine göre (UTC+3) sunucuda hesaplanır.
 //
 // İnceleme: yapay zekâ bir soruyu güvenle çözemezse çözüm akışı (n8n, sunucu yetkisiyle) durumu "İnceleme Gerekli"
-// yapar. Öğrenci seçer (soruIncelemeKarari): "devam" → soru incelemede kalır, hak iade edilmez; "iptal" → soru
+// yapar (yalnızca otomatik denemeleri bittikten sonra; son durumdur). Öğrenci seçer (soruIncelemeKarari):
+// "devam" → soru BİR KEZ daha çözüm sırasına ("Bekliyor") alınır, hak iade edilmez. Bu ek deneme her soru için
+// yalnızca bir kez kullanılabilir (ekDenemeKullanildi; yalnızca sunucu yazar): aksi hâlde tek hakla sınırsız
+// yapay zekâ çağrısı yaptırılabilirdi. "iptal" → soru
 // "İptal Edildi" olur (çözüm akışı bir daha işlemez) ve harcanan hak, soru aynı gün içindeyse BİR KEZ geri verilir.
 // Soru durumunu istemci doğrudan değiştiremez (firestore.rules); karar yalnızca sunucu üzerinden, yalnızca sorunun
 // sahibi tarafından ve yalnızca "İnceleme Gerekli" durumundayken verilebilir. İade için gereken bilgiler
@@ -38,6 +41,8 @@ const TURKIYE_FARKI_MS = 3 * 60 * 60 * 1000;
 const INCELEME_DURUMU = "İnceleme Gerekli";
 // Öğrencinin iptal ettiği soru: çözüm akışı bu durumdaki soruyu işlemez, sonuç yazmaz
 const IPTAL_DURUMU = "İptal Edildi";
+// Çözüm sırasında bekleyen soru (soruGonder ilk kez, "devam" kararı ek deneme için yazar)
+const BEKLIYOR_DURUMU = "Bekliyor";
 const KARARLAR = ["devam", "iptal"];
 const TOPLU_BOYUT = 400;
 
@@ -200,7 +205,7 @@ const soruGonder = async (uid, token, veri, simdi = Date.now()) => {
       kullaniciEposta: typeof token?.email === "string" ? token.email : null,
       fotoLink,
       tarih: new Date(simdi).toISOString(),
-      durum: "Bekliyor",
+      durum: BEKLIYOR_DURUMU,
       ogrenciSecimi,
     });
     return {
@@ -267,8 +272,16 @@ const soruIncelemeKarari = async (uid, veri, simdi = Date.now()) => {
       throw new HttpsError("failed-precondition", "durum-uygun-degil");
     }
     if (karar === "devam") {
-      tx.update(soruRef, { kullaniciKarari: "devam", kararTarihi: FieldValue.serverTimestamp() });
-      return { durum: INCELEME_DURUMU };
+      if (soruSnap.get("ekDenemeKullanildi") === true) {
+        throw new HttpsError("failed-precondition", "devam-hakki-yok");
+      }
+      tx.update(soruRef, {
+        durum: BEKLIYOR_DURUMU,
+        kullaniciKarari: "devam",
+        ekDenemeKullanildi: true,
+        kararTarihi: FieldValue.serverTimestamp(),
+      });
+      return { durum: BEKLIYOR_DURUMU };
     }
     const okunan = await iadeOku(tx, soruId);
     const iade = iadeYaz(tx, okunan, simdi);

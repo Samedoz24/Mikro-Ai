@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
-  Switch,
   Alert,
   ActivityIndicator,
   Image,
@@ -28,7 +27,6 @@ import { auth, db } from "../firebaseConfig";
 import {
   doc,
   getDoc,
-  setDoc,
   collection,
   query,
   where,
@@ -73,8 +71,6 @@ export default function ParentDashboard() {
   const [aktifOgrenci, setAktifOgrenci] = useState(null);
   const [ogrenciFotolar, setOgrenciFotolar] = useState({});
 
-  const [whatsappNo, setWhatsappNo] = useState("");
-  const [raporAktif, setRaporAktif] = useState(false);
 
   const [sonSorular, setSonSorular] = useState([]);
   const [toplamSoruSayisi, setToplamSoruSayisi] = useState(0);
@@ -142,8 +138,6 @@ export default function ParentDashboard() {
               setAktifOgrenci(gecerliListe[0]);
             }
           }
-          if (data.whatsappNo) setWhatsappNo(data.whatsappNo);
-          if (data.raporAktif !== undefined) setRaporAktif(data.raporAktif);
         }
       } catch (hata) {
         console.log("Veli verileri alınamadı:", hata?.code);
@@ -318,39 +312,6 @@ export default function ParentDashboard() {
     );
   };
 
-  const whatsappNumarasiKaydet = async (yeniNumara) => {
-    const numara = (yeniNumara || "").trim();
-    setWhatsappNo(numara);
-    if (!auth.currentUser) return;
-    try {
-      const veliRef = doc(db, "kullanicilar", auth.currentUser.uid);
-      await setDoc(veliRef, { whatsappNo: numara }, { merge: true });
-    } catch (hata) {
-      console.log("Telefon kaydedilemedi:", hata?.code);
-      Alert.alert(
-        "Kaydedilemedi",
-        "Telefon numarası kaydedilemedi. İnternet bağlantını kontrol edip tekrar dene."
-      );
-    }
-  };
-
-  const raporTercihiKaydet = async (deger) => {
-    const onceki = raporAktif;
-    setRaporAktif(deger);
-    if (!auth.currentUser) return;
-    try {
-      const veliRef = doc(db, "kullanicilar", auth.currentUser.uid);
-      await setDoc(veliRef, { raporAktif: deger }, { merge: true });
-    } catch (hata) {
-      console.log("Rapor tercihi kaydedilemedi:", hata?.code);
-      setRaporAktif(onceki);
-      Alert.alert(
-        "Kaydedilemedi",
-        "Tercihin kaydedilemedi. İnternet bağlantını kontrol edip tekrar dene."
-      );
-    }
-  };
-
   const soruDetayAc = async (soru) => {
     setSeciliSoru(soru);
     setDetayModalGorunur(true);
@@ -514,51 +475,6 @@ export default function ParentDashboard() {
             )}
           </View>
 
-          <View
-            style={[
-              styles.kutu,
-              {
-                backgroundColor: tema.kutuArkaplan,
-                borderColor: tema.kutuCerceve,
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.kutuBaslik,
-                { color: tema.metin, marginBottom: 15 },
-              ]}
-            >
-              WhatsApp Raporlama (Cuma Günleri)
-            </Text>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: tema.arkaplan,
-                  color: tema.metin,
-                  borderColor: tema.kutuCerceve,
-                },
-              ]}
-              placeholder="Örn: 5xxxxxxxxx"
-              placeholderTextColor={tema.ikincilMetin}
-              keyboardType="phone-pad"
-              value={whatsappNo}
-              onChangeText={setWhatsappNo}
-              onEndEditing={() => whatsappNumarasiKaydet(whatsappNo)}
-            />
-            <View style={styles.switchSatir}>
-              <Text style={[styles.switchYazi, { color: tema.metin }]}>
-                Haftalık Rapor İstiyorum
-              </Text>
-              <Switch
-                value={raporAktif}
-                onValueChange={raporTercihiKaydet}
-                trackColor={{ false: tema.kutuCerceve, true: tema.anaButon }}
-                thumbColor={"#fff"}
-              />
-            </View>
-          </View>
 
           {aktifOgrenci ? (
             <>
@@ -1237,13 +1153,6 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   input: { borderWidth: 1, borderRadius: 12, padding: 16, fontSize: 17 },
-  switchSatir: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 20,
-  },
-  switchYazi: { fontSize: 16, fontWeight: "600" },
   altBaslik: { fontSize: 20, fontWeight: "bold", marginBottom: 20 },
   istatistikKutusu: {
     flexDirection: "row",

@@ -238,6 +238,9 @@ exports.lisansKontrol = onSchedule(
     // Tek seferlik: eski tek alanlı premium'lar kaynak yapısına taşınır (goc.js, premium.js)
     const premiumGoc = await goc.premiumKaynaklariniTasi();
     console.log("Premium kaynakları:", JSON.stringify(premiumGoc));
+    // Tek seferlik: kaldırılan veli WhatsApp raporlama alanları (telefon numarası, tercih) silinir (goc.js)
+    const veliAlanlari = await goc.kaldirilanVeliAlanlariniSil();
+    console.log("Kaldırılan veli alanları:", JSON.stringify(veliAlanlari));
     // Eski sürümle hesaplanmış özetler (katılım öncesi soruları da sayan) bir kez yeniden hesaplanır
     const guncellenen = await ozet.ozetleriGuncelle();
     console.log("Güncellenen özet:", guncellenen);

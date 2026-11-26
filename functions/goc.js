@@ -9,7 +9,7 @@
 // Hesabı bulunamayan, zamanı okunamayan ya da hesaptan önce sorulmuş soru kimseye verilmez (sahipsiz).
 // Var olan kullaniciUid asla değiştirilmez.
 
-const { getFirestore } = require("firebase-admin/firestore");
+const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getAuth } = require("firebase-admin/auth");
 
 const db = () => getFirestore();
@@ -119,4 +119,38 @@ const premiumKaynaklariniTasi = async () => {
   return { tasinan };
 };
 
-module.exports = { eskiSorularaKimlikEkle, premiumKaynaklariniTasi, kimlikYazilabilirMi, SAAT_PAYI_MS };
+// kaldirilanVeliAlanlariniSil: Veli panelindeki "WhatsApp Raporlama" özelliği hiç çalışmıyordu (rapor gönderen
+// kod yoktu) ve kaldırıldı. Velilerin girdiği telefon numaraları (whatsappNo) ve rapor tercihi (raporAktif) KVKK
+// gereği (gereğinden fazla veri tutulmaz) tüm profillerden silinir. Güvenlik kuralları bu alanların yeniden
+// yazılmasını engeller (yalnızca silinmelerine izin verir). Tekrar çalıştırılabilir; bitince bayrakla kapanır.
+const KALDIRILAN_ALANLAR = ["whatsappNo", "raporAktif"];
+const kaldirilanVeliAlanlariniSil = async () => {
+  const bayrakRef = db().doc(BAYRAK);
+  if ((await bayrakRef.get()).data()?.kaldirilanVeliAlanlari === true) return { atlandi: true };
+
+  const refler = new Map();
+  const sorgular = [
+    db().collection("kullanicilar").where("whatsappNo", "!=", null).get(),
+    db().collection("kullanicilar").where("raporAktif", "in", [true, false]).get(),
+  ];
+  for (const snap of await Promise.all(sorgular)) snap.docs.forEach((d) => refler.set(d.id, d.ref));
+
+  const liste = [...refler.values()];
+  const silme = Object.fromEntries(KALDIRILAN_ALANLAR.map((a) => [a, FieldValue.delete()]));
+  for (let i = 0; i < liste.length; i += SAYFA) {
+    const batch = db().batch();
+    liste.slice(i, i + SAYFA).forEach((ref) => batch.update(ref, silme));
+    await batch.commit();
+  }
+  await bayrakRef.set({ kaldirilanVeliAlanlari: true, kaldirilanVeliAlanlariSayisi: liste.length }, { merge: true });
+  return { temizlenen: liste.length };
+};
+
+module.exports = {
+  eskiSorularaKimlikEkle,
+  premiumKaynaklariniTasi,
+  kaldirilanVeliAlanlariniSil,
+  KALDIRILAN_ALANLAR,
+  kimlikYazilabilirMi,
+  SAAT_PAYI_MS,
+};

@@ -141,6 +141,11 @@ service cloud.firestore {
     }
 
     // Güncelleme: yalnızca değişen alan denetlenir (silinmesi serbest), eski kayıtlar kilitlenmez
+    // Kaldırılan veli "WhatsApp Raporlama" alanları: istemci yazamaz, yalnızca silebilir (sunucu temizliyor)
+    function kaldirilanAlanlar() {
+      return ['whatsappNo', 'raporAktif'];
+    }
+
     function profilAlanlariGecerliGuncelleme(uid) {
       return (!degisenAnahtarlar().hasAny(['profilFoto'])
               || !('profilFoto' in request.resource.data)
@@ -158,12 +163,15 @@ service cloud.firestore {
 
       allow create: if ben(uid)
         && !request.resource.data.keys().hasAny(sunucuAlanlari())
+        && !request.resource.data.keys().hasAny(kaldirilanAlanlar())
         && request.resource.data.get('rol', 'ogrenci') in istemciRolleri()
         && profilAlanlariGecerliYeni(uid, request.resource.data);
 
       allow update: if ben(uid)
         && !degisenAnahtarlar().hasAny(sunucuAlanlari())
         && profilAlanlariGecerliGuncelleme(uid)
+        && (!degisenAnahtarlar().hasAny(kaldirilanAlanlar())
+            || !request.resource.data.keys().hasAny(kaldirilanAlanlar()))
         && (!degisenAnahtarlar().hasAny(['rol'])
             || (request.resource.data.rol in istemciRolleri()
                 && resource.data.get('rol', 'ogrenci') in istemciRolleri()));

@@ -78,6 +78,20 @@ const DK = 60 * 1000;
   esit("karar: hesap yok", goc.kimlikYazilabilirMi(5, null), false);
   esit("karar: zaman yok", goc.kimlikYazilabilirMi(null, h), false);
 
+  // ------------------------------------------------ kaldırılan veli alanları (WhatsApp raporlama)
+  await db.doc("kullanicilar/veliW1").set({ rol: "veli", whatsappNo: "5551112233", raporAktif: true, adSoyad: "Veli Bir" });
+  await db.doc("kullanicilar/veliW2").set({ rol: "veli", raporAktif: false });
+  await db.doc("kullanicilar/veliW3").set({ rol: "veli", whatsappNo: "" });
+  await db.doc("kullanicilar/temizVeli").set({ rol: "veli", adSoyad: "Temiz" });
+  const temiz = await goc.kaldirilanVeliAlanlariniSil();
+  esit("temizlenen profil sayısı", temiz, { temizlenen: 3 });
+  const v1 = (await db.doc("kullanicilar/veliW1").get()).data();
+  esit("numara ve tercih silindi, diğer alanlar duruyor", [v1.whatsappNo, v1.raporAktif, v1.adSoyad, v1.rol], [undefined, undefined, "Veli Bir", "veli"]);
+  esit("yalnızca tercih olan da temizlendi", "raporAktif" in (await db.doc("kullanicilar/veliW2").get()).data(), false);
+  esit("boş numara alanı da silindi", "whatsappNo" in (await db.doc("kullanicilar/veliW3").get()).data(), false);
+  esit("temiz profile dokunulmadı", (await db.doc("kullanicilar/temizVeli").get()).data(), { rol: "veli", adSoyad: "Temiz" });
+  esit("ikinci çalıştırma atlanır (bayrak)", await goc.kaldirilanVeliAlanlariniSil(), { atlandi: true });
+
   console.log(`[goc] ${gecen} geçti, ${kalan} hata`);
   process.exit(kalan ? 1 : 0);
 })().catch((e) => {

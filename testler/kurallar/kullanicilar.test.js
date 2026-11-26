@@ -57,6 +57,7 @@ const admin = yoneticiDb.getFirestore();
 const hazirla = (fn) =>
   fn({
     set: (yol, veri) => admin.doc(yol).set(veri),
+    update: (yol, veri) => admin.doc(yol).update(veri),
   });
 const clearFirestore = async () => {
   const r = await fetch(`http://${HOST}:${PORT}/emulator/v1/projects/${PROJE}/databases/(default)/documents`, { method: "DELETE" });
@@ -205,7 +206,21 @@ const dene = async (ad, fn) => {
   await dene("gerçek veli listeden kendisi de silemez (sunucu üzerinden)", () =>
     assertFails(updateDoc(doc(gercekVeli, "kullanicilar/gercekVeli"), { bagliOgrenciIdleri: arrayRemove("kurban") })));
   await dene("gerçek veli diğer alanlarını güncelleyebilir", () =>
-    assertSucceeds(updateDoc(doc(gercekVeli, "kullanicilar/gercekVeli"), { whatsappNo: "5551112233" })));
+    assertSucceeds(updateDoc(doc(gercekVeli, "kullanicilar/gercekVeli"), { bildirimAktif: false })));
+
+  // Kaldırılan "WhatsApp Raporlama" alanları: yeniden yazılamaz (eski uygulama sürümleri dahil), yalnızca silinebilir
+  await dene("veli telefon numarası yazamaz", () =>
+    assertFails(updateDoc(doc(gercekVeli, "kullanicilar/gercekVeli"), { whatsappNo: "5551112233" })));
+  await dene("veli rapor tercihi yazamaz", () =>
+    assertFails(updateDoc(doc(gercekVeli, "kullanicilar/gercekVeli"), { raporAktif: true })));
+  await hazirla((a) => a.update("kullanicilar/gercekVeli", { whatsappNo: "5550000000", raporAktif: true }));
+  await dene("eski numara değiştirilemez", () =>
+    assertFails(updateDoc(doc(gercekVeli, "kullanicilar/gercekVeli"), { whatsappNo: "5559999999" })));
+  await dene("eski alanlar birlikte silinebilir", () =>
+    assertSucceeds(updateDoc(doc(gercekVeli, "kullanicilar/gercekVeli"), { whatsappNo: deleteField(), raporAktif: deleteField() })));
+  const yeniKullanici = db("yeniKullanici", { email: "yeni@ornek.com" });
+  await dene("profil oluştururken telefon numarası yazılamaz", () =>
+    assertFails(setDoc(doc(yeniKullanici, "kullanicilar/yeniKullanici"), { rol: "veli", whatsappNo: "5551112233" })));
 
   // ---------------------------------------------------------------- istemciye kapalı koleksiyonlar
   for (const yol of ["kotaSayaclari/h_ali", "ayarlar/kota", "cihazHaklari/x", "platformYoneticileri/a@b.com", "abonelikEsitleme/ali", "kotaKayitlari/s1"]) {

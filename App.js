@@ -121,6 +121,8 @@ function MainApp() {
   // n8n bir soruyu birden çok kez güncelleyebilir; her soru için yalnızca bir kez bildirim gönderilir
   const bildirilenSorular = useRef(new Set());
   const [premiumMu, setPremiumMu] = useState(false);
+  // Premium'un kaynağı (dershane / abonelik / elle): yalnızca Hesabım'daki görünüm için; sunucu yazar
+  const [premiumKaynaklari, setPremiumKaynaklari] = useState(null);
   // Öğrencinin dershane duyuruları: tek dinleyici, rozet ve liste için paylaşılır
   const duyuruKutusu = useDuyuruKutusu(
     kullaniciRolu === "ogrenci" && kullanici ? kullanici.uid : null
@@ -194,6 +196,7 @@ function MainApp() {
 
             setKullaniciRolu(gercekRol);
             setPremiumMu(userDoc.data().premiumMu === true);
+            setPremiumKaynaklari(userDoc.data().premiumKaynaklari ?? null);
             await AsyncStorage.setItem("kullaniciRolu", gercekRol);
             setGosterOnboarding(false);
           } else {
@@ -212,6 +215,7 @@ function MainApp() {
             setOnayGerekli(true);
             setKullaniciRolu(yeniRol);
             setPremiumMu(false);
+            setPremiumKaynaklari(null);
             await AsyncStorage.setItem("kullaniciRolu", yeniRol);
             setGosterOnboarding(true);
           }
@@ -223,6 +227,9 @@ function MainApp() {
 
         setKullanici(aktifKullanici);
       } else {
+        // Ortak telefonda önceki kişinin Premium görünümü sonraki kişiye kalmasın
+        setPremiumMu(false);
+        setPremiumKaynaklari(null);
         setKullanici(null);
       }
       setYukleniyor(false);
@@ -250,7 +257,10 @@ function MainApp() {
 
     const abonelik = onSnapshot(
       doc(db, "kullanicilar", kullanici.uid),
-      (snap) => setPremiumMu(snap.data()?.premiumMu === true),
+      (snap) => {
+        setPremiumMu(snap.data()?.premiumMu === true);
+        setPremiumKaynaklari(snap.data()?.premiumKaynaklari ?? null);
+      },
       (hata) => console.log("Premium dinleme hatası:", hata?.code)
     );
 
@@ -368,7 +378,7 @@ function MainApp() {
 
   // 🚀 DÜZELTME: NavigationContainer buradan silindi, en dıştaki (ölümsüz) App bileşenine taşındı.
   return (
-    <PremiumProvider premiumMu={premiumMu} rol={kullaniciRolu}>
+    <PremiumProvider premiumMu={premiumMu} premiumKaynaklari={premiumKaynaklari} rol={kullaniciRolu}>
       <DuyuruContext.Provider value={duyuruKutusu}>
         <Tab.Navigator
           // Sayfalar anında değişir; yalnızca alt menüdeki gösterge kayar (AltMenu)

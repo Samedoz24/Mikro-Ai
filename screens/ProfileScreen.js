@@ -77,6 +77,7 @@ import {
 
 import { useTheme } from "../ThemeContext";
 import { usePremium } from "../PremiumContext";
+import { abonelikKarti } from "../utils/premiumKaynagi";
 import { yerelTarih } from "../utils/tarih";
 import { dersBul } from "../utils/ders";
 import { kotaDurumuGetir } from "../utils/kotaIstemci";
@@ -158,7 +159,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   // Yüzen alt menünün altında kalmamak için
   const altMenuBoslugu = useAltMenuBoslugu(20);
-  const { premiumMu: premiumAktif, premiumAc } = usePremium();
+  const { premiumMu: premiumAktif, premiumKaynagi, premiumAc } = usePremium();
   const isFocused = useIsFocused();
 
   const { tema, temaModu } = useTheme();
@@ -422,19 +423,13 @@ export default function ProfileScreen() {
   };
 
   // Abonelik kartı metni: sayılar sunucudaki ayardan gelir; henüz yüklenmediyse sayı yazılmaz
-  const abonelikAciklamasi = (premium, k) => {
-    const ucretsiz = k?.ucretsizSinir;
-    const prem = k?.premiumSinir;
-    if (premium) {
-      return Number.isInteger(prem)
-        ? `Günde ${prem} soru ve PDF indirme aktif.`
-        : "Premium soru hakkı ve PDF indirme aktif.";
-    }
-    if (Number.isInteger(ucretsiz) && Number.isInteger(prem)) {
-      return `Günde ${ucretsiz} soru. Premium ile günde ${prem} soru ve PDF indirme.`;
-    }
-    return "Premium ile daha fazla günlük soru ve PDF indirme.";
-  };
+  // Abonelik kartı: Premium'un kaynağına göre metin ve "Aboneliği Yönet" düğmesi (utils/premiumKaynagi.js)
+  const kart = abonelikKarti({
+    premiumMu: premiumAktif,
+    kaynak: premiumKaynagi,
+    ucretsizSinir: kota?.ucretsizSinir,
+    premiumSinir: kota?.premiumSinir,
+  });
 
   // Sınıf yalnızca listeden seçilir; önce sunucuya yazılır, başarılı olursa ekranda ve cihazda güncellenir
   const sinifKaydet = async (sinif) => {
@@ -1530,7 +1525,7 @@ export default function ProfileScreen() {
                           },
                         ]}
                       >
-                        {premiumAktif ? "Premium" : "Ücretsiz"}
+                        {kart.rozet}
                       </Text>
                     </View>
                   </View>
@@ -1543,9 +1538,10 @@ export default function ProfileScreen() {
                       marginBottom: 14,
                     }}
                   >
-                    {abonelikAciklamasi(premiumAktif, kota)}
+                    {kart.aciklama}
                   </Text>
 
+                  {(!premiumAktif || kart.yonetDugmesi) && (
                   <TouchableOpacity
                     onPress={
                       premiumAktif ? abonelikYonet : () => premiumAc("profil")
@@ -1567,6 +1563,7 @@ export default function ProfileScreen() {
                       {premiumAktif ? "Aboneliği Yönet" : "Premium'a Geç"}
                     </Text>
                   </TouchableOpacity>
+                  )}
                 </View>
               )}
 

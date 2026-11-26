@@ -7,16 +7,18 @@ import React, {
   useState,
 } from "react";
 import PremiumModal from "./screens/PremiumModal";
+import { premiumKaynagiCoz } from "./utils/premiumKaynagi";
 
 // Premium durumunu ve ortak premium penceresini uygulamanın her yerine sunar.
 // premiumMu değeri Firestore'dan canlı gelir; satın alma sonrası sunucu
 // güncellediğinde arayüz kendiliğinden yenilenir.
 const PremiumContext = createContext({
   premiumMu: false,
+  premiumKaynagi: { kurum: false, abonelik: false, elle: false },
   premiumAc: () => {},
 });
 
-export const PremiumProvider = ({ premiumMu, rol, children }) => {
+export const PremiumProvider = ({ premiumMu, premiumKaynaklari, rol, children }) => {
   const [modal, setModal] = useState({ gorunur: false, neden: null });
 
   // Veli hesaplarında günlük soru hakkı olmadığı için premium sunulmaz
@@ -38,7 +40,13 @@ export const PremiumProvider = ({ premiumMu, rol, children }) => {
     if (premiumMu && modal.gorunur) kapat();
   }, [premiumMu, modal.gorunur, kapat]);
 
-  const deger = useMemo(() => ({ premiumMu, premiumAc }), [premiumMu, premiumAc]);
+  // Yalnızca görünüm için (Hesabım kartı); Premium kararı sunucudadır
+  const premiumKaynagi = useMemo(() => premiumKaynagiCoz(premiumKaynaklari), [premiumKaynaklari]);
+
+  const deger = useMemo(
+    () => ({ premiumMu, premiumKaynagi, premiumAc }),
+    [premiumMu, premiumKaynagi, premiumAc]
+  );
 
   return (
     <PremiumContext.Provider value={deger}>

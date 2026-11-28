@@ -27,8 +27,6 @@ import { useIsFocused } from "@react-navigation/native";
 
 import { auth, db, storage } from "../firebaseConfig";
 
-import * as Print from "expo-print";
-import * as Sharing from "expo-sharing";
 
 import {
   collection,
@@ -72,6 +70,7 @@ import {
 } from "../utils/soruDurumu";
 import { soruIncelemeKarariVer } from "../utils/kotaIstemci";
 import { soruDestekBaglantisi } from "../utils/destek";
+import { raporuPaylas } from "../utils/raporPaylas";
 
 const ekranGenisligi = Dimensions.get("window").width;
 const ekranYuksekligi = Dimensions.get("window").height;
@@ -449,19 +448,13 @@ export default function HistoryScreen() {
         govde: sorularHtml,
       });
 
-      const { uri } = await Print.printToFileAsync({
+      // A4, her sayfada kenar boşluğu; paylaşımdan sonra geçici PDF telefondan silinir (raporPaylas.js)
+      const sonuc = await raporuPaylas({
         html: htmlIcerik,
-        base64: false,
+        dosyaAdi: `Sormix-HataDefteri-${new Date().toISOString().slice(0, 10)}.pdf`,
+        baslik: "Hata Defterimi Paylaş",
       });
-
-      const isSharingAvailable = await Sharing.isAvailableAsync();
-      if (isSharingAvailable) {
-        await Sharing.shareAsync(uri, {
-          mimeType: "application/pdf",
-          dialogTitle: "Hata Defterimi Paylaş",
-          UTI: "com.adobe.pdf",
-        });
-      } else {
+      if (sonuc.desteklenmiyor) {
         Alert.alert("Bilgi", "Cihazınızda paylaşım özelliği desteklenmiyor.");
       }
     } catch (error) {

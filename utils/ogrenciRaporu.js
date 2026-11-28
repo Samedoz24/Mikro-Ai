@@ -1,4 +1,5 @@
 import { htmlKacis } from "./metin";
+import { PDF_SAYFA_STILI } from "./pdfYazdir";
 import { aktiflikMetni, gunDizisi } from "./kurumIstatistik";
 import { turkceTarih } from "./kurumRapor";
 
@@ -43,19 +44,22 @@ export const raporDosyaAdi = (isim, simdi = Date.now()) => {
 export const calisilanGunSayisi = (gunler, gunSayisi, simdi = Date.now()) =>
   gunDizisi(gunler, gunSayisi, simdi).filter((g) => g.adet > 0).length;
 
-const STIL = `
-  body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 36px; color: #1F2937; }
-  .kurum { text-align: center; font-size: 13px; letter-spacing: 1.2px; color: #6B7280; text-transform: uppercase; }
+// Sayfa düzeni (28 Kasım): A4 ve her sayfada kenar boşluğu (pdfYazdir.js); bölümler sayfa arasında bölünmez.
+// Dershane adı büyük harfe Türkçe kuralla çevrilir (toLocaleUpperCase "tr-TR": i → İ); CSS text-transform'a bırakılmaz.
+const STIL = `${PDF_SAYFA_STILI}
+  body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1F2937; }
+  .kurum { text-align: center; font-size: 13px; letter-spacing: 1.2px; color: #6B7280; }
   h1 { text-align: center; color: ${RENK}; font-size: 26px; margin: 6px 0 4px; }
   .ogrenci { text-align: center; font-size: 22px; font-weight: bold; margin: 4px 0; }
   .tarih { text-align: center; font-size: 13px; color: #6B7280; margin-bottom: 24px; border-bottom: 2px solid ${RENK}; padding-bottom: 14px; }
-  .kartlar { display: flex; flex-wrap: wrap; margin: 0 -6px 8px; }
+  .kartlar { display: flex; flex-wrap: wrap; margin: 0 -6px 8px; page-break-inside: avoid; break-inside: avoid; }
   .kart { width: 25%; box-sizing: border-box; padding: 0 6px; }
   .kart-ic { border: 1px solid #D1D5DB; border-radius: 10px; padding: 14px 8px; text-align: center; }
   .sayi { font-size: 26px; font-weight: bold; color: ${RENK}; }
   .etiket { font-size: 12px; color: #6B7280; margin-top: 2px; }
   .bilgi { font-size: 14px; margin: 6px 0; }
-  h2 { font-size: 16px; color: #374151; margin: 26px 0 10px; }
+  h2 { font-size: 16px; color: #374151; margin: 26px 0 10px; page-break-after: avoid; break-after: avoid; }
+  .bolum { page-break-inside: avoid; break-inside: avoid; }
   .grafik { display: flex; align-items: flex-end; height: 100px; border-bottom: 1px solid #D1D5DB; }
   .sutun { flex: 1; margin: 0 1px; }
   .cubuk { background: ${RENK}; border-radius: 2px 2px 0 0; }
@@ -71,7 +75,8 @@ const STIL = `
   td.sag { text-align: right; font-weight: bold; color: ${RENK}; width: 60px; }
   .soluk { color: #6B7280; font-size: 12px; }
   .bos { color: #6B7280; font-size: 14px; }
-  .footer { margin-top: 36px; border-top: 1px solid #E5E7EB; padding-top: 12px; font-size: 11px; line-height: 1.6; color: #6B7280; text-align: center; }
+  tr { page-break-inside: avoid; break-inside: avoid; }
+  .footer { page-break-inside: avoid; break-inside: avoid; margin-top: 36px; border-top: 1px solid #E5E7EB; padding-top: 12px; font-size: 11px; line-height: 1.6; color: #6B7280; text-align: center; }
 `;
 
 const sayi = (x) => (Number.isFinite(Number(x)) ? Number(x) : 0);
@@ -159,9 +164,9 @@ export const ogrenciRaporuHtml = ({ kurumAdi, satir, simdi = Date.now() }) => {
           .join("")}</table>`;
 
   return `<!DOCTYPE html>
-<html lang="tr"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<html lang="tr"><head><meta charset="utf-8"/>
 <style>${STIL}</style></head><body>
-  <div class="kurum">${htmlKacis(kurumAdi || "Dershane")}</div>
+  <div class="kurum">${htmlKacis(String(kurumAdi || "Dershane").toLocaleUpperCase("tr-TR"))}</div>
   <h1>Öğrenci Gelişim Raporu</h1>
   <div class="ogrenci">${htmlKacis(satir.isim || "Öğrenci")}</div>
   <div class="tarih">Rapor tarihi: ${htmlKacis(turkceTarih(simdi))}</div>
@@ -172,12 +177,14 @@ export const ogrenciRaporuHtml = ({ kurumAdi, satir, simdi = Date.now() }) => {
     aktiflikMetni(satir.sonAktiflikMs, simdi)
   )}</div>
 
+  <div class="bolum">
   <h2>Son ${RAPOR_GUNU} gün: günlük soru sayısı</h2>
   <div class="grafik">${cubuklar}</div>
   <div class="gunler">${gunEtiketleri}</div>
   <div class="soluk" style="margin-top:6px">En yoğun gün: ${
     gunler.some((g) => g.adet > 0) ? `${enYuksek} soru` : "-"
   }</div>
+  </div>
 
   <h2>Ders dağılımı</h2>
   ${derslerHtml}

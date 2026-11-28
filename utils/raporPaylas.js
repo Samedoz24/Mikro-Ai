@@ -1,15 +1,16 @@
 import { Platform } from "react-native";
-import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system/legacy";
+import { pdfOlustur } from "./pdfYazdir";
 
-// HTML'den PDF üretip paylaşma penceresini açar. Rapor çocuk verisi içerdiği için geçici dosyalar
+// HTML'den PDF üretip (A4, her sayfada kenar boşluğu: pdfYazdir.js) paylaşma penceresini açar. Hem müdürün
+// öğrenci raporu hem öğrencinin Hata Defteri bunu kullanır. PDF kişisel veri içerdiği için geçici dosyalar
 // telefonda kalmamalı: PDF üretim çıktısı hemen silinir. Paylaşılan kopya iOS'ta paylaşma bitince
 // silinir; Android'de paylaşma penceresi açılır açılmaz söz tamamlandığından (hedef uygulama dosyayı
 // o sırada okuyor olabilir) silme bir sonraki rapora ertelenir.
-const ONEK = "Sormix-Rapor-";
+const ONEKLER = ["Sormix-Rapor-", "Sormix-HataDefteri-"];
 // Ad değişikliğinden (Mikro → Sormix) önce kalmış geçici raporlar da temizlenir
-const ESKI_ONEKLER = [ONEK, "Mikro-Rapor-"];
+const ESKI_ONEKLER = [...ONEKLER, "Mikro-Rapor-"];
 
 const sil = async (yol) => {
   if (!yol) return;
@@ -40,12 +41,12 @@ const eskileriTemizle = async () => {
  */
 export const raporuPaylas = async ({ html, dosyaAdi, baslik }) => {
   await eskileriTemizle();
-  const ad = dosyaAdi.startsWith(ONEK) ? dosyaAdi : ONEK + dosyaAdi;
+  const ad = ONEKLER.some((o) => dosyaAdi.startsWith(o)) ? dosyaAdi : ONEKLER[0] + dosyaAdi;
   let gecici = null;
   let kopya = null;
   let paylasildi = false;
   try {
-    const { uri } = await Print.printToFileAsync({ html, base64: false });
+    const { uri } = await pdfOlustur(html);
     gecici = uri;
     kopya = FileSystem.cacheDirectory + ad;
     await FileSystem.copyAsync({ from: uri, to: kopya });

@@ -1,5 +1,6 @@
 import * as Notifications from "expo-notifications";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { gorunenSeri, bugunSoruGonderildiMi } from "./seri";
 import { Platform } from "react-native";
 
 Notifications.setNotificationHandler({
@@ -138,17 +139,28 @@ const eskiBildirimleriTemizle = async () => {
 // Öğrenci bildirimleri
 // ---------------------------------------------------------
 
+// Seri yalnızca SORU GÖNDERİLİNCE artar (sunucuda; utils/seri.js). Hatırlatma: bugün henüz soru gönderilmediyse ve
+// saat gelmediyse BUGÜN akşam (seri gece 00:00'da bozulmadan önce), aksi hâlde yarın akşam kurulur.
 async function seriHatirlatmasiniKur(simdi) {
-  let seri = 0;
+  let profil = {};
   try {
-    seri = parseInt(await AsyncStorage.getItem("seriGunu"), 10) || 0;
+    const kayitlar = Object.fromEntries(await AsyncStorage.multiGet(["seriGunu", "sonSoruGunu"]));
+    profil = { seriGunu: parseInt(kayitlar.seriGunu, 10), sonSoruGunu: kayitlar.sonSoruGunu };
   } catch (e) {}
 
+  const ms = simdi.getTime();
+  const bugunGonderildi = bugunSoruGonderildiMi(profil, ms);
+  const bugunAksam = zamanUret(simdi, 0, SERI_SAATI);
+  const bugunKurulsun = !bugunGonderildi && bugunAksam.getTime() > ms;
+  // Hatırlatmanın çalışacağı anda hâlâ korunabilir seri: bugün akşam → mevcut seri; yarın akşam → yalnızca
+  // bugün soru gönderildiyse seri sürer (gönderilmediyse gece bozulur, genel hatırlatma gösterilir)
+  const seri = bugunKurulsun || bugunGonderildi ? gorunenSeri(profil, ms) : 0;
+
   const icerik =
-    seri >= 2
+    seri >= 1
       ? {
           title: "🔥 Serin Bozulmak Üzere!",
-          body: "Günlük serini kaybetmemek için bugün Sormix'e uğraman yeterli.",
+          body: `${seri} günlük serini kaybetmemek için bugün bir soru gönder.`,
         }
       : {
           title: "📚 Bugün Bir Soru Çözelim mi?",
@@ -156,7 +168,14 @@ async function seriHatirlatmasiniKur(simdi) {
         };
 
   await iptalEt(KIMLIK.seri);
-  await planla(KIMLIK.seri, icerik, zamanUret(simdi, 1, SERI_SAATI));
+  await planla(KIMLIK.seri, icerik, bugunKurulsun ? bugunAksam : zamanUret(simdi, 1, SERI_SAATI));
+}
+
+// Soru gönderildikten sonra seri hatırlatmasını yeniden kurar (bugün gönderildi → yarın akşama kayar).
+// Kullanıcı bildirimleri kapattıysa ya da işletim sistemi izni yoksa hiçbir şey kurulmaz.
+export async function seriHatirlatmasiniGuncelle(simdi = new Date()) {
+  if (!(await bildirimlerAcikMi())) return;
+  await seriHatirlatmasiniKur(simdi);
 }
 
 async function geriKazanimBildirimleriniKur(simdi) {

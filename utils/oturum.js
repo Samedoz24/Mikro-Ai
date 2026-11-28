@@ -20,6 +20,7 @@ const KULLANICI_ANAHTARLARI = [
   "bildirimAktif",
   "profilFoto",
   "seriGunu",
+  "sonSoruGunu",
   "hedefRol",
   "bekleyenAdSoyad",
 ];

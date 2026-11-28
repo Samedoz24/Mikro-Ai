@@ -19,6 +19,13 @@
 // (uid, cihaz özeti, gün) soru belgesine değil, istemciye tamamen kapalı kotaKayitlari/{soruId} belgesine yazılır;
 // bu kayıtlar ertesi gece silinir (eskiKotaKayitlariniSil), hesap silinince de silinir (kotaKayitlariniSil).
 //
+// Seri (28 Kasım 2026): yalnızca SORU GÖNDERİLİNCE artar (uygulamaya girmek yetmez) ve yalnızca sunucuda hesaplanır.
+// Asıl kayıt istemciye tamamen kapalı seriSayaclari/{uid} { seri, sonGun } belgesidir; sunucu yalnızca buna güvenir.
+// kullanicilar/{uid} içindeki seriGunu/sonSoruGunu yalnızca GÖSTERİM kopyasıdır (istemci yazamaz, firestore.rules).
+// Günün ilk sorusu: son soru dün gönderildiyse seri +1, değilse 1. Aynı gün sonraki sorular seriyi değiştirmez.
+// Gün sınırı kota ile aynı (Türkiye 00:00). İptal edilip hakkı iade edilen soru seriyi geri almaz (karar).
+// Eski (giriş bazlı, istemcinin yazdığı) seriler kullanılmaz: herkes ilk sorusuyla 1'den başlar.
+//
 // Sınırlar Firebase Console'dan değiştirilebilir: ayarlar/kota { ucretsiz: 3, premium: 50 }.
 // Belge yoksa ya da değerler geçersizse güvenli varsayılanlar kullanılır.
 
@@ -64,6 +71,30 @@ const bugunkuKullanim = (sayac, gun) =>
   sayac && sayac.gun === gun && Number.isInteger(sayac.sayi) && sayac.sayi > 0 ? sayac.sayi : 0;
 
 // Saf: kalan hak = sınır - (hesap ve cihaz kullanımından büyük olanı), en az 0
+// ---------------------------------------------------------------- seri
+const GUN_BICIMI = /^\d{4}-\d{2}-\d{2}$/;
+const SERI_EN_FAZLA = 100000;
+const GUN_MS = 24 * 60 * 60 * 1000;
+const oncekiGun = (gun) => new Date(Date.parse(`${gun}T00:00:00Z`) - GUN_MS).toISOString().slice(0, 10);
+// Kayıttan geçerli değerler (bozuk/eksik kayıt = seri yok)
+const seriKaydiCoz = (kayit) => ({
+  seri: Number.isInteger(kayit?.seri) && kayit.seri > 0 && kayit.seri <= SERI_EN_FAZLA ? kayit.seri : 0,
+  sonGun: typeof kayit?.sonGun === "string" && GUN_BICIMI.test(kayit.sonGun) ? kayit.sonGun : null,
+});
+// Bugün soru gönderilince yeni seri. artti: seri bu soruyla değişti mi (kutlama gösterilir)
+const seriIlerlet = (kayit, gun) => {
+  const { seri, sonGun } = seriKaydiCoz(kayit);
+  if (seri > 0 && sonGun === gun) return { seri, sonGun: gun, artti: false };
+  if (seri > 0 && sonGun === oncekiGun(gun)) return { seri: Math.min(seri + 1, SERI_EN_FAZLA), sonGun: gun, artti: true };
+  return { seri: 1, sonGun: gun, artti: true };
+};
+// Soru göndermeden görünen seri: son soru bugün ya da dün ise seri sürüyor, daha eskiyse 0
+const gorunenSeri = (kayit, gun) => {
+  const { seri, sonGun } = seriKaydiCoz(kayit);
+  return seri > 0 && (sonGun === gun || sonGun === oncekiGun(gun)) ? seri : 0;
+};
+const seriRef = (uid) => db().doc(`seriSayaclari/${uid}`);
+
 const kalanHak = (sinir, hesapKullanim, cihazKullanim) =>
   Math.max(0, sinir - Math.max(hesapKullanim, cihazKullanim));
 
@@ -170,11 +201,12 @@ const soruGonder = async (uid, token, veri, simdi = Date.now()) => {
   const gun = turkiyeGunu(simdi);
 
   return db().runTransaction(async (tx) => {
-    const [soruSnap, profilSnap, hesapSnap, cihazSnap] = await Promise.all([
+    const [soruSnap, profilSnap, hesapSnap, cihazSnap, seriSnap] = await Promise.all([
       tx.get(soruRef),
       tx.get(profilRef),
       tx.get(refler.hesap),
       tx.get(refler.cihaz),
+      tx.get(seriRef(uid)),
     ]);
     const profil = ogrenciProfili(profilSnap);
     // Kaynaklardan hesaplanır: bitiş tarihi geçmiş abonelik, haber gelmemiş olsa bile sayılmaz
@@ -185,7 +217,14 @@ const soruGonder = async (uid, token, veri, simdi = Date.now()) => {
 
     if (soruSnap.exists) {
       // Aynı istek tekrarı: yeni soru yok, kota düşmez
-      return { soruId: soruRef.id, kalan: kalanHak(sinir, hesapKullanim, cihazKullanim), sinir, premiumMu, zatenVar: true };
+      return {
+        soruId: soruRef.id,
+        kalan: kalanHak(sinir, hesapKullanim, cihazKullanim),
+        sinir,
+        premiumMu,
+        zatenVar: true,
+        seri: { gun: gorunenSeri(seriSnap.data(), gun), artti: false },
+      };
     }
     if (hesapKullanim >= sinir || cihazKullanim >= sinir) {
       throw new HttpsError("resource-exhausted", "kota-doldu", { sinir, premiumMu });
@@ -208,12 +247,19 @@ const soruGonder = async (uid, token, veri, simdi = Date.now()) => {
       durum: BEKLIYOR_DURUMU,
       ogrenciSecimi,
     });
+    // Seri: asıl kayıt istemciye kapalı belgede; profildeki kopya yalnızca gösterim için (değiştiyse yazılır)
+    const yeniSeri = seriIlerlet(seriSnap.data(), gun);
+    tx.set(seriRef(uid), { seri: yeniSeri.seri, sonGun: yeniSeri.sonGun, guncelleme: FieldValue.serverTimestamp() });
+    if (profil.seriGunu !== yeniSeri.seri || profil.sonSoruGunu !== yeniSeri.sonGun) {
+      tx.update(profilRef, { seriGunu: yeniSeri.seri, sonSoruGunu: yeniSeri.sonGun });
+    }
     return {
       soruId: soruRef.id,
       kalan: kalanHak(sinir, hesapKullanim + 1, cihazKullanim + 1),
       sinir,
       premiumMu,
       zatenVar: false,
+      seri: { gun: yeniSeri.seri, artti: yeniSeri.artti },
     };
   });
 };
@@ -311,8 +357,11 @@ const topluSil = async (sorgu) => {
 const eskiKotaKayitlariniSil = (simdi = Date.now()) =>
   topluSil(db().collection("kotaKayitlari").where("gun", "<", turkiyeGunu(simdi)));
 
-// Hesap silme: kullanıcının iade kayıtları silinir
-const kotaKayitlariniSil = (uid) => topluSil(db().collection("kotaKayitlari").where("uid", "==", uid));
+// Hesap silme: kullanıcının iade kayıtları ve seri kaydı silinir
+const kotaKayitlariniSil = async (uid) => {
+  await topluSil(db().collection("kotaKayitlari").where("uid", "==", uid));
+  await seriRef(uid).delete();
+};
 
 module.exports = {
   soruGonder,
@@ -324,6 +373,10 @@ module.exports = {
   IPTAL_DURUMU,
   // test için
   turkiyeGunu,
+  oncekiGun,
+  seriKaydiCoz,
+  seriIlerlet,
+  gorunenSeri,
   sinirlariCoz,
   bugunkuKullanim,
   kalanHak,

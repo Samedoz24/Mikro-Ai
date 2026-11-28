@@ -87,6 +87,7 @@ const raporOlustur = async () => {
 
   for await (const d of tumBelgeler(db().collection("kullanicilar"))) kimlikGor(d.id);
   for await (const d of tumBelgeler(db().collection("baglantiKodlari"))) kimlikGor(d.data().uid);
+  for await (const d of tumBelgeler(db().collection("seriSayaclari"))) kimlikGor(d.id);
   for await (const d of tumBelgeler(db().collection("sorular"))) {
     const veri = d.data();
     if (soruSahibiVarMi(veri, hesaplar)) continue;
@@ -140,6 +141,7 @@ const raporuUygula = async (rapor) => {
     await silinenHesabiTemizle(uid, profil.exists ? profil.data() : null);
     if (profil.exists) await profilRef.delete();
     await db().doc(`kotaSayaclari/h_${uid}`).delete();
+    await db().doc(`seriSayaclari/${uid}`).delete();
     sonuc.kimlik++;
   }
 

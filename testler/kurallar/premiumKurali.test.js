@@ -25,7 +25,9 @@ const reddedilirMi = async (fn) => { try { await fn(); return false; } catch (e)
   esit("güncellerken premiumKaynaklari eklenemez", await reddedilirMi(() => updateDoc(ref, { premiumKaynaklari: abone })), true);
   esit("güncellerken kurum kaynağı eklenemez", await reddedilirMi(() => updateDoc(ref, { "premiumKaynaklari.kurum": true })), true);
   esit("güncellerken premiumMu yazılamaz", await reddedilirMi(() => updateDoc(ref, { premiumMu: true })), true);
-  esit("normal alan güncellenir", await reddedilirMi(() => updateDoc(ref, { seriGunu: 2 })), false);
+  esit("normal alan güncellenir", await reddedilirMi(() => updateDoc(ref, { bildirimAktif: false })), false);
+  // Seri artık yalnızca sunucuda yazılır (28 Kasım): istemciden reddedilir
+  esit("seriGunu istemciden yazılamaz", await reddedilirMi(() => updateDoc(ref, { seriGunu: 2 })), true);
 
   console.log(`[kural-premium] ${gecen} geçti, ${kalan} hata`);
   process.exit(kalan ? 1 : 0);

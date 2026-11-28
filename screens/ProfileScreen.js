@@ -81,6 +81,7 @@ import { abonelikKarti } from "../utils/premiumKaynagi";
 import { yerelTarih } from "../utils/tarih";
 import { dersBul } from "../utils/ders";
 import { kotaDurumuGetir } from "../utils/kotaIstemci";
+import { gorunenSeri } from "../utils/seri";
 import { colors } from "../theme";
 import * as Application from "expo-application";
 import GorunumSecici from "./GorunumSecici";
@@ -266,8 +267,11 @@ export default function ProfileScreen() {
       const kayitliFoto = await AsyncStorage.getItem("profilFoto");
       if (profilFotoGecerliMi(user.uid, kayitliFoto)) setProfilFoto(kayitliFoto);
 
-      const kayitliSeri = await AsyncStorage.getItem("seriGunu");
-      if (kayitliSeri) setSeriGunu(parseInt(kayitliSeri));
+      // Seri: son bilinen değer (sunucunun yazdığı kopya) hemen gösterilir; asıl değer aşağıda belgeden gelir
+      const seriKayitlari = Object.fromEntries(await AsyncStorage.multiGet(["seriGunu", "sonSoruGunu"]));
+      setSeriGunu(
+        gorunenSeri({ seriGunu: parseInt(seriKayitlari.seriGunu, 10), sonSoruGunu: seriKayitlari.sonSoruGunu })
+      );
 
       const bildirimAyar = await AsyncStorage.getItem("bildirimAktif");
       if (bildirimAyar !== null) setBildirimAktif(JSON.parse(bildirimAyar));
@@ -310,17 +314,12 @@ export default function ProfileScreen() {
               }
             }
 
-            if (data.seriGunu !== undefined) {
-              setSeriGunu(data.seriGunu);
-              await AsyncStorage.setItem("seriGunu", String(data.seriGunu));
-            } else {
-              setSeriGunu(1);
-              try {
-                await updateDoc(kullaniciRef, { seriGunu: 1 });
-              } catch (e) {
-                console.log("Seri ekleme hatası", e);
-              }
-            }
+            // Seri yalnızca sunucuda (soru gönderilince) yazılır; uygulama yalnızca okur (utils/seri.js)
+            setSeriGunu(gorunenSeri(data));
+            await AsyncStorage.multiSet([
+              ["seriGunu", String(Number.isInteger(data.seriGunu) ? data.seriGunu : 0)],
+              ["sonSoruGunu", typeof data.sonSoruGunu === "string" ? data.sonSoruGunu : ""],
+            ]);
 
             if (profilFotoGecerliMi(user.uid, data.profilFoto)) {
               setProfilFoto(data.profilFoto);
@@ -336,7 +335,6 @@ export default function ProfileScreen() {
                 rol: kayitliRol === "veli" ? "veli" : "ogrenci",
                 kayitTarihi: new Date().toISOString(),
                 bildirimAktif: true,
-                seriGunu: 1,
               });
             } catch (yazmaHatasi) {
               console.log(

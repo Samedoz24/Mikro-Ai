@@ -223,7 +223,7 @@ const dene = async (ad, fn) => {
     assertFails(setDoc(doc(yeniKullanici, "kullanicilar/yeniKullanici"), { rol: "veli", whatsappNo: "5551112233" })));
 
   // ---------------------------------------------------------------- istemciye kapalı koleksiyonlar
-  for (const yol of ["kotaSayaclari/h_ali", "ayarlar/kota", "cihazHaklari/x", "platformYoneticileri/a@b.com", "abonelikEsitleme/ali", "kotaKayitlari/s1"]) {
+  for (const yol of ["kotaSayaclari/h_ali", "ayarlar/kota", "cihazHaklari/x", "platformYoneticileri/a@b.com", "abonelikEsitleme/ali", "kotaKayitlari/s1", "seriSayaclari/ali"]) {
     await dene(`${yol} okunamaz`, () => assertFails(getDoc(doc(ali, yol))));
     await dene(`${yol} yazılamaz`, () => assertFails(setDoc(doc(ali, yol), { sayi: 0 })));
   }
@@ -251,6 +251,34 @@ const dene = async (ad, fn) => {
   await dene("başkası soruyu okuyamaz", () => assertFails(getDoc(doc(ali, "sorular/s2"))));
   await dene("başkasının sorularını sorgulayamaz", () =>
     assertFails(getDocs(query(collection(ali, "sorular"), where("kullaniciUid", "==", "ayse")))));
+
+  // ---------------------------------------------------------------- seri (28 Kasım): yalnızca sunucu yazar
+  await clearFirestore();
+  await dene("seriGunu ile oluşturamaz", () =>
+    assertFails(setDoc(doc(ali, "kullanicilar/ali"), { rol: "ogrenci", seriGunu: 1 })));
+  await dene("sonSoruGunu ile oluşturamaz", () =>
+    assertFails(setDoc(doc(ali, "kullanicilar/ali"), { rol: "ogrenci", sonSoruGunu: "2026-11-28" })));
+  await dene("seri alanları olmadan oluşturur", () =>
+    assertSucceeds(setDoc(doc(ali, "kullanicilar/ali"), { rol: "ogrenci", eposta: "ali@ornek.com" })));
+  await dene("seriGunu yazamaz", () => assertFails(updateDoc(doc(ali, "kullanicilar/ali"), { seriGunu: 30 })));
+  await dene("sonSoruGunu yazamaz", () => assertFails(updateDoc(doc(ali, "kullanicilar/ali"), { sonSoruGunu: "2026-11-28" })));
+  await dene("eski sürümün seri güncellemesi reddedilir", () =>
+    assertFails(updateDoc(doc(ali, "kullanicilar/ali"), { seriGunu: 2, sonGirisTarihi: "2026-11-28T00:00:00.000Z" })));
+  await hazirla((a) => a.update("kullanicilar/ali", { seriGunu: 4, sonSoruGunu: "2026-11-28" }));
+  await dene("sunucunun yazdığı seriyi değiştiremez", () => assertFails(updateDoc(doc(ali, "kullanicilar/ali"), { seriGunu: 400 })));
+  await dene("sunucunun yazdığı seriyi silemez", () => assertFails(updateDoc(doc(ali, "kullanicilar/ali"), { seriGunu: deleteField() })));
+  await dene("seri dururken adını değiştirebilir", () =>
+    assertSucceeds(updateDoc(doc(ali, "kullanicilar/ali"), { adSoyad: "Ali Can" })));
+  await dene("seri dururken sınıfını değiştirebilir", () =>
+    assertSucceeds(updateDoc(doc(ali, "kullanicilar/ali"), { sinif: "12" })));
+  await dene("kendi serisini okur", async () => {
+    const d = (await getDoc(doc(ali, "kullanicilar/ali"))).data();
+    if (d.seriGunu !== 4 || d.sonSoruGunu !== "2026-11-28") throw new Error("seri okunamadı");
+  });
+  await dene("başkası seriyi okuyamaz", () => assertFails(getDoc(doc(ayse, "kullanicilar/ali"))));
+  await dene("başkası seri yazamaz", () => assertFails(updateDoc(doc(ayse, "kullanicilar/ali"), { seriGunu: 1 })));
+  await dene("seri kaydını okuyamaz", () => assertFails(getDoc(doc(ali, "seriSayaclari/ali"))));
+  await dene("seri kaydı yazamaz", () => assertFails(setDoc(doc(ali, "seriSayaclari/ali"), { seri: 99, sonGun: "2026-11-28" })));
 
   await Promise.all(acik.map((f) => terminate(f)));
   await clearFirestore();

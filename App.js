@@ -59,6 +59,7 @@ import {
 import ErrorBoundary from "./ErrorBoundary";
 import { adSoyadTemizle } from "./utils/profilDogrulama";
 import { tanitimGosterilsinMi } from "./utils/tanitim";
+import SeriKutlama from "./screens/SeriKutlama";
 
 const Tab = createBottomTabNavigator();
 
@@ -464,6 +465,8 @@ function MainApp() {
             </>
           )}
         </Tab.Navigator>
+        {/* Seri kutlaması: soru gönderildikten 10 sn sonra hangi ekranda olunursa olunsun (yalnızca öğrenci) */}
+        <SeriKutlama kullaniciUid={kullaniciRolu === "ogrenci" && kullanici ? kullanici.uid : null} />
       </DuyuruContext.Provider>
     </PremiumProvider>
   );

@@ -130,8 +130,11 @@ service cloud.firestore {
 
     // Veli–öğrenci bağlantısı ve bağlantı kodu yalnızca sunucuda (veliBagla / baglantiKoduAl) yazılır.
     // Bu alanları istemci yazabilseydi, veliMi() kod bilmeden herhangi bir öğrenciye erişim verirdi.
+    // Seri (seriGunu, sonSoruGunu) yalnızca sunucuda, soru gönderilince yazılır (functions/kota.js); asıl kayıt
+    // istemciye kapalı seriSayaclari'dadır. İstemci yazabilseydi sahte seri ve seri rozetleri elde edilebilirdi.
     function sunucuAlanlari() {
-      return ['premiumMu', 'premiumKaynaklari', 'kurumId', 'kurumRol', 'bagliOgrenciIdleri', 'bagliOgrenciler', 'baglantiKodu'];
+      return ['premiumMu', 'premiumKaynaklari', 'kurumId', 'kurumRol', 'bagliOgrenciIdleri', 'bagliOgrenciler', 'baglantiKodu',
+              'seriGunu', 'sonSoruGunu'];
     }
 
     // Yeni belge: alan varsa geçerli olmalı
@@ -287,6 +290,11 @@ service cloud.firestore {
     }
 
     match /kotaSayaclari/{kayitId} {
+      allow read, write: if false;
+    }
+
+    // Seri kaydı (asıl kayıt; profildeki seriGunu/sonSoruGunu yalnızca gösterim kopyası): yalnızca sunucu
+    match /seriSayaclari/{uid} {
       allow read, write: if false;
     }
 

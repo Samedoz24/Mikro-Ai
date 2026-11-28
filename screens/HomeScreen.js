@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useRef } from "react";
 import {
   Text,
   View,
@@ -8,8 +8,6 @@ import {
   Image,
   StyleSheet,
   Platform,
-  Modal,
-  Dimensions,
   StatusBar,
   Linking,
 } from "react-native";
@@ -22,11 +20,9 @@ import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import { Ionicons } from "@expo/vector-icons";
 
-import ConfettiCannon from "react-native-confetti-cannon";
 
-import { auth, db, storage } from "../firebaseConfig";
+import { auth, storage } from "../firebaseConfig";
 import { appCheckBasligi } from "../utils/appCheck";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { ref, deleteObject } from "firebase/storage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -34,8 +30,9 @@ import { useTheme } from "../ThemeContext";
 // 🚀 YENİ: Gerçek karanlık mod kontrolü için colors eklendi
 import { colors } from "../theme";
 import { usePremium } from "../PremiumContext";
-import { kotaYenilenmeHatirlatmasiKur } from "../utils/notificationManager";
-import { takvimGunFarki } from "../utils/tarih";
+import { kotaYenilenmeHatirlatmasiKur, seriHatirlatmasiniGuncelle } from "../utils/notificationManager";
+import { kutlanacakSeri, turkiyeGunu } from "../utils/seri";
+import { seriKutlamasiIste } from "../utils/seriKutlama";
 import YapayZekaBilgi from "./YapayZekaBilgi";
 import useAltMenuBoslugu from "../utils/altMenu";
 import {
@@ -53,7 +50,6 @@ import {
   soruHataMesaji,
 } from "../utils/kotaIstemci";
 
-const screenWidth = Dimensions.get("window").width;
 
 export default function HomeScreen() {
   const [yukleniyor, setYukleniyor] = useState(false);
@@ -65,10 +61,6 @@ export default function HomeScreen() {
   // Yüzen alt menünün altında kalmamak için en altta bırakılan boşluk
   const altMenuBoslugu = useAltMenuBoslugu(8);
 
-  const [seriModalGorunur, setSeriModalGorunur] = useState(false);
-  const [guncelSeriSayisi, setGuncelSeriSayisi] = useState(0);
-
-
   const { tema, temaModu } = useTheme();
   const { premiumAc } = usePremium();
   const user = auth.currentUser;
@@ -76,75 +68,6 @@ export default function HomeScreen() {
   // 🚀 YENİ: Sayfa odakta mı ve gerçekten karanlık mı kontrolleri
   const isFocused = useIsFocused();
   const isGercektenKaranlik = tema.arkaplan === colors.dark.arkaplan;
-
-  useEffect(() => {
-    const seriKontrol = async () => {
-      if (!user) return;
-
-      try {
-        const bugunDate = new Date();
-        bugunDate.setHours(0, 0, 0, 0);
-
-        const kullaniciRef = doc(db, "kullanicilar", user.uid);
-        const kullaniciSnap = await getDoc(kullaniciRef);
-
-        if (kullaniciSnap.exists()) {
-          const data = kullaniciSnap.data();
-          let mevcutSeri = data.seriGunu || 0;
-          let sonGiris = data.sonGirisTarihi
-            ? new Date(data.sonGirisTarihi)
-            : null;
-
-          let guncellenecekVeri = {};
-
-          if (!sonGiris) {
-            guncellenecekVeri = {
-              seriGunu: 1,
-              sonGirisTarihi: bugunDate.toISOString(),
-            };
-            setGuncelSeriSayisi(1);
-            setSeriModalGorunur(true);
-          } else {
-            // Takvim günü farkı: yaz saati/saat dilimi değişimleri günü 23-25 saat yapabilir
-            const farkGun = takvimGunFarki(sonGiris, bugunDate);
-
-            if (farkGun === 1) {
-              const yeniSeri = mevcutSeri + 1;
-              guncellenecekVeri = {
-                seriGunu: yeniSeri,
-                sonGirisTarihi: bugunDate.toISOString(),
-              };
-              setGuncelSeriSayisi(yeniSeri);
-              setSeriModalGorunur(true);
-            } else if (farkGun > 1) {
-              guncellenecekVeri = {
-                seriGunu: 1,
-                sonGirisTarihi: bugunDate.toISOString(),
-              };
-              setGuncelSeriSayisi(1);
-              setSeriModalGorunur(true);
-            } else {
-              setGuncelSeriSayisi(mevcutSeri);
-            }
-          }
-
-          if (Object.keys(guncellenecekVeri).length > 0) {
-            await updateDoc(kullaniciRef, guncellenecekVeri);
-            await AsyncStorage.setItem(
-              "seriGunu",
-              String(guncellenecekVeri.seriGunu)
-            );
-          } else {
-            await AsyncStorage.setItem("seriGunu", String(mevcutSeri));
-          }
-        }
-      } catch (error) {
-        console.log("Seri kontrol hatası:", error);
-      }
-    };
-
-    seriKontrol();
-  }, [user]);
 
   const kamerayiAc = async () => {
     try {
@@ -312,6 +235,22 @@ export default function HomeScreen() {
         return;
       }
 
+      // Seri sunucuda hesaplandı: arttıysa 10 sn sonra (hangi ekranda olursa olsun) kutlama gösterilir.
+      // Bildirim hatırlatması için yerel kopya güncellenir (yalnızca görünüm; asıl kayıt sunucuda).
+      const kutlanacak = kutlanacakSeri(sonuc);
+      if (kutlanacak) seriKutlamasiIste(kutlanacak);
+      if (Number.isInteger(sonuc?.seri?.gun) && sonuc.seri.gun > 0) {
+        try {
+          await AsyncStorage.multiSet([
+            ["seriGunu", String(sonuc.seri.gun)],
+            ["sonSoruGunu", turkiyeGunu()],
+          ]);
+          await seriHatirlatmasiniGuncelle();
+        } catch (e) {
+          console.log("Seri hatırlatması güncellenemedi:", e?.message);
+        }
+      }
+
       // Son hak kullanıldıysa ertesi sabah "hakların yenilendi" bildirimi kurulur
       if (sonuc.kalan <= 0) {
         await kotaYenilenmeHatirlatmasiKur(sonuc.premiumMu, undefined, sonuc.sinir);
@@ -350,41 +289,6 @@ export default function HomeScreen() {
       )}
 
       <View style={[styles.innerContainer, { paddingBottom: altMenuBoslugu }]}>
-        <Modal visible={seriModalGorunur} transparent animationType="fade">
-          <View style={styles.modalOverlay}>
-            {seriModalGorunur && (
-              <ConfettiCannon
-                count={200}
-                origin={{ x: screenWidth / 2, y: -20 }}
-                autoStart={true}
-                fadeOut={true}
-                fallSpeed={2500}
-              />
-            )}
-
-            <View
-              style={[styles.modalKutu, { backgroundColor: tema.kutuArkaplan }]}
-            >
-              <View style={styles.ikonCember}>
-                <Ionicons name="flame" size={50} color="#FF9800" />
-              </View>
-              <Text style={[styles.modalBaslik, { color: tema.metin }]}>
-                {guncelSeriSayisi} GÜNLÜK SERİ!
-              </Text>
-              <Text style={[styles.modalMesaj, { color: tema.ikincilMetin }]}>
-                Harika gidiyorsun! Bugün de buradasın ve serini korudun. Hadi
-                bir soru çözerek günü taçlandır!
-              </Text>
-              <TouchableOpacity
-                onPress={() => setSeriModalGorunur(false)}
-                style={[styles.modalButon, { backgroundColor: tema.anaButon }]}
-              >
-                <Text style={styles.modalButonYazi}>Devam Et</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
-
         <View style={styles.header}>
           <YapayZekaBilgi tema={tema} style={styles.bilgiDugmesi} />
           <Text style={[styles.baslik, { color: tema.metin }]}>
@@ -652,50 +556,4 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     letterSpacing: 0.5,
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.75)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 30,
-  },
-  modalKutu: {
-    padding: 35,
-    borderRadius: 30,
-    alignItems: "center",
-    width: "100%",
-    elevation: 15,
-  },
-  ikonCember: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: "rgba(255, 152, 0, 0.15)",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  modalBaslik: {
-    fontSize: 24,
-    fontWeight: "900",
-    textAlign: "center",
-    marginBottom: 12,
-    letterSpacing: 0.5,
-  },
-  modalMesaj: {
-    fontSize: 15,
-    textAlign: "center",
-    lineHeight: 22,
-    marginBottom: 30,
-    paddingHorizontal: 10,
-  },
-  modalButon: {
-    paddingVertical: 16,
-    paddingHorizontal: 40,
-    borderRadius: 100,
-    width: "100%",
-    alignItems: "center",
-    elevation: 3,
-  },
-  modalButonYazi: { color: "#fff", fontWeight: "bold", fontSize: 17 },
 });

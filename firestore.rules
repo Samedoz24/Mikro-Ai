@@ -107,9 +107,15 @@ service cloud.firestore {
             || get(/databases/$(database)/documents/kurumlar/$(kurumId)/uyeler/$(request.auth.uid)).data.get('grupId', '') == kutuId);
     }
 
-    // Kullanıcı yalnızca kendi seçebileceği rolleri yazabilir
+    // Kullanıcı yalnızca kendi seçebileceği rolleri yazabilir (yalnızca profil OLUŞTURULURKEN; sonra rol değişmez)
     function istemciRolleri() {
       return ['ogrenci', 'veli'];
+    }
+
+    // Sınıf yalnızca uygulamadaki seçeneklerden biri olabilir (utils/profilKurallari.js SINIF_SECENEKLERI ile aynı);
+    // veli hesabında sınıf olmaz. Rastgele metin yazılıp veli/dershane ekranlarında gösterilemesin.
+    function sinifSecenekleri() {
+      return ['8. Sınıf', '9. Sınıf', '10. Sınıf', '11. Sınıf', '12. Sınıf', 'Mezun'];
     }
 
     function degisenAnahtarlar() {
@@ -168,6 +174,9 @@ service cloud.firestore {
         && !request.resource.data.keys().hasAny(sunucuAlanlari())
         && !request.resource.data.keys().hasAny(kaldirilanAlanlar())
         && request.resource.data.get('rol', 'ogrenci') in istemciRolleri()
+        && (!('sinif' in request.resource.data)
+            || (request.resource.data.get('rol', 'ogrenci') == 'ogrenci'
+                && request.resource.data.sinif in sinifSecenekleri()))
         && profilAlanlariGecerliYeni(uid, request.resource.data);
 
       allow update: if ben(uid)
@@ -175,9 +184,14 @@ service cloud.firestore {
         && profilAlanlariGecerliGuncelleme(uid)
         && (!degisenAnahtarlar().hasAny(kaldirilanAlanlar())
             || !request.resource.data.keys().hasAny(kaldirilanAlanlar()))
-        && (!degisenAnahtarlar().hasAny(['rol'])
-            || (request.resource.data.rol in istemciRolleri()
-                && resource.data.get('rol', 'ogrenci') in istemciRolleri()));
+        // Rol kayıttan sonra istemciden DEĞİŞTİRİLEMEZ, eklenemez, silinemez (öğrenci↔veli dahil; 28 Kasım kararı).
+        // Yönetici rolünü yalnızca sunucu (davetle) yazar.
+        && !degisenAnahtarlar().hasAny(['rol'])
+        // Sınıf değişiyorsa: yalnızca öğrenci hesabında ve yalnızca geçerli seçenek (silinmesi serbest)
+        && (!degisenAnahtarlar().hasAny(['sinif'])
+            || !('sinif' in request.resource.data)
+            || (resource.data.get('rol', 'ogrenci') == 'ogrenci'
+                && request.resource.data.sinif in sinifSecenekleri()));
 
       allow delete: if ben(uid);
     }

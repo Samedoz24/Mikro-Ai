@@ -85,7 +85,9 @@ esit("yöneticiye gösterilmez", tanitimGosterilsinMi("yonetici"), false);
 esit("bilinmeyen rol: gösterilmez", tanitimGosterilsinMi(undefined), false);
 esit("'Ogrenci' (büyük harf) gösterilmez", tanitimGosterilsinMi("Ogrenci"), false);
 const appKaynagi = fs.readFileSync(path.join(KOK, "App.js"), "utf8");
-esit("App.js tanıtımı role göre açıyor", appKaynagi.includes("setGosterOnboarding(tanitimGosterilsinMi(yeniRol))"), true);
+esit("App.js tanıtımı yalnızca yeni profilde ve role göre açıyor",
+  appKaynagi.includes("setGosterOnboarding(yeniOlusturuldu && tanitimGosterilsinMi(gercekRol))") &&
+    appKaynagi.includes("setGosterOnboarding(tanitimGosterilsinMi(profil.rol))"), true);
 esit("App.js'te koşulsuz tanıtım açma kalmadı", appKaynagi.includes("setGosterOnboarding(true)"), false);
 
 // ------------------------------------------------ 4) Destek e-postası

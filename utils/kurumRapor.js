@@ -82,8 +82,8 @@ export const ogretmenDavetMetni = (kurumAdi, eposta) =>
     "",
     "Seni dershanemizin Sormix hesabına rehber öğretmen olarak ekledik:",
     "1. Sormix uygulamasını telefonuna indir.",
-    "2. Giriş ekranında Yönetici sekmesini seç.",
-    `3. ${eposta} adresiyle giriş yap (Google ile Giriş Yap önerilir).`,
+    `2. ${eposta} adresiyle "Google ile Giriş Yap" (ya da bu adres Apple hesabınsa "Apple ile Giriş Yap") düğmesine bas.`,
+    "3. Yeni hesap formu doldurma; yönetici ekranı otomatik açılır.",
     "",
     "Giriş yaptığında öğrencilerin istatistiklerini görebilirsin.",
   ].join("\n");

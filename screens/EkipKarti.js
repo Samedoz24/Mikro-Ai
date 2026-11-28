@@ -99,7 +99,7 @@ export default function EkipKarti({ kurumId, kurumAdi, tema }) {
         sonuc.zatenVar ? "Zaten Ekipte" : "Davet Hazır",
         sonuc.zatenVar
           ? `${sonuc.eposta} zaten ekipte ya da davetli.`
-          : `${sonuc.eposta} adresine rehber öğretmen yetkisi tanımlandı. Rehber öğretmen, Yönetici sekmesinden bu adresle giriş yapınca ekibe katılır. İstersen hazır davet mesajını paylaşabilirsin.`,
+          : `${sonuc.eposta} adresine rehber öğretmen yetkisi tanımlandı. Rehber öğretmen, uygulamaya bu adresle Google ya da Apple ile giriş yapınca ekibe katılır. İstersen hazır davet mesajını paylaşabilirsin.`,
         [
           { text: "Tamam", style: "cancel" },
           {
@@ -379,8 +379,8 @@ export default function EkipKarti({ kurumId, kurumAdi, tema }) {
                 onSubmitEditing={davetGonder}
               />
               <Text style={[styles.bilgi, { color: tema.ikincilMetin }]}>
-                Rehber öğretmen, uygulamada Yönetici sekmesinden bu e-posta
-                adresiyle giriş yapınca ekibe katılır. Google ile giriş önerilir.
+                Rehber öğretmen, uygulamaya bu e-posta adresiyle Google ya da
+                Apple ile giriş yapınca ekibe katılır; yönetici ekranı otomatik açılır.
                 Rehber öğretmen
                 öğrencilerin yalnızca istatistiklerini görür, sorularını
                 göremez.

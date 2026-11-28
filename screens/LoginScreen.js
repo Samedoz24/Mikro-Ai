@@ -50,6 +50,16 @@ import {
   appleGirisHatasiMesaji,
   SIFRE_EN_AZ,
 } from "../utils/authHatalari";
+import {
+  SINIF_SECENEKLERI,
+  BEKLEYEN_PROFIL_ANAHTARI,
+  kayitFormuDogrula,
+  bekleyenProfilMetni,
+} from "../utils/profilKurallari";
+import SinifSecici from "./SinifSecici";
+import RolSecici, { rolEtiketi } from "./RolSecici";
+import KosullarPenceresi from "./KosullarPenceresi";
+import { onayOnMetni, kosullarBasligi, ONAY_SON_METNI } from "../utils/onayMetni";
 
 // 🚀 DÜZELTME: useIsFocused tamamen silindi! (Hatanın kaynağı burasıydı)
 
@@ -92,7 +102,22 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [gosterilenSayfa, setGosterilenSayfa] = useState("giris");
-  const [seciliRol, setSeciliRol] = useState("ogrenci");
+  // Kayıt formu (28 Kasım): giriş ekranında rol sekmesi yok; rolü sistem profilden bulur.
+  // Kayıtta: ad soyad, sınıf (yalnızca öğrenci), e-posta, rol (Öğrenci/Veli), şifre. Yönetici seçeneği yok.
+  const [adSoyad, setAdSoyad] = useState("");
+  const [sinif, setSinif] = useState(null);
+  // Hesap türü boş başlar: kullanıcı Öğrenci/Veli'yi bilinçli seçmeden kayıt olamaz
+  const [kayitRol, setKayitRol] = useState(null);
+  const [sinifSeciciGorunur, setSinifSeciciGorunur] = useState(false);
+  const [rolSeciciGorunur, setRolSeciciGorunur] = useState(false);
+  // Kullanım koşulları / yaş onayı (kayıtta zorunlu). Onay cümlesi hesap türüne göre değişir; tür değişirse onay
+  // sıfırlanır (kişi, gördüğü cümleye onay vermiş olmalı). onayZamani profil oluşturulurken kaydedilir.
+  const [onayZamani, setOnayZamani] = useState(null);
+  const [kosullarGorunur, setKosullarGorunur] = useState(false);
+  const hesapTuruSec = (yeniRol) => {
+    if (yeniRol !== kayitRol) setOnayZamani(null);
+    setKayitRol(yeniRol);
+  };
 
   const [yukleniyor, setYukleniyor] = useState(false);
   const [googleYukleniyor, setGoogleYukleniyor] = useState(false);
@@ -121,31 +146,28 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
 
   const isGercektenKaranlik = tema.arkaplan === colors.dark.arkaplan;
 
-  const dinamikAnaRenk =
-    seciliRol === "veli"
-      ? "#4F46E5"
-      : seciliRol === "yonetici"
-      ? "#0F766E"
-      : tema.anaButon;
+  const dinamikAnaRenk = tema.anaButon;
 
   const handleKayitOl = async () => {
-    const eposta = email.trim();
-    if (!eposta || !password) {
-      Alert.alert("Uyarı", "Lütfen e-posta ve şifre alanlarını doldurun.");
-      return;
-    }
-    // Firebase'in şifre politikası da en az 8 karakteri sunucuda zorunlu tutar (uygulama atlanamaz);
-    // bu kontrol yalnızca kullanıcıya hemen geri bildirim içindir. Girişte uygulanmaz: eski hesaplar kilitlenmesin.
-    if (password.length < SIFRE_EN_AZ) {
-      Alert.alert("Uyarı", `Şifre en az ${SIFRE_EN_AZ} karakter olmalı.`);
+    // Firebase'in şifre politikası en az 8 karakteri sunucuda da zorunlu tutar (uygulama atlanamaz); buradaki
+    // kontroller kullanıcıya hemen geri bildirim içindir. Rol/sınıf/ad kuralları ayrıca firestore.rules'ta.
+    const sonuc = kayitFormuDogrula({ adSoyad, sinif, rol: kayitRol, eposta: email, sifre: password, onay: !!onayZamani });
+    if (sonuc.hata) {
+      Alert.alert("Eksik Bilgi", sonuc.hata);
       return;
     }
     setYukleniyor(true);
     try {
-      await AsyncStorage.setItem("hedefRol", seciliRol);
-      await createUserWithEmailAndPassword(auth, eposta, password);
+      // Profil, hesap açıldıktan hemen sonra (App.js) bu bilgilerle oluşturulur: yalnızca aynı e-posta ve kısa süre
+      // içinde geçerlidir; şifre saklanmaz.
+      await AsyncStorage.setItem(
+        BEKLEYEN_PROFIL_ANAHTARI,
+        bekleyenProfilMetni(sonuc.profil, sonuc.eposta, Date.now(), onayZamani)
+      );
+      await createUserWithEmailAndPassword(auth, sonuc.eposta, password);
     } catch (e) {
       console.log("Kayıt hatası:", e?.code);
+      await AsyncStorage.removeItem(BEKLEYEN_PROFIL_ANAHTARI);
       Alert.alert("Kayıt Yapılamadı", kayitHatasiMesaji(e));
       setYukleniyor(false);
     }
@@ -159,7 +181,8 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
     }
     setYukleniyor(true);
     try {
-      await AsyncStorage.setItem("hedefRol", seciliRol);
+      // Önceki yarım kalmış bir kaydın formu bu girişe uygulanmasın
+      await AsyncStorage.removeItem(BEKLEYEN_PROFIL_ANAHTARI);
       await signInWithEmailAndPassword(auth, eposta, password);
     } catch (e) {
       console.log("Giriş hatası:", e?.code);
@@ -199,7 +222,8 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
   const handleGoogleGiris = async () => {
     setGoogleYukleniyor(true);
     try {
-      await AsyncStorage.setItem("hedefRol", seciliRol);
+      // Google ile ilk girişte profil "Profilini Tamamla" ekranında oluşturulur (form bilgisi kullanılmaz)
+      await AsyncStorage.removeItem(BEKLEYEN_PROFIL_ANAHTARI);
       await GoogleSignin.hasPlayServices();
       const response = await GoogleSignin.signIn();
 
@@ -238,10 +262,10 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
   const handleAppleGiris = async () => {
     setAppleYukleniyor(true);
     try {
-      await AsyncStorage.setItem("hedefRol", seciliRol);
-      const { kimlik, adSoyad } = await appleKimligiAl();
-      // Apple adı yalnızca ilk girişte verir: profil oluşturulurken kullanılmak üzere saklanır
-      if (adSoyad) await AsyncStorage.setItem("bekleyenAdSoyad", adSoyad);
+      await AsyncStorage.removeItem(BEKLEYEN_PROFIL_ANAHTARI);
+      const { kimlik, adSoyad: appleAdi } = await appleKimligiAl();
+      // Apple adı yalnızca ilk girişte verir: "Profilini Tamamla" ekranında ad alanını doldurmak için saklanır
+      if (appleAdi) await AsyncStorage.setItem("bekleyenAdSoyad", appleAdi);
       else await AsyncStorage.removeItem("bekleyenAdSoyad");
       await signInWithCredential(auth, kimlik);
     } catch (error) {
@@ -260,29 +284,12 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
 
   const anaIslem = gosterilenSayfa === "giris" ? handleGirisYap : handleKayitOl;
 
-  const karsilamaMetni =
-    seciliRol === "ogrenci"
-      ? gosterilenSayfa === "giris"
-        ? "Hoş Geldin"
-        : "Hesap Oluştur"
-      : seciliRol === "yonetici"
-      ? gosterilenSayfa === "giris"
-        ? "Yönetici Girişi"
-        : "Yönetici Hesabı Oluştur"
-      : gosterilenSayfa === "giris"
-      ? "Veli Girişi"
-      : "Veli Hesabı Oluştur";
+  const karsilamaMetni = gosterilenSayfa === "giris" ? "Hoş Geldin" : "Hesap Oluştur";
 
   const altMetin =
-    seciliRol === "ogrenci"
-      ? gosterilenSayfa === "giris"
-        ? "Yapay zeka destekli eğitim asistanınıza erişmek için giriş yapın."
-        : "Kişiselleştirilmiş öğrenim deneyimine adım atmak için hesabınızı oluşturun."
-      : seciliRol === "yonetici"
-      ? "Yalnızca dershane tarafından davet edilen müdür ve rehber öğretmenler içindir. Davet edilen e-posta adresinle giriş yap."
-      : gosterilenSayfa === "giris"
-      ? "Öğrencinizin akademik gelişimini detaylı analiz etmek için giriş yapın."
-      : "Öğrencinizin eğitim sürecini yakından takip etmek için veli hesabı oluşturun.";
+    gosterilenSayfa === "giris"
+      ? "Sormix hesabınla giriş yap. Öğrenci, veli ya da dershane yöneticisi olman fark etmez; doğru ekran otomatik açılır."
+      : "Bilgilerini girerek hesabını oluştur.";
 
   const dinamikStil = {
     container: {
@@ -393,23 +400,6 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
       fontSize: 14,
       fontWeight: "600",
     },
-    tabContainer: {
-      flexDirection: "row",
-      width: "100%",
-      marginBottom: 30,
-      backgroundColor: tema.kutuArkaplan,
-      borderRadius: 16,
-      padding: 6,
-      borderWidth: 1,
-      borderColor: tema.kutuCerceve,
-    },
-    tabButon: {
-      flex: 1,
-      paddingVertical: 14,
-      alignItems: "center",
-      borderRadius: 12,
-    },
-    tabYazi: { fontSize: 15, fontWeight: "bold" },
     cizgiKutu: {
       flexDirection: "row",
       alignItems: "center",
@@ -426,6 +416,25 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
       color: tema.ikincilMetin,
       fontSize: 14,
       fontWeight: "500",
+    },
+    onayKutusu: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 12,
+      width: "100%",
+      borderWidth: 1.5,
+      borderRadius: 16,
+      padding: 14,
+      marginBottom: 6,
+    },
+    onayMetni: { flex: 1, fontSize: 14, lineHeight: 21 },
+    bilgiSatiri: {
+      width: "100%",
+      textAlign: "center",
+      color: tema.ikincilMetin,
+      fontSize: 13,
+      lineHeight: 19,
+      marginTop: 4,
     },
     hesapGecisKarti: {
       flexDirection: "row",
@@ -452,70 +461,12 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
     },
   };
 
-  const rolSecici = () => (
-    <View style={dinamikStil.tabContainer}>
-      <TouchableOpacity
-        style={[
-          dinamikStil.tabButon,
-          {
-            backgroundColor:
-              seciliRol === "ogrenci" ? dinamikAnaRenk : "transparent",
-          },
-        ]}
-        onPress={() => setSeciliRol("ogrenci")}
-        disabled={islemSuruyor}
-      >
-        <Text
-          style={[
-            dinamikStil.tabYazi,
-            { color: seciliRol === "ogrenci" ? "#fff" : tema.ikincilMetin },
-          ]}
-        >
-          Öğrenci
-        </Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[
-          dinamikStil.tabButon,
-          {
-            backgroundColor:
-              seciliRol === "veli" ? dinamikAnaRenk : "transparent",
-          },
-        ]}
-        onPress={() => setSeciliRol("veli")}
-        disabled={islemSuruyor}
-      >
-        <Text
-          style={[
-            dinamikStil.tabYazi,
-            { color: seciliRol === "veli" ? "#fff" : tema.ikincilMetin },
-          ]}
-        >
-          Veli
-        </Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[
-          dinamikStil.tabButon,
-          {
-            backgroundColor:
-              seciliRol === "yonetici" ? dinamikAnaRenk : "transparent",
-          },
-        ]}
-        onPress={() => setSeciliRol("yonetici")}
-        disabled={islemSuruyor}
-      >
-        <Text
-          style={[
-            dinamikStil.tabYazi,
-            { color: seciliRol === "yonetici" ? "#fff" : tema.ikincilMetin },
-          ]}
-        >
-          Yönetici
-        </Text>
-      </TouchableOpacity>
-    </View>
-  );
+  const kayitMi = gosterilenSayfa === "kayit";
+  // Kayıt Ol düğmesi: bütün alanlar geçerli ve onay kutusu işaretli değilse soluk ve basılamaz. Koşul, kayıttaki
+  // doğrulamayla AYNI fonksiyondur (düğme aktifken kayıt reddedilmez, soluk görünürken kayıt yapılamaz).
+  const kayitHazir =
+    !kayitMi ||
+    !kayitFormuDogrula({ adSoyad, sinif, rol: kayitRol, eposta: email, sifre: password, onay: !!onayZamani }).hata;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: tema.arkaplan }}>
@@ -533,11 +484,7 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
         >
           <View style={dinamikStil.animasyonKutu}>
             <LottieView
-              source={
-                seciliRol === "ogrenci"
-                  ? require("../assets/animations/kamera.json")
-                  : require("../assets/animations/veli.json")
-              }
+              source={require("../assets/animations/kamera.json")}
               autoPlay
               loop
               style={{ width: "100%", height: "100%" }}
@@ -547,7 +494,50 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
           <Text style={dinamikStil.baslik}>{karsilamaMetni}</Text>
           <Text style={dinamikStil.altBaslik}>{altMetin}</Text>
 
-          {rolSecici()}
+          {kayitMi && (
+            <View style={dinamikStil.inputKutu}>
+              <Ionicons
+                name="person-outline"
+                size={22}
+                color={tema.ikincilMetin}
+                style={dinamikStil.inputIkon}
+              />
+              <TextInput
+                style={dinamikStil.input}
+                placeholderTextColor={tema.ikincilMetin}
+                placeholder="Ad Soyad"
+                value={adSoyad}
+                onChangeText={setAdSoyad}
+                autoCapitalize="words"
+                autoComplete="name"
+                textContentType="name"
+                maxLength={40}
+                returnKeyType="next"
+                editable={!islemSuruyor}
+              />
+            </View>
+          )}
+
+          {kayitMi && kayitRol !== "veli" && (
+            <TouchableOpacity
+              style={dinamikStil.inputKutu}
+              onPress={() => setSinifSeciciGorunur(true)}
+              disabled={islemSuruyor}
+              accessibilityRole="button"
+              accessibilityLabel={sinif ? `Sınıf: ${sinif}` : "Sınıfını seç"}
+            >
+              <Ionicons
+                name="school-outline"
+                size={22}
+                color={tema.ikincilMetin}
+                style={dinamikStil.inputIkon}
+              />
+              <Text style={[dinamikStil.input, { color: sinif ? tema.metin : tema.ikincilMetin }]}>
+                {sinif || "Sınıfınız"}
+              </Text>
+              <Ionicons name="chevron-down" size={20} color={tema.ikincilMetin} />
+            </TouchableOpacity>
+          )}
 
           <View style={dinamikStil.inputKutu}>
             <Ionicons
@@ -559,7 +549,7 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
             <TextInput
               style={dinamikStil.input}
               placeholderTextColor={tema.ikincilMetin}
-              placeholder="E-posta Adresiniz"
+              placeholder="E-posta adresiniz"
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
@@ -572,6 +562,29 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
               editable={!(yukleniyor || googleYukleniyor)}
             />
           </View>
+
+          {kayitMi && (
+            <TouchableOpacity
+              style={dinamikStil.inputKutu}
+              onPress={() => setRolSeciciGorunur(true)}
+              disabled={islemSuruyor}
+              accessibilityRole="button"
+              accessibilityLabel={
+                kayitRol ? `Hesap türü: ${rolEtiketi(kayitRol)}. Değiştirmek için dokun.` : "Hesap türünü seç"
+              }
+            >
+              <Ionicons
+                name={kayitRol === "ogrenci" ? "school-outline" : "people-outline"}
+                size={22}
+                color={tema.ikincilMetin}
+                style={dinamikStil.inputIkon}
+              />
+              <Text style={[dinamikStil.input, { color: kayitRol ? tema.metin : tema.ikincilMetin }]}>
+                {kayitRol ? `Hesap türü: ${rolEtiketi(kayitRol)}` : "Hesap türünüz"}
+              </Text>
+              <Ionicons name="chevron-down" size={20} color={tema.ikincilMetin} />
+            </TouchableOpacity>
+          )}
 
           <View style={dinamikStil.inputKutu}>
             <Ionicons
@@ -601,7 +614,7 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
                 gosterilenSayfa === "giris" ? "password" : "newPassword"
               }
               returnKeyType="go"
-              onSubmitEditing={anaIslem}
+              onSubmitEditing={() => kayitHazir && anaIslem()}
               editable={!(yukleniyor || googleYukleniyor)}
             />
             <TouchableOpacity
@@ -618,6 +631,40 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
             </TouchableOpacity>
           </View>
 
+          {kayitMi && (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => setOnayZamani((z) => (z ? null : Date.now()))}
+              disabled={islemSuruyor}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: !!onayZamani }}
+              style={[
+                dinamikStil.onayKutusu,
+                {
+                  borderColor: onayZamani ? dinamikAnaRenk : tema.kutuCerceve,
+                  backgroundColor: onayZamani ? dinamikAnaRenk + "12" : "transparent",
+                },
+              ]}
+            >
+              <Ionicons
+                name={onayZamani ? "checkbox" : "square-outline"}
+                size={26}
+                color={onayZamani ? dinamikAnaRenk : tema.ikincilMetin}
+              />
+              <Text style={[dinamikStil.onayMetni, { color: tema.metin }]}>
+                {onayOnMetni(kayitRol)}
+                <Text
+                  onPress={() => setKosullarGorunur(true)}
+                  style={{ color: dinamikAnaRenk, fontWeight: "700", textDecorationLine: "underline" }}
+                  accessibilityRole="link"
+                >
+                  {kosullarBasligi(kayitRol)}
+                </Text>
+                {ONAY_SON_METNI}
+              </Text>
+            </TouchableOpacity>
+          )}
+
           {gosterilenSayfa === "giris" && (
             <TouchableOpacity
               onPress={handleSifremiUnuttum}
@@ -630,9 +677,18 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
           )}
 
           <TouchableOpacity
-            style={[dinamikStil.butonAna, yukleniyor && { opacity: 0.7 }]}
+            style={[
+              dinamikStil.butonAna,
+              yukleniyor && { opacity: 0.7 },
+              !kayitHazir && { opacity: 0.45, shadowOpacity: 0, elevation: 0 },
+            ]}
             onPress={anaIslem}
-            disabled={islemSuruyor}
+            disabled={islemSuruyor || !kayitHazir}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: islemSuruyor || !kayitHazir }}
+            accessibilityHint={
+              kayitHazir ? undefined : "Bütün alanları doldurup Kullanım Koşulları onay kutusunu işaretlemelisin."
+            }
           >
             {yukleniyor ? (
               <ActivityIndicator color="#ffffff" size="small" />
@@ -720,6 +776,20 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
             </TouchableOpacity>
           )}
 
+          {!kayitMi && (
+            <Text style={dinamikStil.bilgiSatiri}>
+              Sormix'i kullanarak{" "}
+              <Text
+                onPress={() => setKosullarGorunur(true)}
+                style={{ color: dinamikAnaRenk, fontWeight: "700", textDecorationLine: "underline" }}
+                accessibilityRole="link"
+              >
+                Kullanım Koşulları
+              </Text>
+              'na uymayı kabul edersin.
+            </Text>
+          )}
+
           <TouchableOpacity
             style={dinamikStil.hesapGecisKarti}
             activeOpacity={0.6}
@@ -741,6 +811,23 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
+      <KosullarPenceresi gorunur={kosullarGorunur} kapat={() => setKosullarGorunur(false)} rol={kayitRol} />
+      <RolSecici
+        gorunur={rolSeciciGorunur}
+        kapat={() => setRolSeciciGorunur(false)}
+        seciliRol={kayitRol}
+        sec={hesapTuruSec}
+      />
+      <SinifSecici
+        gorunur={sinifSeciciGorunur}
+        kapat={() => setSinifSeciciGorunur(false)}
+        siniflar={SINIF_SECENEKLERI}
+        seciliSinif={sinif}
+        sec={(secilen) => {
+          setSinif(secilen);
+          return true;
+        }}
+      />
     </SafeAreaView>
   );
 }

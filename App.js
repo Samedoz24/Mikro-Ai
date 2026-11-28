@@ -14,7 +14,6 @@ import {
   doc,
   getDoc,
   setDoc,
-  updateDoc,
 } from "firebase/firestore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -46,7 +45,6 @@ import { DuyuruContext } from "./utils/DuyuruContext";
 import AltMenu from "./screens/AltMenu";
 import { rozetDegeri, sekmeEtiketi } from "./utils/sekmeAyarlari";
 import { yoneticiOl, kurumHataMesaji } from "./utils/kurumIstemci";
-import { YAS_ONAYI_SURUMU } from "./utils/yasalMetinler";
 import { PremiumProvider } from "./PremiumContext";
 import { magazaKullanicisiniAyarla, magazaGirisiniUnut } from "./utils/magaza";
 import { dersiTamamla, digerDersiDuzelt } from "./utils/dersTamamla";
@@ -60,6 +58,16 @@ import ErrorBoundary from "./ErrorBoundary";
 import { adSoyadTemizle } from "./utils/profilDogrulama";
 import { tanitimGosterilsinMi } from "./utils/tanitim";
 import SeriKutlama from "./screens/SeriKutlama";
+import { onayGecerliMi } from "./utils/onayMetni";
+import ProfilTamamla from "./screens/ProfilTamamla";
+import {
+  BEKLEYEN_PROFIL_ANAHTARI,
+  bekleyenProfilCoz,
+  yeniProfilBelgesi,
+  rolCoz,
+  profilEksikleri,
+  yoneticiDenemesiSonucu,
+} from "./utils/profilKurallari";
 
 const Tab = createBottomTabNavigator();
 
@@ -71,13 +79,7 @@ const ROZET_STILI = {
   fontWeight: "bold",
 };
 
-const ROL_ETIKETLERI = {
-  ogrenci: "Öğrenci",
-  veli: "Veli",
-  yonetici: "Yönetici",
-};
-
-// Yönetici sekmesinden girişte sunucudan yetki alınır. Davet yoksa ya da e-posta doğrulanmamışsa
+// Yönetici hesabının her girişinde sunucudan yetki yenilenir. Davet yoksa ya da e-posta doğrulanmamışsa
 // giriş reddedilir. Dönen değer: { basarili: true } ya da { basarili: false, baslik, mesaj }
 const yoneticiYetkisiAl = async (kullanici) => {
   try {
@@ -114,7 +116,10 @@ const yoneticiYetkisiAl = async (kullanici) => {
 function MainApp() {
   const [kullanici, setKullanici] = useState(null);
   const [yukleniyor, setYukleniyor] = useState(true);
-  const [kullaniciRolu, setKullaniciRolu] = useState("ogrenci");
+  // Rol profil okunup doğrulanana kadar BOŞ: rol belirlenmeden öğrenci/veli/yönetici işleri başlamaz
+  const [kullaniciRolu, setKullaniciRolu] = useState(null);
+  // "Profilini Tamamla" gerekiyorsa: { mod: "yeni" | "tamamla", rolSabit?, onerilenAd?, mevcutSinif? }
+  const [profilGerekli, setProfilGerekli] = useState(null);
   const [gosterOnboarding, setGosterOnboarding] = useState(false);
   const [onayGerekli, setOnayGerekli] = useState(false);
   // Rol uyuşmazlığıyla giriş reddedilince giriş ekranının yükleniyor durumunu sıfırlar
@@ -136,103 +141,136 @@ function MainApp() {
     const abonelik = onAuthStateChanged(auth, async (aktifKullanici) => {
       if (aktifKullanici) {
         try {
+          // Rol belirleme (28 Kasım): giriş ekranında rol seçilmez; rol yalnızca profilden (istemci yalnızca ilk
+          // oluşturmada öğrenci/veli yazabilir) ya da sunucudan (yönetici: doğrulanmış e-posta + davet) gelir.
           const userDocRef = doc(db, "kullanicilar", aktifKullanici.uid);
           let userDoc = await getDoc(userDocRef);
-          const hedefRol = await AsyncStorage.getItem("hedefRol");
           // Apple ile ilk girişte Apple'ın verdiği ad (yalnızca bir kez gelir); kullanıldıktan sonra silinir
-          const bekleyenAdSoyad = adSoyadTemizle(
-            await AsyncStorage.getItem("bekleyenAdSoyad")
-          );
-          await AsyncStorage.removeItem("bekleyenAdSoyad");
+          const bekleyenAdSoyad = adSoyadTemizle(await AsyncStorage.getItem("bekleyenAdSoyad"));
+          // E-postayla kayıt formunun bilgileri (yalnızca aynı e-posta + kısa süre; utils/profilKurallari.js)
+          const bekleyenMetin = await AsyncStorage.getItem(BEKLEYEN_PROFIL_ANAHTARI);
+          await AsyncStorage.multiRemove(["bekleyenAdSoyad", BEKLEYEN_PROFIL_ANAHTARI, "hedefRol"]);
+          const onerilenAd = bekleyenAdSoyad || adSoyadTemizle(aktifKullanici.displayName);
 
           // Girişi reddedip oturumu kapatır; giriş ekranının yükleniyor durumunu sıfırlar
           const girisiReddet = async (baslik, mesaj) => {
             await signOut(auth);
             Alert.alert(baslik, mesaj);
-            await AsyncStorage.removeItem("hedefRol");
             setKullanici(null);
+            setKullaniciRolu(null);
+            setProfilGerekli(null);
             setGirisReddi((n) => n + 1);
             setYukleniyor(false);
           };
 
-          // Yönetici sekmesi: her girişte sunucuya sorulur. Hesap ilk kez yönetici oluyorsa yetki verilir;
-          // zaten yöneticiyse davet hâlâ geçerli mi bakılır ve rol değişikliği (müdür/öğretmen) uygulanır.
-          if (hedefRol === "yonetici") {
+          let yoneticiYetkisiYeniAlindi = false;
+          let yeniOlusturuldu = false;
+
+          if (!userDoc.exists()) {
+            // 1) Yönetici daveti var mı? Yalnızca doğrulanmış e-postada sorulur (sunucu da doğrular). Davet yoksa
+            //    normal kullanıcı akışı; başka her hata (lisans geçersiz, davet kullanılmış, ağ...) girişi durdurur.
+            if (aktifKullanici.emailVerified === true) {
+              let hata = null;
+              try {
+                await yoneticiOl();
+              } catch (e) {
+                hata = e;
+              }
+              const sonuc = yoneticiDenemesiSonucu(hata);
+              if (sonuc === "yonetici") {
+                await aktifKullanici.getIdToken(true);
+                yoneticiYetkisiYeniAlindi = true;
+                userDoc = await getDoc(userDocRef);
+              } else if (sonuc === "dur") {
+                console.log("Yönetici kontrolü:", hata?.code, hata?.message);
+                await girisiReddet("Giriş Yapılamadı", kurumHataMesaji(hata));
+                return;
+              }
+            }
+          }
+
+          if (!userDoc.exists()) {
+            // 2) E-postayla kayıt: formdaki bilgilerle profil oluşturulur
+            const bekleyen = bekleyenProfilCoz(bekleyenMetin, aktifKullanici.email);
+            if (bekleyen) {
+              await setDoc(userDocRef, yeniProfilBelgesi({ profil: bekleyen, eposta: aktifKullanici.email }));
+              userDoc = await getDoc(userDocRef);
+              yeniOlusturuldu = true;
+            } else {
+              // 3) Google/Apple ile ilk giriş: "Profilini Tamamla" (tamamlanmadan uygulamaya girilmez)
+              setKullaniciRolu(null);
+              setPremiumMu(false);
+              setPremiumKaynaklari(null);
+              setOnayGerekli(true);
+              setGosterOnboarding(false);
+              setProfilGerekli({ mod: "yeni", onerilenAd });
+              setKullanici(aktifKullanici);
+              setYukleniyor(false);
+              return;
+            }
+          }
+
+          const veri = userDoc.data();
+          const gercekRol = rolCoz(veri);
+          if (gercekRol === null) {
+            await girisiReddet("Giriş Yapılamadı", "Hesap türün tanınamadı. Lütfen destek ile iletişime geç.");
+            return;
+          }
+
+          // Yönetici: her girişte sunucu daveti yeniden doğrular ve rol değişikliğini (müdür/rehber öğretmen) uygular
+          if (gercekRol === "yonetici" && !yoneticiYetkisiYeniAlindi) {
             const sonuc = await yoneticiYetkisiAl(aktifKullanici);
             if (!sonuc.basarili) {
               await girisiReddet(sonuc.baslik, sonuc.mesaj);
               return;
             }
-            userDoc = await getDoc(userDocRef);
           }
 
-          if (userDoc.exists()) {
-            const gercekRol = userDoc.data().rol || "ogrenci";
+          // Kayıt formunda onay verildiyse profil oluşturulurken kaydedildi (onay ekranı tekrar çıkmaz); Google/Apple
+          // ile gelenler ve onayı eski sürümde kalanlar için role özel onay ekranı gösterilir
+          setOnayGerekli(!onayGecerliMi(veri.yasOnayi));
+          setPremiumMu(veri.premiumMu === true);
+          setPremiumKaynaklari(veri.premiumKaynaklari ?? null);
+          // Tanıtım sayfaları öğrenci özelliklerini anlatır; yalnızca yeni öğrenciye (28 Kasım kararı)
+          setGosterOnboarding(yeniOlusturuldu && tanitimGosterilsinMi(gercekRol));
 
-            if (hedefRol && gercekRol !== hedefRol) {
-              await girisiReddet(
-                "Hatalı Giriş ❌",
-                `Bu e-posta adresi bir ${
-                  ROL_ETIKETLERI[gercekRol] || "Öğrenci"
-                } hesabına ait. Lütfen doğru sekmeyi seçin.`
-              );
-              return;
-            }
-
-            // Profilde ad yoksa ve Apple ad verdiyse eklenir (var olan ad asla değiştirilmez)
-            if (bekleyenAdSoyad && !userDoc.data().adSoyad) {
-              try {
-                await updateDoc(userDocRef, { adSoyad: bekleyenAdSoyad });
-              } catch (e) {
-                console.log("Ad eklenemedi:", e?.code);
-              }
-            }
-
-            const yasOnayi = userDoc.data().yasOnayi;
-            setOnayGerekli(
-              !(
-                yasOnayi?.onaylandi === true &&
-                (yasOnayi?.surum ?? 0) >= YAS_ONAYI_SURUMU
-              )
-            );
-
-            setKullaniciRolu(gercekRol);
-            setPremiumMu(userDoc.data().premiumMu === true);
-            setPremiumKaynaklari(userDoc.data().premiumKaynaklari ?? null);
-            await AsyncStorage.setItem("kullaniciRolu", gercekRol);
-            setGosterOnboarding(false);
+          // Eski hesaplarda ad ya da sınıf eksikse bir kez "Profilini Tamamla" (rol sabit, değiştirilemez)
+          const eksik = profilEksikleri(veri);
+          if (eksik.length > 0) {
+            setKullaniciRolu(null);
+            setProfilGerekli({
+              mod: "tamamla",
+              rolSabit: gercekRol,
+              onerilenAd: veri.adSoyad || onerilenAd,
+              mevcutSinif: veri.sinif,
+            });
           } else {
-            const yeniRol = hedefRol || "ogrenci";
-            await setDoc(
-              userDocRef,
-              {
-                eposta: aktifKullanici.email,
-                rol: yeniRol,
-                kayitTarihi: new Date().toISOString(),
-                ...(bekleyenAdSoyad ? { adSoyad: bekleyenAdSoyad } : {}),
-              },
-              { merge: true }
-            );
-
-            setOnayGerekli(true);
-            setKullaniciRolu(yeniRol);
-            setPremiumMu(false);
-            setPremiumKaynaklari(null);
-            await AsyncStorage.setItem("kullaniciRolu", yeniRol);
-            // Tanıtım sayfaları öğrenci özelliklerini anlatır; veliye gösterilmez (28 Kasım kararı)
-            setGosterOnboarding(tanitimGosterilsinMi(yeniRol));
+            setProfilGerekli(null);
+            setKullaniciRolu(gercekRol);
+            await AsyncStorage.setItem("kullaniciRolu", gercekRol);
           }
-
-          await AsyncStorage.removeItem("hedefRol");
         } catch (e) {
-          console.log("Kapı bekçisi hatası:", e);
+          // Güvenli tarafta kal: rol belirlenemediyse (ağ hatası, beklenmedik durum) içeri alınmaz; oturum kapatılır
+          console.log("Kapı bekçisi hatası:", e?.code || e?.message);
+          try {
+            await signOut(auth);
+          } catch (cikisHatasi) {}
+          setKullanici(null);
+          setKullaniciRolu(null);
+          setProfilGerekli(null);
+          setGirisReddi((n) => n + 1);
+          setYukleniyor(false);
+          Alert.alert("Giriş Yapılamadı", "Bir sorun oluştu. İnternet bağlantını kontrol edip tekrar dene.");
+          return;
         }
 
         setKullanici(aktifKullanici);
       } else {
-        // Ortak telefonda önceki kişinin Premium görünümü sonraki kişiye kalmasın
+        // Ortak telefonda önceki kişinin Premium görünümü ve rolü sonraki kişiye kalmasın
         setPremiumMu(false);
         setPremiumKaynaklari(null);
+        setKullaniciRolu(null);
+        setProfilGerekli(null);
         setKullanici(null);
       }
       setYukleniyor(false);
@@ -248,15 +286,15 @@ function MainApp() {
       magazaGirisiniUnut();
       return;
     }
-    if (onayGerekli || kullaniciRolu !== "ogrenci") return;
+    if (onayGerekli || profilGerekli || kullaniciRolu !== "ogrenci") return;
     magazaKullanicisiniAyarla(kullanici.uid).catch((e) =>
       console.log("Mağaza oturumu açılamadı:", e?.code)
     );
-  }, [kullanici, onayGerekli, kullaniciRolu]);
+  }, [kullanici, onayGerekli, profilGerekli, kullaniciRolu]);
 
   // Premium durumu canlı izlenir: satın alma sonrası sunucu güncelleyince arayüz yenilenir
   useEffect(() => {
-    if (!kullanici || onayGerekli) return;
+    if (!kullanici || onayGerekli || profilGerekli) return;
 
     const abonelik = onSnapshot(
       doc(db, "kullanicilar", kullanici.uid),
@@ -268,12 +306,12 @@ function MainApp() {
     );
 
     return () => abonelik();
-  }, [kullanici, onayGerekli]);
+  }, [kullanici, onayGerekli, profilGerekli]);
 
   useEffect(() => {
     const bildirimleriKur = async () => {
       // Onay verilmeden bildirim izni istenmez
-      if (!kullanici || onayGerekli) return;
+      if (!kullanici || onayGerekli || profilGerekli || !kullaniciRolu) return;
 
       try {
         const bildirimAyar = await AsyncStorage.getItem("bildirimAktif");
@@ -291,7 +329,7 @@ function MainApp() {
     };
 
     bildirimleriKur();
-  }, [kullanici, kullaniciRolu, onayGerekli]);
+  }, [kullanici, kullaniciRolu, onayGerekli, profilGerekli]);
 
   useEffect(() => {
     if (!kullanici || kullaniciRolu !== "ogrenci") return;
@@ -341,6 +379,22 @@ function MainApp() {
     return () => abonelik();
   }, [kullanici, kullaniciRolu]);
 
+  // "Profilini Tamamla" bitti: yeni profilde yaş/şart onayı ve (öğrenciye) tanıtım gösterilir
+  const profilTamamlandi = async (profil) => {
+    const yeni = profilGerekli?.mod === "yeni";
+    if (yeni) {
+      setOnayGerekli(true);
+      setPremiumMu(false);
+      setPremiumKaynaklari(null);
+      setGosterOnboarding(tanitimGosterilsinMi(profil.rol));
+    }
+    setKullaniciRolu(profil.rol);
+    setProfilGerekli(null);
+    try {
+      await AsyncStorage.setItem("kullaniciRolu", profil.rol);
+    } catch (e) {}
+  };
+
   if (yukleniyor) {
     return (
       <View
@@ -362,6 +416,28 @@ function MainApp() {
         setKullaniciRolu={setKullaniciRolu}
         girisReddi={girisReddi}
       />
+    );
+  }
+
+  if (profilGerekli) {
+    return (
+      <ProfilTamamla
+        kullanici={kullanici}
+        mod={profilGerekli.mod}
+        rolSabit={profilGerekli.rolSabit}
+        onerilenAd={profilGerekli.onerilenAd}
+        mevcutSinif={profilGerekli.mevcutSinif}
+        onTamamlandi={profilTamamlandi}
+      />
+    );
+  }
+
+  // Rol doğrulanmadan hiçbir sekme açılmaz (güvenli taraf)
+  if (!kullaniciRolu) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: tema.arkaplan }}>
+        <ActivityIndicator size="large" color={tema.anaButon} />
+      </View>
     );
   }
 

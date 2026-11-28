@@ -82,6 +82,7 @@ import { yerelTarih } from "../utils/tarih";
 import { dersBul } from "../utils/ders";
 import { kotaDurumuGetir } from "../utils/kotaIstemci";
 import { gorunenSeri } from "../utils/seri";
+import { SINIF_SECENEKLERI } from "../utils/profilKurallari";
 import { colors } from "../theme";
 import * as Application from "expo-application";
 import GorunumSecici from "./GorunumSecici";
@@ -98,14 +99,8 @@ import {
 } from "../utils/profilDogrulama";
 
 // 13 yaş şartı nedeniyle liste 8. sınıftan başlar
-const SINIFLAR = [
-  "8. Sınıf",
-  "9. Sınıf",
-  "10. Sınıf",
-  "11. Sınıf",
-  "12. Sınıf",
-  "Mezun",
-];
+// Sınıf seçenekleri tek yerde (firestore.rules sinifSecenekleri() ile aynı; test denetler)
+const SINIFLAR = SINIF_SECENEKLERI;
 
 // Bilinen roller; rol alanı olmayan eski hesaplar öğrenci sayılır (sunucudaki kuralla aynı)
 const BILINEN_ROLLER = ["ogrenci", "veli", "yonetici"];

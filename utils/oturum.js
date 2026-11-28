@@ -23,6 +23,7 @@ const KULLANICI_ANAHTARLARI = [
   "sonSoruGunu",
   "hedefRol",
   "bekleyenAdSoyad",
+  "bekleyenProfil",
 ];
 
 // Kullanıcıya ait önekli anahtarlar (çözüm önbelleği ayrıca temizlenir: hafızadaki kopyası da silinir)

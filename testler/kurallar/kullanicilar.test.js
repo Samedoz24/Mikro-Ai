@@ -152,7 +152,7 @@ const dene = async (ad, fn) => {
   await dene("kurumId güncellenemez", () => assertFails(updateDoc(doc(ali, "kullanicilar/ali"), { kurumId: "k1" })));
   await dene("kurumRol güncellenemez", () => assertFails(updateDoc(doc(ali, "kullanicilar/ali"), { kurumRol: "mudur" })));
   await dene("yonetici rolüne geçemez", () => assertFails(updateDoc(doc(ali, "kullanicilar/ali"), { rol: "yonetici" })));
-  await dene("öğrenci→veli geçebilir", () => assertSucceeds(updateDoc(doc(ali, "kullanicilar/ali"), { rol: "veli" })));
+  await dene("öğrenci→veli GEÇEMEZ (rol kilidi)", () => assertFails(updateDoc(doc(ali, "kullanicilar/ali"), { rol: "veli" })));
   await hazirla((a) => a.set("kullanicilar/mudur1", { rol: "yonetici" }));
   await dene("yönetici rolünden çıkamaz", () => assertFails(updateDoc(doc(db("mudur1"), "kullanicilar/mudur1"), { rol: "ogrenci" })));
   await dene("başkasının belgesini güncelleyemez", () => assertFails(updateDoc(doc(ayse, "kullanicilar/ali"), { adSoyad: "x" })));
@@ -270,7 +270,7 @@ const dene = async (ad, fn) => {
   await dene("seri dururken adını değiştirebilir", () =>
     assertSucceeds(updateDoc(doc(ali, "kullanicilar/ali"), { adSoyad: "Ali Can" })));
   await dene("seri dururken sınıfını değiştirebilir", () =>
-    assertSucceeds(updateDoc(doc(ali, "kullanicilar/ali"), { sinif: "12" })));
+    assertSucceeds(updateDoc(doc(ali, "kullanicilar/ali"), { sinif: "12. Sınıf" })));
   await dene("kendi serisini okur", async () => {
     const d = (await getDoc(doc(ali, "kullanicilar/ali"))).data();
     if (d.seriGunu !== 4 || d.sonSoruGunu !== "2026-11-28") throw new Error("seri okunamadı");
@@ -279,6 +279,47 @@ const dene = async (ad, fn) => {
   await dene("başkası seri yazamaz", () => assertFails(updateDoc(doc(ayse, "kullanicilar/ali"), { seriGunu: 1 })));
   await dene("seri kaydını okuyamaz", () => assertFails(getDoc(doc(ali, "seriSayaclari/ali"))));
   await dene("seri kaydı yazamaz", () => assertFails(setDoc(doc(ali, "seriSayaclari/ali"), { seri: 99, sonGun: "2026-11-28" })));
+
+  // ---------------------------------------------------------------- rol kilidi ve sınıf (28 Kasım, giriş/kayıt)
+  await clearFirestore();
+  const s1 = db("s1"), v1 = db("v1"), e1 = db("e1");
+  await dene("öğrenci geçerli sınıfla oluşturur", () =>
+    assertSucceeds(setDoc(doc(s1, "kullanicilar/s1"), { rol: "ogrenci", adSoyad: "Ece Çağ", sinif: "11. Sınıf", eposta: "s1@x.com" })));
+  for (const kotu of ["12", "13. Sınıf", "11. sinif", "", "Mezun ", 11, null, ["9. Sınıf"]]) {
+    await clearFirestore();
+    await dene(`geçersiz sınıfla oluşturamaz: ${JSON.stringify(kotu)}`, () =>
+      assertFails(setDoc(doc(s1, "kullanicilar/s1"), { rol: "ogrenci", sinif: kotu })));
+  }
+  await dene("sınıfsız öğrenci oluşturur (eski sürüm uyumu)", () =>
+    assertSucceeds(setDoc(doc(s1, "kullanicilar/s1"), { rol: "ogrenci", adSoyad: "Ece" })));
+  await dene("veli sınıfla oluşturamaz", () => assertFails(setDoc(doc(v1, "kullanicilar/v1"), { rol: "veli", sinif: "9. Sınıf" })));
+  await dene("veli sınıfsız oluşturur", () => assertSucceeds(setDoc(doc(v1, "kullanicilar/v1"), { rol: "veli", adSoyad: "Veli Bey" })));
+  await dene("yönetici rolüyle oluşturamaz (sınıfla da)", () =>
+    assertFails(setDoc(doc(e1, "kullanicilar/e1"), { rol: "yonetici", sinif: "9. Sınıf" })));
+  // Rol kilidi
+  await dene("öğrenci rolünü veli yapamaz", () => assertFails(updateDoc(doc(s1, "kullanicilar/s1"), { rol: "veli" })));
+  await dene("veli rolünü öğrenci yapamaz", () => assertFails(updateDoc(doc(v1, "kullanicilar/v1"), { rol: "ogrenci" })));
+  await dene("rol silinemez", () => assertFails(updateDoc(doc(s1, "kullanicilar/s1"), { rol: deleteField() })));
+  await dene("aynı rol yeniden yazılabilir (değişiklik yok)", () => assertSucceeds(updateDoc(doc(s1, "kullanicilar/s1"), { rol: "ogrenci" })));
+  await hazirla((a) => a.set("kullanicilar/e1", { adSoyad: "Eski" })); // rolü olmayan eski hesap
+  await dene("rolü olmayan eski hesap rol ekleyemez", () => assertFails(updateDoc(doc(e1, "kullanicilar/e1"), { rol: "veli" })));
+  await dene("rolü olmayan eski hesap (öğrenci sayılır) sınıf seçer", () =>
+    assertSucceeds(updateDoc(doc(e1, "kullanicilar/e1"), { sinif: "Mezun" })));
+  await dene("setDoc birleştirmeyle de rol değişmez", () =>
+    assertFails(setDoc(doc(s1, "kullanicilar/s1"), { rol: "veli" }, { merge: true })));
+  // Sınıf güncelleme
+  await dene("öğrenci geçerli sınıfa geçer", () => assertSucceeds(updateDoc(doc(s1, "kullanicilar/s1"), { sinif: "12. Sınıf" })));
+  await dene("öğrenci geçersiz sınıf yazamaz", () => assertFails(updateDoc(doc(s1, "kullanicilar/s1"), { sinif: "Üniversite" })));
+  await dene("öğrenci sınıfı silebilir", () => assertSucceeds(updateDoc(doc(s1, "kullanicilar/s1"), { sinif: deleteField() })));
+  await dene("veli sınıf yazamaz", () => assertFails(updateDoc(doc(v1, "kullanicilar/v1"), { sinif: "9. Sınıf" })));
+  await hazirla((a) => a.set("kullanicilar/m1", { rol: "yonetici", kurumId: "k1" }));
+  await dene("yönetici sınıf yazamaz", () => assertFails(updateDoc(doc(db("m1"), "kullanicilar/m1"), { sinif: "9. Sınıf" })));
+  await dene("profil tamamlama: ad + sınıf birlikte", () =>
+    assertSucceeds(updateDoc(doc(s1, "kullanicilar/s1"), { adSoyad: "Ece Çağ Yılmaz", sinif: "10. Sınıf" })));
+  // Eski geçersiz sınıf kaydı başka güncellemeleri kilitlemez
+  await hazirla((a) => a.set("kullanicilar/e2", { rol: "ogrenci", sinif: "12" }));
+  await dene("eski geçersiz sınıflı kayıtta ad güncellenir", () =>
+    assertSucceeds(updateDoc(doc(db("e2"), "kullanicilar/e2"), { adSoyad: "Eski Öğrenci" })));
 
   await Promise.all(acik.map((f) => terminate(f)));
   await clearFirestore();

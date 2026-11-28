@@ -6,16 +6,10 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
-  Modal,
   ActivityIndicator,
   StatusBar,
-  Platform,
 } from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
-import { WebView } from "react-native-webview";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { doc, setDoc } from "firebase/firestore";
 
@@ -23,19 +17,14 @@ import { auth, db } from "../firebaseConfig";
 import { oturumuKapat } from "../utils/oturum";
 import { useTheme } from "../ThemeContext";
 import { colors } from "../theme";
-import {
-  htmlSablonUret,
-  KULLANIM_KOSULLARI_ICERIK,
-  YONETICI_KOSULLARI_ICERIK,
-  YAS_ONAYI_SURUMU,
-  ASGARI_YAS,
-} from "../utils/yasalMetinler";
+import { ASGARI_YAS } from "../utils/yasalMetinler";
+import { onayOnMetni, kosullarBasligi, ONAY_SON_METNI, onayKaydi } from "../utils/onayMetni";
+import KosullarPenceresi from "./KosullarPenceresi";
 
 // Girişten hemen sonra, kullanıcı henüz yaş/koşul onayı vermemişse gösterilir.
 // Tüm giriş yöntemleri (e-posta, Google, ileride Apple) ve mevcut hesaplar aynı yoldan geçer.
 export default function YasOnayScreen({ kullanici, rol, onOnaylandi }) {
   const { tema } = useTheme();
-  const insets = useSafeAreaInsets();
   const isKaranlik = tema.arkaplan === colors.dark.arkaplan;
   const veliMi = rol === "veli";
   // Dershane müdürü ya da öğretmeni: kendi metni ve belgesi vardır
@@ -107,15 +96,8 @@ export default function YasOnayScreen({ kullanici, rol, onOnaylandi }) {
         },
       ];
 
-  const onayMetni = yoneticiMi
-    ? "Dershanenin yetkilisi olduğumu, öğrenci verilerini yalnızca eğitim faaliyetleri için kullanacağımı ve "
-    : veliMi
-    ? "18 yaşını doldurduğumu ve "
-    : `${ASGARI_YAS} yaşını doldurduğumu, 18 yaşından küçükse velimin bilgisi dahilinde kullandığımı ve `;
-
-  const kosullarBasligi = yoneticiMi
-    ? "Yönetici Kullanım Koşulları"
-    : "Kullanım Koşulları";
+  // Kayıt formuyla aynı role özel cümle ve aynı kayıt biçimi (utils/onayMetni.js)
+  const onayMetni = onayOnMetni(rol || "ogrenci");
 
   const onayla = async () => {
     if (!onaylandi || kaydediliyor || !kullanici) return;
@@ -124,12 +106,7 @@ export default function YasOnayScreen({ kullanici, rol, onOnaylandi }) {
       await setDoc(
         doc(db, "kullanicilar", kullanici.uid),
         {
-          yasOnayi: {
-            onaylandi: true,
-            surum: YAS_ONAYI_SURUMU,
-            tarih: new Date().toISOString(),
-            rol: rol || "ogrenci",
-          },
+          yasOnayi: onayKaydi({ rol: rol || "ogrenci" }),
         },
         { merge: true }
       );
@@ -231,9 +208,9 @@ export default function YasOnayScreen({ kullanici, rol, onOnaylandi }) {
               }}
               accessibilityRole="link"
             >
-              {kosullarBasligi}
+              {kosullarBasligi(rol)}
             </Text>
-            'nı okuyup kabul ettiğimi onaylıyorum.
+            {ONAY_SON_METNI}
           </Text>
         </TouchableOpacity>
 
@@ -275,71 +252,7 @@ export default function YasOnayScreen({ kullanici, rol, onOnaylandi }) {
         </TouchableOpacity>
       </ScrollView>
 
-      <Modal
-        visible={kosullarGorunur}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setKosullarGorunur(false)}
-        onDismiss={() => setKosullarGorunur(false)}
-      >
-        {/* Modal, güvenli alan bağlamının dışında çizildiği için boşluklar elle verilir */}
-        <View
-          style={{
-            flex: 1,
-            // WebView'ın içindeki şablonla aynı renk; alt boşlukta renk farkı oluşmaz
-            backgroundColor: isKaranlik ? "#121212" : "#FFFFFF",
-            paddingTop: Platform.OS === "android" ? insets.top : 0,
-            paddingBottom: insets.bottom,
-          }}
-        >
-          <View
-            style={[
-              styles.modalBaslik,
-              {
-                borderBottomColor: tema.kutuCerceve,
-                backgroundColor: tema.arkaplan,
-              },
-            ]}
-          >
-            <Text
-              style={[styles.modalBaslikYazi, { color: tema.metin }]}
-              accessibilityRole="header"
-            >
-              {kosullarBasligi}
-            </Text>
-            <TouchableOpacity
-              onPress={() => setKosullarGorunur(false)}
-              activeOpacity={0.6}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              accessibilityRole="button"
-              accessibilityLabel="Kapat"
-              style={styles.modalKapatButon}
-            >
-              <Ionicons
-                name="close-circle"
-                size={32}
-                color={tema.ikincilMetin}
-              />
-            </TouchableOpacity>
-          </View>
-          <WebView
-            originWhitelist={["*"]}
-            source={{
-              html: htmlSablonUret(
-                isKaranlik,
-                "Yasal Şartlar",
-                "Hukuki Metin",
-                yoneticiMi ? YONETICI_KOSULLARI_ICERIK : KULLANIM_KOSULLARI_ICERIK
-              ),
-            }}
-            style={{
-              flex: 1,
-              backgroundColor: isKaranlik ? "#121212" : "#FFFFFF",
-            }}
-            showsVerticalScrollIndicator={false}
-          />
-        </View>
-      </Modal>
+      <KosullarPenceresi gorunur={kosullarGorunur} kapat={() => setKosullarGorunur(false)} rol={rol} />
     </SafeAreaView>
   );
 }
@@ -406,20 +319,4 @@ const styles = StyleSheet.create({
   anaButonYazi: { fontSize: 17, fontWeight: "700" },
   cikisButon: { alignItems: "center", paddingVertical: 18 },
   cikisYazi: { fontSize: 15, fontWeight: "600" },
-  modalBaslik: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingLeft: 20,
-    paddingRight: 12,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  modalBaslikYazi: { fontSize: 18, fontWeight: "700" },
-  modalKapatButon: {
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
 });

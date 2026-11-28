@@ -121,7 +121,7 @@ export const formuDenetle = (
 export const mudurMesaji = ({ ad, mudurEposta, kurumKodu }) =>
   `${ad} için Sormix yönetici hesabın hazır.\n\n` +
   `1) Sormix uygulamasını indir.\n` +
-  `2) Giriş ekranında "Yönetici" sekmesini seç ve ${mudurEposta} e-posta adresinle giriş yap (e-postanı doğrulaman gerekir).\n` +
+  `2) ${mudurEposta} adresinle "Google ile Giriş Yap" (ya da bu adres Apple hesabınsa "Apple ile Giriş Yap") düğmesine bas. Yeni hesap formu doldurma; yönetici ekranı otomatik açılır.\n` +
   `3) Dershane sekmesinden öğrencilerine verebileceğin kayıt kodunu görürsün: ${kurumKodu}`;
 
 // Dershane durumu etiketi ve yapılabilecek işlemler (kural: sunucu yine de doğrular)

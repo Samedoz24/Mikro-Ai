@@ -58,6 +58,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "./withSceneDelegate.js",
       [
         "expo-build-properties",
         {

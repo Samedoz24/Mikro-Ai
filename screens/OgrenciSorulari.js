@@ -15,6 +15,7 @@ import {
 } from "../utils/kurumIstemci";
 import { YONETICI_RENGI } from "../utils/useYoneticiYetkisi";
 import { sorulariHazirla, tarihSaatMetni } from "../utils/kurumSorular";
+import { isleniyorMu, ISLENIYOR_METNI, ISLENIYOR_EMOJI, ISLENIYOR_RENGI } from "../utils/soruDurumu";
 
 const SAYFA_BOYUTU = 30;
 
@@ -197,7 +198,9 @@ export default function OgrenciSorulari({
           {
             backgroundColor: item.cozuldu
               ? YONETICI_RENGI + "22"
-              : tema.kutuCerceve,
+              : isleniyorMu(item)
+                ? ISLENIYOR_RENGI + "22"
+                : tema.kutuCerceve,
           },
         ]}
       >
@@ -205,10 +208,18 @@ export default function OgrenciSorulari({
           style={{
             fontSize: 12,
             fontWeight: "700",
-            color: item.cozuldu ? YONETICI_RENGI : tema.ikincilMetin,
+            color: item.cozuldu
+              ? YONETICI_RENGI
+              : isleniyorMu(item)
+                ? ISLENIYOR_RENGI
+                : tema.ikincilMetin,
           }}
         >
-          {item.cozuldu ? "Çözüldü" : item.durum || "Bekliyor"}
+          {item.cozuldu
+            ? "Çözüldü"
+            : isleniyorMu(item)
+              ? `${ISLENIYOR_EMOJI} ${ISLENIYOR_METNI}`
+              : item.durum || "Bekliyor"}
         </Text>
       </View>
     </TouchableOpacity>

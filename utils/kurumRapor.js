@@ -78,9 +78,9 @@ export const ogrenciDavetMetni = (kurumAdi, kod) =>
 // Müdürün davet ettiği öğretmene göndereceği hazır mesaj
 export const ogretmenDavetMetni = (kurumAdi, eposta) =>
   [
-    `🏫 ${kurumAdi || "Dershanemiz"} — Sormix öğretmen daveti`,
+    `🏫 ${kurumAdi || "Dershanemiz"} — Sormix rehber öğretmen daveti`,
     "",
-    "Seni dershanemizin Sormix hesabına öğretmen olarak ekledik:",
+    "Seni dershanemizin Sormix hesabına rehber öğretmen olarak ekledik:",
     "1. Sormix uygulamasını telefonuna indir.",
     "2. Giriş ekranında Yönetici sekmesini seç.",
     `3. ${eposta} adresiyle giriş yap (Google ile Giriş Yap önerilir).`,

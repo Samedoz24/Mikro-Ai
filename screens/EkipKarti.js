@@ -29,7 +29,7 @@ import { kapsamMetni } from "../utils/kurumKapsam";
 import { ogretmenDavetMetni } from "../utils/kurumRapor";
 
 const UYARI_RENGI = "#D97706";
-const ROL_ADLARI = { mudur: "Müdür", ogretmen: "Öğretmen" };
+const ROL_ADLARI = { mudur: "Müdür", ogretmen: "Rehber Öğretmen" };
 const EN_FAZLA_OGRETMEN_GRUBU = 10;
 
 // Müdürün ekip yönetimi: öğretmen davet etme, davet/yetki kaldırma. Yetki kararları sunucudadır;
@@ -84,7 +84,7 @@ export default function EkipKarti({ kurumId, kurumAdi, tema }) {
   const davetGonder = async () => {
     const temiz = eposta.trim().toLowerCase();
     if (!temiz) {
-      Alert.alert("E-posta Gerekli", "Öğretmenin e-posta adresini yaz.");
+      Alert.alert("E-posta Gerekli", "Rehber öğretmenin e-posta adresini yaz.");
       return;
     }
     setCalisiyor(true);
@@ -99,7 +99,7 @@ export default function EkipKarti({ kurumId, kurumAdi, tema }) {
         sonuc.zatenVar ? "Zaten Ekipte" : "Davet Hazır",
         sonuc.zatenVar
           ? `${sonuc.eposta} zaten ekipte ya da davetli.`
-          : `${sonuc.eposta} adresine öğretmen yetkisi tanımlandı. Öğretmen, Yönetici sekmesinden bu adresle giriş yapınca ekibe katılır. İstersen hazır davet mesajını paylaşabilirsin.`,
+          : `${sonuc.eposta} adresine rehber öğretmen yetkisi tanımlandı. Rehber öğretmen, Yönetici sekmesinden bu adresle giriş yapınca ekibe katılır. İstersen hazır davet mesajını paylaşabilirsin.`,
         [
           { text: "Tamam", style: "cancel" },
           {
@@ -140,7 +140,7 @@ export default function EkipKarti({ kurumId, kurumAdi, tema }) {
     if (!isaretli && kapsamPenceresi.secili.length >= EN_FAZLA_OGRETMEN_GRUBU) {
       Alert.alert(
         "Sınıra Ulaşıldı",
-        `Bir öğretmene en fazla ${EN_FAZLA_OGRETMEN_GRUBU} grup atanabilir.`
+        `Bir rehber öğretmene en fazla ${EN_FAZLA_OGRETMEN_GRUBU} grup atanabilir.`
       );
       return;
     }
@@ -175,7 +175,7 @@ export default function EkipKarti({ kurumId, kurumAdi, tema }) {
   const kaldirmayiOnayla = (uye) => {
     const davetli = uye.durum === "davetli";
     Alert.alert(
-      davetli ? "Daveti İptal Et" : "Öğretmeni Kaldır",
+      davetli ? "Daveti İptal Et" : "Rehber Öğretmeni Kaldır",
       davetli
         ? `${uye.eposta} adresine gönderilen davet iptal edilecek.`
         : `${uye.eposta} ekipten çıkarılacak ve yönetici yetkisi hemen kapanacak.`,
@@ -314,7 +314,7 @@ export default function EkipKarti({ kurumId, kurumAdi, tema }) {
                       accessibilityLabel={
                         davetli
                           ? `${uye.eposta} davetini iptal et`
-                          : `${uye.eposta} öğretmenini kaldır`
+                          : `${uye.eposta} rehber öğretmenini kaldır`
                       }
                     >
                       <Ionicons
@@ -336,7 +336,7 @@ export default function EkipKarti({ kurumId, kurumAdi, tema }) {
           accessibilityRole="button"
         >
           <Ionicons name="person-add-outline" size={18} color="#fff" />
-          <Text style={styles.anaButonYazi}>Öğretmen Davet Et</Text>
+          <Text style={styles.anaButonYazi}>Rehber Öğretmen Davet Et</Text>
         </TouchableOpacity>
       </View>
 
@@ -355,7 +355,7 @@ export default function EkipKarti({ kurumId, kurumAdi, tema }) {
           >
             <ScrollView keyboardShouldPersistTaps="handled" bounces={false}>
               <Text style={[styles.modalBaslik, { color: tema.metin }]}>
-                Öğretmen Davet Et
+                Rehber Öğretmen Davet Et
               </Text>
               <TextInput
                 style={[
@@ -379,8 +379,9 @@ export default function EkipKarti({ kurumId, kurumAdi, tema }) {
                 onSubmitEditing={davetGonder}
               />
               <Text style={[styles.bilgi, { color: tema.ikincilMetin }]}>
-                Öğretmen, uygulamada Yönetici sekmesinden bu e-posta adresiyle
-                giriş yapınca ekibe katılır. Google ile giriş önerilir. Öğretmen
+                Rehber öğretmen, uygulamada Yönetici sekmesinden bu e-posta
+                adresiyle giriş yapınca ekibe katılır. Google ile giriş önerilir.
+                Rehber öğretmen
                 öğrencilerin yalnızca istatistiklerini görür, sorularını
                 göremez.
               </Text>
@@ -429,7 +430,7 @@ export default function EkipKarti({ kurumId, kurumAdi, tema }) {
           >
             <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
               <Text style={[styles.modalBaslik, { color: tema.metin }]}>
-                Öğretmenin Kapsamı
+                Rehber Öğretmenin Kapsamı
               </Text>
               <Text
                 style={[
@@ -514,7 +515,7 @@ export default function EkipKarti({ kurumId, kurumAdi, tema }) {
                         { color: tema.hataKirmizi, marginTop: 8 },
                       ]}
                     >
-                      Hiç grup seçmezsen bu öğretmen hiçbir öğrenciyi göremez.
+                      Hiç grup seçmezsen bu rehber öğretmen hiçbir öğrenciyi göremez.
                     </Text>
                   )}
                 </View>
@@ -526,9 +527,9 @@ export default function EkipKarti({ kurumId, kurumAdi, tema }) {
                   { color: tema.ikincilMetin, marginTop: 14 },
                 ]}
               >
-                Kapsam, öğretmenin göreceği öğrenci istatistiklerini belirler.
-                Öğretmen hiçbir zaman öğrencilerin sorularını göremez.
-                Değişiklik, öğretmen uygulamayı bir sonraki açtığında geçerli
+                Kapsam, rehber öğretmenin göreceği öğrenci istatistiklerini belirler.
+                Rehber öğretmen hiçbir zaman öğrencilerin sorularını göremez.
+                Değişiklik, rehber öğretmen uygulamayı bir sonraki açtığında geçerli
                 olur.
               </Text>
 

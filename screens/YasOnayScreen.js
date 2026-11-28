@@ -50,12 +50,12 @@ export default function YasOnayScreen({ kullanici, rol, onOnaylandi }) {
     {
       ikon: "business-outline",
       metin:
-        "Bu hesabı, bağlı olduğun dershanenin yetkilisi (müdür ya da öğretmen) olarak kullanıyorsun.",
+        "Bu hesabı, bağlı olduğun dershanenin yetkilisi (müdür ya da rehber öğretmen) olarak kullanıyorsun.",
     },
     {
       ikon: "eye-outline",
       metin:
-        "Müdür öğrencilerin sorularını ve çözümlerini, öğretmen yalnızca istatistiklerini görür. Yalnızca dershaneye kendi isteğiyle bağlanan öğrencilerin verileri görünür.",
+        "Müdür öğrencilerin sorularını ve çözümlerini, rehber öğretmen yalnızca istatistiklerini görür. Yalnızca dershaneye kendi isteğiyle bağlanan öğrencilerin verileri görünür.",
     },
     {
       ikon: "lock-closed-outline",

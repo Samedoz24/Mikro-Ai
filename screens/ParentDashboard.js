@@ -41,7 +41,15 @@ import useAltMenuBoslugu from "../utils/altMenu";
 // 🚀 YENİ: Gerçek karanlık mod kontrolü için
 import { colors } from "../theme";
 import { cozumYukle, kesinSonuc } from "../utils/cozumYukleyici";
-import { INCELEME_MESAJI, incelemedeMi, iptalMi } from "../utils/soruDurumu";
+import {
+  INCELEME_MESAJI,
+  incelemedeMi,
+  iptalMi,
+  isleniyorMu,
+  ISLENIYOR_METNI,
+  ISLENIYOR_EMOJI,
+  ISLENIYOR_RENGI,
+} from "../utils/soruDurumu";
 import { dersBul } from "../utils/ders";
 import {
   veliBagla,
@@ -635,6 +643,7 @@ export default function ParentDashboard() {
                     "tr-TR"
                   );
                   const cozulduMu = item.durum === "Çözüldü";
+                  const isleniyor = isleniyorMu(item);
                   const dersAdi = dersBul(item);
 
                   return (
@@ -691,7 +700,9 @@ export default function ParentDashboard() {
                           {
                             backgroundColor: cozulduMu
                               ? (tema.aiButon || "#10B981") + "20"
-                              : tema.kutuCerceve,
+                              : isleniyor
+                                ? ISLENIYOR_RENGI + "20"
+                                : tema.kutuCerceve,
                           },
                         ]}
                       >
@@ -699,12 +710,14 @@ export default function ParentDashboard() {
                           style={{
                             color: cozulduMu
                               ? tema.aiButon || "#10B981"
-                              : tema.ikincilMetin,
+                              : isleniyor
+                                ? ISLENIYOR_RENGI
+                                : tema.ikincilMetin,
                             fontWeight: "bold",
                             fontSize: 13,
                           }}
                         >
-                          {item.durum}
+                          {isleniyor ? `${ISLENIYOR_EMOJI} ${ISLENIYOR_METNI}` : item.durum}
                         </Text>
                       </View>
                     </TouchableOpacity>

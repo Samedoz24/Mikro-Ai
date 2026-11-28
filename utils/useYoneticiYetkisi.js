@@ -4,7 +4,7 @@ import { auth } from "../firebaseConfig";
 import { KAPSAM_TUM, kapsamBilgisi } from "./kurumKapsam";
 
 export const YONETICI_RENGI = "#0F766E";
-export const ROL_ETIKETLERI = { mudur: "Müdür", ogretmen: "Öğretmen" };
+export const ROL_ETIKETLERI = { mudur: "Müdür", ogretmen: "Rehber Öğretmen" };
 
 // Yönetici yetkisi, sunucunun kimlik belirtecine yazdığı kurumId ve kurumRol bilgilerinden gelir.
 // Ekran her odaklandığında belirteç sunucudan yenilenir: geri alınan yetki en geç o zaman fark edilir.

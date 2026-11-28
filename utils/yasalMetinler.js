@@ -160,7 +160,7 @@ export const KULLANIM_KOSULLARI_ICERIK = `
 // Dershane yöneticileri (müdür ve öğretmen) için. Hukuki incelemeden geçirilmeden yayına alınmamalıdır.
 export const YONETICI_KOSULLARI_ICERIK = `
   <div class="card">
-    <p>Bu belge, Sormix'te bir dershanenin müdürü ya da öğretmeni olarak oturum açan kullanıcılar için geçerlidir.</p>
+    <p>Bu belge, Sormix'te bir dershanenin müdürü ya da rehber öğretmeni olarak oturum açan kullanıcılar için geçerlidir.</p>
   </div>
 
   <h2>🏫 Yetki ve Hesap</h2>
@@ -169,7 +169,7 @@ export const YONETICI_KOSULLARI_ICERIK = `
   <h2>👁️ Erişebileceğiniz Veriler</h2>
   <ul>
     <li><span class="highlight">Müdür:</span> dershaneye bağlı öğrencilerin gönderdiği soruları, çözümleri ve istatistikleri görebilir.</li>
-    <li><span class="highlight">Öğretmen:</span> yalnızca öğrencilerin istatistiklerini (soru sayısı, ders dağılımı, aktiflik) görebilir; soru içeriklerine erişemez.</li>
+    <li><span class="highlight">Rehber Öğretmen:</span> yalnızca öğrencilerin istatistiklerini (soru sayısı, ders dağılımı, aktiflik) görebilir; soru içeriklerine erişemez.</li>
     <li>Yalnızca dershaneye kendi isteğiyle bağlanmış öğrencilerin verileri görünür. Öğrenci dilediği zaman dershaneden ayrılabilir; ayrıldığında verilerine erişiminiz sona erer.</li>
   </ul>
 

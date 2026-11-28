@@ -279,7 +279,7 @@ export default function LoginScreen({ setKullaniciRolu, girisReddi }) {
         ? "Yapay zeka destekli eğitim asistanınıza erişmek için giriş yapın."
         : "Kişiselleştirilmiş öğrenim deneyimine adım atmak için hesabınızı oluşturun."
       : seciliRol === "yonetici"
-      ? "Yalnızca dershane tarafından davet edilen müdür ve öğretmenler içindir. Davet edilen e-posta adresinle giriş yap."
+      ? "Yalnızca dershane tarafından davet edilen müdür ve rehber öğretmenler içindir. Davet edilen e-posta adresinle giriş yap."
       : gosterilenSayfa === "giris"
       ? "Öğrencinizin akademik gelişimini detaylı analiz etmek için giriş yapın."
       : "Öğrencinizin eğitim sürecini yakından takip etmek için veli hesabı oluşturun.";

@@ -12,6 +12,22 @@ export const incelemedeMi = (soru) => soru?.durum === INCELEME_DURUMU;
 // Ek deneme ("Çözmeye devam et") bu soru için kullanılabilir mi?
 export const ekDenemeVarMi = (soru) => soru?.ekDenemeKullanildi !== true;
 export const iptalMi = (soru) => soru?.durum === IPTAL_DURUMU;
+
+// "İşleniyor": çözüm sunucusu soruyu şu an çözüyor. Değer sunucudan gelir; yazım farklarına (İ/I/ı, ş/s,
+// büyük-küçük harf, baştaki/sondaki boşluk) dayanıklı tanınır. Yalnızca görünümü etkiler.
+export const ISLENIYOR_METNI = "İşleniyor";
+export const ISLENIYOR_EMOJI = "🔄";
+export const ISLENIYOR_RENGI = "#F97316"; // turuncu
+export const isleniyorMu = (soru) => {
+  if (typeof soru?.durum !== "string") return false;
+  const sade = soru.durum
+    .trim()
+    .toLocaleLowerCase("tr-TR")
+    .replace(/ı/g, "i")
+    .replace(/ş/g, "s")
+    .replace(/i̇/g, "i"); // "İ" bazı ortamlarda "i + nokta" olarak küçülür
+  return sade === "isleniyor";
+};
 export const iptalMesaji = (soru) =>
   soru?.hakIadeEdildi === true
     ? "Bu soruyu iptal ettin. Soru hakkın iade edildi."

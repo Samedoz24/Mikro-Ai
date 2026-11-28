@@ -14,6 +14,7 @@ import {
   StatusBar,
   Platform,
   Pressable,
+  Linking,
 } from "react-native";
 
 import {
@@ -64,8 +65,13 @@ import {
   ekDenemeVarMi,
   iptalMi,
   iptalMesaji,
+  isleniyorMu,
+  ISLENIYOR_METNI,
+  ISLENIYOR_EMOJI,
+  ISLENIYOR_RENGI,
 } from "../utils/soruDurumu";
 import { soruIncelemeKarariVer } from "../utils/kotaIstemci";
+import { soruDestekBaglantisi } from "../utils/destek";
 
 const ekranGenisligi = Dimensions.get("window").width;
 const ekranYuksekligi = Dimensions.get("window").height;
@@ -136,6 +142,16 @@ export default function HistoryScreen() {
   const [pratikCozumGorunur, setPratikCozumGorunur] = useState(false);
   const [dersSecimiAcik, setDersSecimiAcik] = useState(false);
   const [kararIsleniyor, setKararIsleniyor] = useState(false);
+
+  // Destek: soru kimliğiyle hazır e-posta (kişisel bilgi eklenmez; bkz. utils/destek.js)
+  const soruIcinDestek = () => {
+    Linking.openURL(soruDestekBaglantisi(seciliSoru?.id)).catch(() =>
+      Alert.alert(
+        "E-posta Açılamadı",
+        "Telefonunda kurulu bir e-posta uygulaması bulunamadı. Bize cesa@cesaai.tech adresinden ulaşabilirsin."
+      )
+    );
+  };
 
   useEffect(() => {
     // Sorular sahibinin kimliğiyle sorgulanır (eski sorulara kimlik sunucuda eklendi: functions/goc.js)
@@ -632,7 +648,9 @@ export default function HistoryScreen() {
                               ? tema.anaButon
                               : item.durum === "Çözüldü"
                                 ? "#4CAF50"
-                                : tema.anaButon,
+                                : isleniyorMu(item)
+                                  ? ISLENIYOR_RENGI
+                                  : tema.anaButon,
                           },
                         ]}
                       >
@@ -640,7 +658,9 @@ export default function HistoryScreen() {
                           ? "Yeni çözüm · açmak için dokun"
                           : item.durum === "Çözüldü"
                             ? "✅ Çözüldü"
-                            : incelemedeMi(item)
+                            : isleniyorMu(item)
+                              ? `${ISLENIYOR_EMOJI} ${ISLENIYOR_METNI}`
+                              : incelemedeMi(item)
                               ? "🔍 İnceleniyor"
                               : iptalMi(item)
                                 ? "✖ İptal edildi"
@@ -1140,6 +1160,33 @@ export default function HistoryScreen() {
                         </Text>
                       </>
                     )}
+                  </TouchableOpacity>
+                )}
+
+                {seciliSoru?.id && (
+                  <TouchableOpacity
+                    onPress={soruIcinDestek}
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                    accessibilityLabel="Bu soruyla ilgili destek ekibine e-posta gönder"
+                    style={[
+                      styles.indirButonu,
+                      {
+                        backgroundColor: "transparent",
+                        borderWidth: 1.5,
+                        borderColor: tema.anaButon,
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name="help-buoy-outline"
+                      size={22}
+                      color={tema.anaButon}
+                      style={{ marginRight: 8 }}
+                    />
+                    <Text style={[styles.indirButonuYazi, { color: tema.anaButon }]}>
+                      Bu Soru İçin Destek Al
+                    </Text>
                   </TouchableOpacity>
                 )}
                 <View style={{ height: 40 }} />

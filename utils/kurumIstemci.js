@@ -63,7 +63,7 @@ const HATA_MESAJLARI = {
   "zaten-yonetici": "Bu adres zaten dershanenin yöneticisi.",
   "baska-kurumda-davetli":
     "Bu e-posta adresi başka bir dershanede yönetici olarak kayıtlı.",
-  "ogretmen-siniri": "En fazla 20 öğretmen ekleyebilirsin.",
+  "ogretmen-siniri": "En fazla 20 rehber öğretmen ekleyebilirsin.",
   "yetki-yok": "Bu işlem için müdür yetkisi gerekiyor.",
   "kendini-kaldiramaz": "Kendini ekipten kaldıramazsın.",
   "kaldirilamaz-rol": "Müdürler uygulamadan kaldırılamaz.",
@@ -79,8 +79,8 @@ const HATA_MESAJLARI = {
   "grup-uretilemedi": "Grup oluşturulamadı. Lütfen tekrar dene.",
   "ogrenci-yok": "Bu öğrenci artık dershanede değil. Listeyi yenile.",
   "kapsam-gecersiz": "Kapsam bilgisi geçersiz.",
-  "cok-grup": "Bir öğretmene en fazla 10 grup atanabilir.",
-  "ogretmen-yok": "Bu öğretmen artık ekipte değil. Listeyi yenile.",
+  "cok-grup": "Bir rehber öğretmene en fazla 10 grup atanabilir.",
+  "ogretmen-yok": "Bu rehber öğretmen artık ekipte değil. Listeyi yenile.",
   "kapsam-rol": "Müdürün kapsamı değiştirilemez.",
   "baslik-gecersiz":
     "Başlık 1-60 karakter olmalı ve satır sonu ya da özel karakter içermemeli.",

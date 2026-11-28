@@ -58,6 +58,7 @@ import {
 } from "./utils/ders";
 import ErrorBoundary from "./ErrorBoundary";
 import { adSoyadTemizle } from "./utils/profilDogrulama";
+import { tanitimGosterilsinMi } from "./utils/tanitim";
 
 const Tab = createBottomTabNavigator();
 
@@ -217,7 +218,8 @@ function MainApp() {
             setPremiumMu(false);
             setPremiumKaynaklari(null);
             await AsyncStorage.setItem("kullaniciRolu", yeniRol);
-            setGosterOnboarding(true);
+            // Tanıtım sayfaları öğrenci özelliklerini anlatır; veliye gösterilmez (28 Kasım kararı)
+            setGosterOnboarding(tanitimGosterilsinMi(yeniRol));
           }
 
           await AsyncStorage.removeItem("hedefRol");

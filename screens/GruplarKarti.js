@@ -88,7 +88,7 @@ export default function GruplarKarti({ kurumId, tema }) {
       "Grubu Sil",
       `"${grup.ad}" grubu silinecek.\n\n• ${
         n > 0 ? `${n} öğrenci` : "Öğrenciler"
-      } gruptan çıkar ama dershanede kalır\n• Bu gruba atanmış öğretmenlerin bu gruptaki erişimi kalkar\n\nBu işlem geri alınamaz.`,
+      } gruptan çıkar ama dershanede kalır\n• Bu gruba atanmış rehber öğretmenlerin bu gruptaki erişimi kalkar\n\nBu işlem geri alınamaz.`,
       [
         { text: "Vazgeç", style: "cancel" },
         { text: "Sil", style: "destructive", onPress: () => sil(grup) },
@@ -128,7 +128,7 @@ export default function GruplarKarti({ kurumId, tema }) {
         ) : gruplar.length === 0 ? (
           <Text style={[styles.kucukYazi, { color: tema.ikincilMetin }]}>
             Henüz grup yok. Öğrencilerini sınıf ya da şubelere ayırarak
-            öğretmenlerin yalnızca kendi öğrencilerinin istatistiklerini
+            rehber öğretmenlerin yalnızca kendi öğrencilerinin istatistiklerini
             görmesini sağlayabilirsin.
           </Text>
         ) : (

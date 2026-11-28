@@ -178,7 +178,7 @@ export default function PlatformKarti({ uid, tema }) {
   const askiyaAlOnayla = (k) =>
     Alert.alert(
       "Dershane askıya alınsın mı?",
-      `${k.ad}\n\n• Müdür ve öğretmenler yönetici özelliklerini kullanamaz\n• Yeni öğrenci katılamaz\n• Mevcut ${k.uyeSayisi} öğrenci bağlı kalır\n• İstediğin zaman yeniden açabilirsin`,
+      `${k.ad}\n\n• Müdür ve rehber öğretmenler yönetici özelliklerini kullanamaz\n• Yeni öğrenci katılamaz\n• Mevcut ${k.uyeSayisi} öğrenci bağlı kalır\n• İstediğin zaman yeniden açabilirsin`,
       [
         { text: "Vazgeç", style: "cancel" },
         {
@@ -193,7 +193,7 @@ export default function PlatformKarti({ uid, tema }) {
   const yenidenAcOnayla = (k) =>
     Alert.alert(
       "Dershane yeniden açılsın mı?",
-      `${k.ad}\n\nMüdür ve öğretmenler bir sonraki girişlerinde yetkilerini geri alır.`,
+      `${k.ad}\n\nMüdür ve rehber öğretmenler bir sonraki girişlerinde yetkilerini geri alır.`,
       [
         { text: "Vazgeç", style: "cancel" },
         {
@@ -492,7 +492,7 @@ export default function PlatformKarti({ uid, tema }) {
                   {kapatilacak.ad} kapatılacak:{"\n\n"}• {kapatilacak.uyeSayisi}{" "}
                   öğrencinin dershane bağlantısı kaldırılır ve koltuklar boşalır
                   {"\n"}• Dershanenin verdiği premium hakları sona erer
-                  {"\n"}• Müdür ve öğretmenlerin yetkisi kaldırılır
+                  {"\n"}• Müdür ve rehber öğretmenlerin yetkisi kaldırılır
                   {"\n"}• Duyurular ve istatistik kopyaları silinir
                   {"\n"}• Kayıt kodu çalışmaz
                   {"\n\n"}Öğrencilerin hesapları, soruları ve geçmişleri
